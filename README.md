@@ -1,6 +1,6 @@
 # Overview
 
-ruby-awstools consists of various tools to:
+ruby-awstools consists of various ruby cli scripts using the Ruby aws-sdk, intended to:
 * Simplify creation of AWS resources
 * Manage sets of CloudFormation stacks
 * Centralize configuration data with an aim towards "configuration as code"
@@ -10,23 +10,51 @@ stacks.
 
 NOTE: Everything below is somewhat out-of-date.
 
+# Installation
+1. Clone the repository
+2. Make sure you have the ruby gem 'bundler' installed:
+```
+# gem install bundler
+```
+`bundler` is the tool used for vendoring the aws-sdk ruby gem and any dependent gems
+3. 2. Then, in the top-level directory:
+```
+$ bundle install
+```
+This tells bundler to install the gems from vendor/cache to vendor/ruby
+4. Create symlinks to scripts in the `bin/` directory of your choice; `/usr/local/bin` or `$HOME/bin` are both good choices.
+
 # cfn - CloudFormation template generator and management
 
-`cfn` can be used for creating general-purpose AWS networks, with
-a fairly generic structure intended to be useful for a wide-range of
-applications. Your particular application may not use all features, but
-since creating VPCs, subnets, buckets, etc. are all 'free' (you only pay
-for actual resources used), it's handy to be able to edit a simple
-configuration file that can be used to generate your network. This document
-outlines the structure of the networks and resources generated, as well as
-the configuration file and tool use.
+`cfn` is the tool for generating CloudFormation(CF) templates and
+creating/updating CF stacks. It is designed around a project directory
+structure that consists of a `cloudconfig.yaml` with site-specific
+configuration such as lists of users, subnets, CIDRs, S3 bucket name
+and prefix, etc. Sub-directories contain yaml-formatted templates
+that are read and processed by the `cfn` tool to generate more complicated
+sets of CF JSON templates, by expanding and modifying the yaml
+templates based on data in `cloudconfig.yaml`. For example, you can
+provide a list of CIDRs used by your organization, and when the template
+processor sees `Ref: $OrgCIDRs`, it will do a smart expansion based
+on the type of resource being processed.
 
-CloudGenerator will use a cloudconfig.yaml and a set of pared-down
-and commented CloudFormation templates in yaml format. From those it
-will create a set of json templates that can be uploaded to S3.
+`ruby-awstools` comes with a `sample/` project directory that you can copy
+to your own project. The intention is that a project will encapsulate
+your AWS CF stacks and configuration, and be managed in an internal
+repository, similar to what might be done with with `puppet` or `ansible`.
 
-# Network Structure
+# Walk-through: creating a VPC+
+This section will walk you through getting started with creating a general-purpose
+VPC from the sample project.
 
+**TODO** Write this
+
+# Resource Processing
+This section details the special handling of each of the CF resource types.
+
+**TODO** write this
+
+# Network Structure from the sample project
 One of the templates created by CG is the network template,
 which defines the VPC and it's associated subnets, along with network
 ACLs that put high-level restrictions on the network traffic to and

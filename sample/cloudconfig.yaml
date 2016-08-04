@@ -1,0 +1,55 @@
+---
+# S3 bucket where the templates will go
+Bucket: cfn.linuxjedi
+# Prefix for the templates, templates will go in <prefix>/<dirname>/*.json
+Prefix: us-east-1
+# Optional prefix for stack names
+StackPrefix: ljmain
+# Common tags to be applied to any resources created
+Tags:
+- Creator: parsley@linuxjedi.org
+# Lists of CIDRs can be referenced in ACLs using Ref:\n"$<somelist>". See
+# the vpc templates for examples. Acls will be expanded as needed.
+#
+# IP Ranges for your organization, used for access to e.g. Intranet
+# and Management subnets.
+OrgCIDRs:
+- 1.2.3.4/16
+# IP range(s) for IT
+OrgITCIDRs:
+- 1.2.3.4/16
+# VPC CIDR, encompassing the entirety of the cloud network; this should
+# probably be a class-B network from somewhere in RFC 1918
+VPCCIDR: 10.20.0.0/16
+# AWS hosted public DNS
+PublicDNS: "linuxjedi.org"
+# Instances in the VPC will resolve hostnames to the private zone and
+# get VPC-internal addresses
+PrivateDNS: "linuxjedi.org"
+Region: us-east-1
+# Not all availability zones are available for a given account, so check
+# first with 'aws ec2 describe-availability-zones', then list the ones
+# you want to use here.
+AvailabilityZones: [ "a", "b", "c", "d" ]
+# Each subnet type corresponds to a Subnet declaration in the network
+# template. Each subnet type will be duplicated across all availability
+# zones, so you'll need to provide a number of subnets equal to the
+# availability zones, all within the overall CIDR for the type.
+SubnetTypes:
+  # Public subnets for providing services to the Whole Wide World
+  PublicSubnet:
+    CIDR: 10.20.128.0/17
+    Subnets: [ "10.20.128.0/20", "10.20.144.0/20", "10.20.160.0/20", "10.20.176.0/20" ]
+  # Private subnets providing services mainly to hosts in Public
+  PrivateSubnet:
+    CIDR: 10.20.32.0/19
+    Subnets: [ "10.20.32.0/22", "10.20.36.0/22", "10.20.40.0/22", "10.20.44.0/22" ]
+  # Intranet subnets providing services only to hosts on 
+  IntranetSubnet:
+    CIDR: 10.20.64.0/18
+    Subnets: [ "10.20.64.0/21", "10.20.72.0/21", "10.20.80.0/21", "10.20.88.0/21" ]
+  # The Management subnet type is only for instances used to manage
+  # other instances, so can be pretty small.
+  ManagementSubnet:
+    CIDR: 10.20.0.0/23
+    Subnets: [ "10.20.0.0/26", "10.20.0.64/26", "10.20.0.128/26", "10.20.1.192/26" ]

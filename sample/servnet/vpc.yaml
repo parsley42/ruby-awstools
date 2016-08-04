@@ -1,0 +1,184 @@
+---
+# CloudGenerator network template, used to generate the VPC and subnets
+#
+# This was created based on the AWS 'Scenario 2':
+# http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_Scenario2.html
+AWSTemplateFormatVersion: '2010-09-09'
+Description: The VPC and VPC-wide configuration
+# Note that with CG, only ids of created resources need to be passed in
+# as parameters.
+# Parameters: (none needed, top-level resource)
+Resources:
+  # Template for the VPC. Note the cfg.XXX are just placeholders, any string (or
+  # no entry at all) will do
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+
+  # Subnets will automatically be duplicated for each AZ, and suffixed with
+  # the uppercase AZ letter
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      MapPublicIpOnLaunch: true
+
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      MapPublicIpOnLaunch: false
+
+  ManagementSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      MapPublicIpOnLaunch: true
+
+  IntranetSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      MapPublicIpOnLaunch: true
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  GatewayToInternet:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: VPC
+      InternetGatewayId:
+        Ref: InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayToInternet
+    Properties:
+      RouteTableId:
+        Ref: PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: InternetGateway
+
+  # SubnetRouteTableAssociations will be automatically duplicated for
+  # each AZ and suffixed with the AZ letter
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicSubnet
+      RouteTableId:
+        Ref: PublicRouteTable
+
+  ManagementSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: ManagementSubnet
+      RouteTableId:
+        Ref: PublicRouteTable
+
+  IntranetSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: ManagementSubnet
+      RouteTableId:
+        Ref: PublicRouteTable
+
+  PublicAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId:
+        Ref: VPC
+
+  # NetworkAclAssociations are also duplicated automatically
+  PublicSubnetAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicSubnet
+      NetworkAclId:
+        Ref: PublicAcl
+
+  PrivateAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId:
+        Ref: VPC
+
+  PrivateSubnetAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnet
+      NetworkAclId:
+        Ref: PrivateAcl
+
+  IntranetAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId:
+        Ref: VPC
+
+  IntranetSubnetAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId:
+        Ref: IntranetSubnet
+      NetworkAclId:
+        Ref: IntranetAcl
+
+  ManagementAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId:
+        Ref: VPC
+
+  ManagementSubnetAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId:
+        Ref: ManagementSubnet
+      NetworkAclId:
+        Ref: ManagementAcl
+
+Outputs:
+  VPCId:
+    Description: VPCId of the newly created VPC
+    Value:
+      Ref: VPC
+
+  PublicAcl:
+    Description: Network ACL for Public subnets
+    Value:
+      Ref: PublicAcl
+
+  PrivateAcl:
+    Description: Network ACL for Private subnets
+    Value:
+      Ref: PrivateAcl
+
+  IntranetAcl:
+    Description: Network ACL for Intranet subnets
+    Value:
+      Ref: IntranetAcl
+
+  ManagementAcl:
+    Description: Network ACL for Management subnets
+    Value:
+      Ref: ManagementAcl

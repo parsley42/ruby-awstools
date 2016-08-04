@@ -1,0 +1,78 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Security Groups for the ITS infrastructure VPC
+Parameters:
+  VPCId:
+    Type: String
+
+Resources:
+  SSHAccessIT:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow ssh access to the EC2 host
+      VpcId:
+        Ref: VPCId
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 
+          Ref: "$OrgITCIDRs"
+
+  RDPAccessIT:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow ssh access to the EC2 host
+      VpcId:
+        Ref: VPCId
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '3389'
+        ToPort: '3389'
+        CidrIp: 
+          Ref: "$OrgITCIDRs"
+
+  SSHAccessORG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow ssh access to the EC2 host
+      VpcId:
+        Ref: VPCId
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 
+          Ref: "$OrgCIDRs"
+
+  RDPAccessORG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow ssh access to the EC2 host
+      VpcId:
+        Ref: VPCId
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '3389'
+        ToPort: '3389'
+        CidrIp: 
+          Ref: "$OrgCIDRs"
+
+  PublicWebServer:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http/https to web server
+      VpcId:
+        Ref: VPCId
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '443'
+        ToPort: '443'
+        CidrIp: 0.0.0.0/0
+
+# Note: cfngenerate will create an Output for each SecurityGroup
+#Outputs:

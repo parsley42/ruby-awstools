@@ -1,0 +1,232 @@
+#!/usr/bin/ruby
+
+require 'pathname'
+script_dir = File.dirname(Pathname.new(__FILE__).realpath)
+project_dir = Dir::getwd()
+
+require 'optparse'
+require 'yaml'
+require 'rubygems'
+Dir::chdir(script_dir)
+require 'bundler/setup'
+require 'aws-sdk'
+require_relative 'lib/templatelib'
+require_relative 'lib/cfglib'
+Dir::chdir(project_dir)
+
+cfgfile = "cloudconfig.yaml"
+outputdir = "output"
+upload = true
+
+opts = OptionParser.new
+
+opts.banner = <<-EOF
+Usage: cfn <command> (options) <templatedir> - manage a CloudFormation stack
+ Where <command> is one of:
+  generate - generate json templates for the stack
+  list - list all stacks for the account
+  create - create a new stack
+  delete - delete a stack (warning: without confirmation, no resources retained)
+  update - update a stack
+  validate - run templates through validation
+ Options are:
+EOF
+opts.on("-t", "--jsondir DIRECTORY", "Use json templates from <templatedir>/DIRECTORY instead of <templatedir>/output") do |dir|
+	outputdir = dir
+end
+opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
+	cfgfile = file
+end
+
+def usage(opts)
+	puts opts.help()
+	exit 1
+end
+
+command = ARGV.shift()
+if command == nil
+	puts "Missing command"
+	usage(opts)
+end
+
+if ! [ "create", "delete", "generate", "list", "update", "validate" ].include?(command)
+	puts "Invalid command: \"#{command}\""
+	usage(opts)
+end
+
+opts.parse!
+
+if ! File::exist?(cfgfile)
+	puts "Couldn't find #{cfgfile}"
+	usage
+end
+
+cfg = ConfigFile.new(cfgfile)
+cfg = cfg.process()
+
+class Aws::CloudFormation::Client
+	def validate(template, verbose=true)
+		resp = validate_template({ template_body: template })
+		if verbose
+			puts "Description: #{resp.description}"
+			if resp.capabilities.length > 0
+				puts "Capabilities: #{resp.capabilities.join(",")}"
+				puts "Reason: #{resp.capabilities_reason}"
+			end
+			puts
+		end
+		return resp.capabilities
+	end
+end
+
+cfn = Aws::CloudFormation::Client.new( region: cfg["Region"] )
+cnfres = Aws::CloudFormation::Resource.new( client: cfn )
+
+s3 = Aws::S3::Resource.new( region: cfg["Region"] )
+
+case command
+when "list"
+	stacklist = []
+	stack_states = [ "CREATE_IN_PROGRESS", "CREATE_FAILED", "CREATE_COMPLETE", "ROLLBACK_IN_PROGRESS", "ROLLBACK_FAILED", "ROLLBACK_COMPLETE", "DELETE_IN_PROGRESS", "DELETE_FAILED", "UPDATE_IN_PROGRESS", "UPDATE_COMPLETE_CLEANUP_IN_PROGRESS", "UPDATE_COMPLETE", "UPDATE_ROLLBACK_IN_PROGRESS", "UPDATE_ROLLBACK_FAILED", "UPDATE_ROLLBACK_COMPLETE_CLEANUP_IN_PROGRESS", "UPDATE_ROLLBACK_COMPLETE" ]
+	response = cfn.list_stacks({ stack_status_filter: stack_states })
+	while true
+		response.stack_summaries.each() do |stack|
+			stacklist.push("#{stack.stack_name}: #{stack.stack_status}")
+		end
+		next_token = response.next_token
+		break unless next_token
+		response = cfn.list_stacks({
+			stack_staus_filter: stack_states,
+			next_token: next_token,
+		})
+	end
+	if stacklist.length() > 0
+		puts "Stacks:"
+		puts stacklist
+	else
+		puts "No stacks found"
+	end
+	exit 0
+end
+
+templatedir = ARGV.shift()
+if templatedir == nil
+	puts "Missing <templatedir>"
+	usage(opts)
+else
+	templatedir = templatedir.chomp("/")
+	if templatedir.include?("/")
+		puts "<templatedir> must be a subdirectory of the current directory"
+		usage(opts)
+	end
+end
+
+outputdir = templatedir + "/" + outputdir
+
+if File::exist?(outputdir)
+	if ! File::stat(outputdir).directory?
+		puts "Not a directory: #{outputdir}"
+		usage(opts)
+	end
+else
+	if command == "generate"
+		Dir::mkdir(outputdir)
+	else
+		puts "No such file or directory: #{outputdir}"
+	end
+end
+
+if ! File::exist?(templatedir)
+	puts "Directory not found: #{templatedir}"
+	usage(opts)
+end
+
+if ! File::stat(templatedir).directory?
+	puts "Not a directory: #{templatedir}"
+	usage(opts)
+end
+
+if ! File::stat(cfgfile).file?
+	puts "Not a regular file: #{cfgfile}"
+	usage(opts)
+end
+
+# Generate the hub template that owns other templates
+maincfg = MainTemplate.new(templatedir, cfg)
+maincfg.process()
+
+files = [ "main" ] + maincfg.children()
+upload = false if files.length() == 1
+
+if cfg["StackPrefix"]
+	stackprefix = cfg["StackPrefix"] + "-"
+else
+	stackprefix = ""
+end
+stackname = stackprefix + templatedir
+
+case command
+when "generate"
+	maincfg.write(outputdir)
+	# Process each of the child templates
+	maincfg.children().each() do |child|
+		childcfg = ChildTemplate.new(templatedir, child, cfg)
+		childcfg.process()
+		childcfg.write(outputdir)
+	end
+when "create", "update", "validate"
+	files.each() do |tfile|
+		case command
+		when "validate"
+			json = File::read(outputdir + "/" + tfile + ".json")
+			puts "Validating #{tfile}"
+			cfn.validate(json)
+		when "create", "update"
+			if ! upload
+				json = File::read(outputdir + "/" + tfile + ".json")
+				required_capabilities = cfn.validate(json, false)
+				params = {
+					stack_name: stackname,
+					tags: cfg["tags"],
+					capabilities: required_capabilities,
+					template_body: json,
+				}
+				if command == "create"
+					puts "Creating #{stackname}"
+					stackout = cfn.create_stack(params)
+				else
+					puts "Updating #{stackname}"
+					stackout = cfn.update_stack(params)
+				end
+				puts "Stack ID: #{stackout.stack_id}"
+			else
+				obj = s3.bucket(cfg["Bucket"]).object("#{cfg["Prefix"]}/#{templatedir}/#{tfile}.json")
+				puts "Uploading #{tfile}"
+				obj.upload_file("#{outputdir}/#{tfile}.json")
+			end
+		end
+	end
+	if upload
+		json = File::read(outputdir + "/main.json")
+		required_capabilities = cfn.validate(json, false)
+		stackname = stackprefix + templatedir
+		template_url = "https://s3.amazonaws.com/#{cfg["Bucket"]}/#{cfg["Prefix"]}/#{templatedir}/main.json"
+		params = {
+			stack_name: stackname,
+			tags: cfg["tags"],
+			capabilities: required_capabilities,
+			template_url: template_url,
+		}
+		if command == "create"
+			puts "Creating #{stackname} from #{template_url}"
+			stackout = cfn.create_stack(params)
+		else
+			puts "Updating #{stackname}"
+			stackout = cfn.update_stack(params)
+		end
+		puts "Stack ID: #{stackout.stack_id}"
+	end
+when "delete"
+	puts "Deleting #{stackname}"
+	cfn.delete_stack({ stack_name: stackname })
+end

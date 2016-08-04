@@ -164,6 +164,7 @@ else
 	stackprefix = ""
 end
 stackname = stackprefix + templatedir
+stack_required_capabilities = []
 
 case command
 when "generate"
@@ -176,15 +177,15 @@ when "generate"
 	end
 when "create", "update", "validate"
 	files.each() do |tfile|
+		json = File::read(outputdir + "/" + tfile + ".json")
 		case command
 		when "validate"
-			json = File::read(outputdir + "/" + tfile + ".json")
 			puts "Validating #{tfile}"
 			cfn.validate(json)
 		when "create", "update"
+			required_capabilities = cfn.validate(json, false)
 			if ! upload
 				json = File::read(outputdir + "/" + tfile + ".json")
-				required_capabilities = cfn.validate(json, false)
 				params = {
 					stack_name: stackname,
 					tags: cfg["tags"],
@@ -203,18 +204,18 @@ when "create", "update", "validate"
 				obj = s3.bucket(cfg["Bucket"]).object("#{cfg["Prefix"]}/#{templatedir}/#{tfile}.json")
 				puts "Uploading #{tfile}"
 				obj.upload_file("#{outputdir}/#{tfile}.json")
+				stack_required_capabilities = (stack_required_capabilities + required_capabilities).uniq()
 			end
 		end
 	end
-	if upload
+	if upload && [ "create", "update" ].include?(command)
 		json = File::read(outputdir + "/main.json")
-		required_capabilities = cfn.validate(json, false)
 		stackname = stackprefix + templatedir
 		template_url = "https://s3.amazonaws.com/#{cfg["Bucket"]}/#{cfg["Prefix"]}/#{templatedir}/main.json"
 		params = {
 			stack_name: stackname,
 			tags: cfg["tags"],
-			capabilities: required_capabilities,
+			capabilities: stack_required_capabilities,
 			template_url: template_url,
 		}
 		if command == "create"

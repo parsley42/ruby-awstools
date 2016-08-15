@@ -8,8 +8,6 @@ ruby-awstools consists of various ruby cli scripts using the Ruby aws-sdk, inten
 Currently the only tool provided is `cfn`, for managing CloudFormation
 stacks.
 
-NOTE: Everything below is somewhat out-of-date.
-
 # Installation
 1. Clone the repository
 2. Make sure you have the ruby gem 'bundler' installed:
@@ -26,6 +24,22 @@ This tells bundler to install the gems from vendor/cache to vendor/ruby
 
 # cfn - CloudFormation template generator and management
 
+## Background
+`cfn` started from the simple idea that writing CloudFormation templates
+in YAML and trivially converting them to JSON was more convenient than
+hand-writing JSON. Ruby can do this trivially, but that led to another idea:
+as long as we're loading YAML into a data structure, why not perform some
+(relatively) simple processing, to:
+- Centralize configuration into a single file (as much as possible)
+- Intelligently handle arrays of CIDRs depending on resources being generated
+- Use automatic generation of things like Outputs, Parameters and tags to
+make templates more robust and less error-prone
+
+At the same time, using the aws ruby sdk, we can also handle validating,
+creating, updating and deleting stacks, taking care of S3 URLs and vastly
+simplifying the process of creating modular stacks.
+
+## Description
 `cfn` is the tool for generating CloudFormation(CF) templates and
 creating/updating CF stacks. It is designed around a project directory
 structure that consists of a `cloudconfig.yaml` with site-specific
@@ -43,18 +57,18 @@ to your own project. The intention is that a project will encapsulate
 your AWS CF stacks and configuration, and be managed in an internal
 repository, similar to what might be done with with `puppet` or `ansible`.
 
-# Walk-through: creating a VPC+
+## Walk-through: creating a VPC+
 This section will walk you through getting started with creating a general-purpose
 VPC from the sample project.
 
 **TODO** Write this
 
-# Resource Processing
+## Resource Processing
 This section details the special handling of each of the CF resource types.
 
 **TODO** write this
 
-# Network Structure from the sample project
+## Network Structure from the sample project
 One of the templates created by CG is the network template,
 which defines the VPC and it's associated subnets, along with network
 ACLs that put high-level restrictions on the network traffic to and

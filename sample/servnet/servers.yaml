@@ -1,0 +1,14 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Servers
+
+# NOTE: Outputs from SecurityGroups stack passed in from main stack
+# as parameters
+
+Resources:
+  MyPublicWebServer:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      SecurityGroups:
+      - Ref: SSHAccessIT
+      - Ref: PublicWebServer

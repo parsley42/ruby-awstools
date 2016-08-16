@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Security Groups for the ITS infrastructure VPC
+Description: Security Groups
 Parameters:
   VPCId:
     Type: String

@@ -155,28 +155,19 @@ end
 maincfg = MainTemplate.new(templatedir, cfg)
 maincfg.process()
 
-files = [ "main" ] + maincfg.children()
-upload = false if files.length() == 1
+filenames = [ "main" ] + maincfg.children.map { |child| child.name().downcase() }
+upload = false if filenames.length() == 1
 
-if cfg["StackPrefix"]
-	stackprefix = cfg["StackPrefix"] + "-"
-else
-	stackprefix = ""
-end
+stackprefix = (cfg["StackPrefix"]?cfg["StackPrefix"]:"")
 stackname = stackprefix + templatedir
 stack_required_capabilities = []
 
 case command
 when "generate"
-	maincfg.write(outputdir)
-	# Process each of the child templates
-	maincfg.children().each() do |child|
-		childcfg = ChildTemplate.new(templatedir, child, cfg)
-		childcfg.process()
-		childcfg.write(outputdir)
-	end
+	maincfg.process_children()
+	maincfg.write_all(outputdir)
 when "create", "update", "validate"
-	files.each() do |tfile|
+	filenames.each() do |tfile|
 		json = File::read(outputdir + "/" + tfile + ".json")
 		case command
 		when "validate"

@@ -10,21 +10,46 @@ class Output
 end
 
 class CFTemplate
-	def initialize(directory, name, cloudcfg)
-		@tname = name
+	attr_reader :name, :outputs, :param_includes
+
+	def initialize(directory, name, cloudcfg, param_includes, parent)
+		@name = name
 		@cloudcfg = cloudcfg
+		@param_includes = param_includes
+		@parent = parent
 		@st = @cloudcfg["SubnetTypes"]
 		@az = @cloudcfg["AvailabilityZones"]
-		raw = File::read(directory + "/" + @tname + ".yaml")
-		puts "Loading #{@tname}"
+		raw = File::read(directory + "/" + @name.downcase() + ".yaml")
+		puts "Loading #{@name}"
 		@cfg = YAML::load(raw)
 		@res = @cfg["Resources"]
 		@cfg["Outputs"] ||= {}
-		@out = @cfg["Outputs"]
+		@outputs = @cfg["Outputs"]
+	end
+
+	def <=>(other)
+		#DEBUG
+		#puts "Comparing #{self.name}:"
+		#puts self.param_includes
+		#puts "to #{other.name}:"
+		#puts other.param_includes
+		#puts
+		return 0 if ( ! self.param_includes && ! other.param_includes )
+		return 1 if  ( self.param_includes && ! other.param_includes )
+		return -1 if  ( other.param_includes && ! self.param_includes )
+		if other.param_includes.include?(self.name)
+			raise "Circular param includes" if self.param_includes.include?(other.name)
+			return -1
+		elsif self.param_includes.include?(other.name)
+			raise "Circular param includes" if other.param_includes.include?(self.name)
+			return 1
+		else
+			return 0
+		end
 	end
 
 	def write(directory)
-		f = File.open(directory + "/" + @tname + ".json", "w")
+		f = File.open(directory + "/" + @name.downcase() + ".json", "w")
 		f.write(JSON::pretty_generate(@cfg))
 	end
 
@@ -78,6 +103,17 @@ class CFTemplate
 	end
 
 	def process()
+		if @param_includes
+			@cfg["Parameters"] ||= {}
+			params = @cfg["Parameters"]
+			@param_includes.each() do |childname|
+				other = @parent.find_child(childname)
+				other.outputs().each_key() do |output|
+					raise "Duplicate parameter (resource name) while processing #{@name}: #{output}" if params[output]
+					params[output] = {"Type" => "String"}
+				end
+			end
+		end
 		reskeys = @res.keys()
 		reskeys.each do |reskey|
 			@res[reskey]["Properties"] ||= {}
@@ -107,11 +143,11 @@ class CFTemplate
 					newsn["Properties"]["CidrBlock"]=@st[reskey].subnets[i]
 					sname = reskey + @az[i].upcase()
 					@res[sname] = newsn
-					@out[sname] = Output.new("SubnetId of #{sname} subnet", sname).output
+					@outputs[sname] = Output.new("SubnetId of #{sname} subnet", sname).output
 				end
 			when "AWS::EC2::SecurityGroup"
 				merge_tags(@res[reskey])
-				@out[reskey] = Output.new("#{reskey} security group", reskey).output
+				@outputs[reskey] = Output.new("#{reskey} security group", reskey).output
 				[ "SecurityGroupIngress", "SecurityGroupEgress" ].each() do |sgtype|
 					sglist = @res[reskey]["Properties"][sgtype]
 					next if sglist == nil
@@ -171,16 +207,18 @@ class CFTemplate
 					@res[assn_name] = nassn
 				end
 			when "AWS::CloudFormation::Stack"
-				if @tname != "main"
+				if @name != "main"
 					raise "Child stacks must be in main.json"
 				end
 				@res[reskey]["Properties"] ||= {}
+				if @res[reskey]["Properties"]["Parameters"]
+					param_includes = @res[reskey]["Properties"]["Parameters"]["Includes"]
+				end
 				merge_tags(@res[reskey])
-				childname = reskey.downcase()
-				childname = childname.chomp!("stack")
-				@res[reskey]["Properties"]["TemplateURL"] = [ "https://s3.amazonaws.com", @cloudcfg["Bucket"], @cloudcfg["Prefix"], @directory, childname + ".json" ].join("/")
-				@out[reskey] = Output.new("#{reskey} child stack", reskey).output
-				@children.push(childname)
+				childname = reskey.chomp("Stack")
+				@res[reskey]["Properties"]["TemplateURL"] = [ "https://s3.amazonaws.com", @cloudcfg["Bucket"], @cloudcfg["Prefix"], @directory, childname.downcase() + ".json" ].join("/")
+				@outputs[reskey] = Output.new("#{reskey} child stack", reskey).output
+				@children.push(CFTemplate.new(@directory, childname, @cloudcfg, param_includes, self))
 			end # case
 		end
 	end
@@ -192,12 +230,39 @@ class MainTemplate < CFTemplate
 	def initialize(directory, cloudcfg)
 		@children = []
 		@directory = directory
-		super(directory, "main", cloudcfg)
+		super(directory, "main", cloudcfg, nil, nil)
 	end
-end
 
-class ChildTemplate < CFTemplate
-	def initialize(directory, name, cloudcfg)
-		super(directory, name, cloudcfg)
+	def process_children()
+		# If one child lists another in it's parameter_includes, it sorts higher
+		@children.sort!()
+		# DEBUT
+		#puts "Sorted:"
+		#puts @children.map() { |child| child.name }
+		@children.each() do |child|
+			child.process()
+			if child.param_includes
+				@res[child.name()+"Stack"]["Properties"]["Parameters"] ||= {}
+				params = @res[child.name()+"Stack"]["Properties"]["Parameters"]
+				child.param_includes.each() do |param_include|
+					param_child = find_child(param_include)
+					param_child.outputs.each_key() do |output|
+						raise "Duplicate parameter: #{output}" if params[output]
+						params[output] = { "Fn::GetAtt" => [ "#{param_include}Stack", "Outputs.#{output}" ] }
+					end
+				end
+			end
+		end
+	end
+
+	def find_child(childname)
+		index = @children.map {|child| child.name() }.index(childname)
+		raise "Reference to unknown child template: #{childname}" unless index
+		@children[index]
+	end
+
+	def write_all(directory)
+		self.write(directory)
+		@children.each() {|child| child.write(directory) }
 	end
 end

@@ -57,6 +57,17 @@ to your own project. The intention is that a project will encapsulate
 your AWS CF stacks and configuration, and be managed in an internal
 repository, similar to what might be done with with `puppet` or `ansible`.
 
+## Conventions
+To enable intelligent processing and automatic generation, `cfn` uses certain
+naming conventions in template files:
+* Stack names all have names like **<Something>Stack**, e.g.
+  **SecurityGroupsStack**
+* Names of Outputs are the same as the name of the resource they reference,
+  except in special cases where a single resource generates multiple related
+  outputs
+Failing to adhere to some of these conventions might result in an
+exception being raised.
+
 ## Walk-through: creating a VPC+
 This section will walk you through getting started with creating a general-purpose
 VPC from the sample project.

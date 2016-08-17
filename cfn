@@ -38,28 +38,23 @@ opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of 
 	cfgfile = file
 end
 
-def usage(opts)
-	puts opts.help()
-	exit 1
+class UsageException < Exception
+	def initialize(msg="Invalid command / option / argument")
+		super(msg)
+	end
 end
 
+begin
+
+commands = [ "create", "delete", "generate", "list", "update", "validate" ]
 command = ARGV.shift()
-if command == nil
-	puts "Missing command"
-	usage(opts)
-end
-
-if ! [ "create", "delete", "generate", "list", "update", "validate" ].include?(command)
-	puts "Invalid command: \"#{command}\""
-	usage(opts)
-end
+raise UsageException.new("Missing <command>") unless command
+raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
 
 opts.parse!
 
-if ! File::exist?(cfgfile)
-	puts "Couldn't find #{cfgfile}"
-	usage
-end
+raise UsageException.new("Missing configuration file: #{cfgfile}") unless File::exist?(cfgfile)
+raise UsageException.new("Not a regular file: #{cfgfile}") unless File::stat(cfgfile).file?
 
 cfg = ConfigFile.new(cfgfile)
 cfg = cfg.process()
@@ -110,50 +105,30 @@ when "list"
 end
 
 templatedir = ARGV.shift()
-if templatedir == nil
-	puts "Missing <templatedir>"
-	usage(opts)
-else
-	templatedir = templatedir.chomp("/")
-	if templatedir.include?("/")
-		puts "<templatedir> must be a subdirectory of the current directory"
-		usage(opts)
-	end
-end
+raise UsageException.new("Missing <templatedir>") unless templatedir
+
+templatedir = templatedir.chomp("/")
+raise UsageException.new("<templatedir> must be a subdirectory of the current directory") if templatedir.include?("/")
 
 outputdir = templatedir + "/" + outputdir
 
 if File::exist?(outputdir)
-	if ! File::stat(outputdir).directory?
-		puts "Not a directory: #{outputdir}"
-		usage(opts)
-	end
+	raise UsageException.new("Not a directory: #{outputdir}") unless File::stat(outputdir).directory?
 else
 	if command == "generate"
 		Dir::mkdir(outputdir)
 	else
-		puts "No such file or directory: #{outputdir}"
+		raise UsageException.new("No such file or directory: #{outputdir}")
 	end
 end
 
-if ! File::exist?(templatedir)
-	puts "Directory not found: #{templatedir}"
-	usage(opts)
-end
-
-if ! File::stat(templatedir).directory?
-	puts "Not a directory: #{templatedir}"
-	usage(opts)
-end
-
-if ! File::stat(cfgfile).file?
-	puts "Not a regular file: #{cfgfile}"
-	usage(opts)
-end
+raise UsageException.new("Directory not found: #{templatedir}") unless File::exist?(templatedir)
+raise UsageException.new("Not a directory: #{templatedir}") unless File::stat(templatedir).directory?
 
 # Generate the hub template that owns other templates
 maincfg = MainTemplate.new(templatedir, cfg)
 maincfg.process()
+puts # blank line after 'Loading ...'
 
 filenames = [ "main" ] + maincfg.children.map { |child| child.name().downcase() }
 upload = false if filenames.length() == 1
@@ -221,4 +196,9 @@ when "create", "update", "validate"
 when "delete"
 	puts "Deleting #{stackname}"
 	cfn.delete_stack({ stack_name: stackname })
+end
+
+rescue UsageException => e
+	puts "\n#{e.message}\n\n"
+	puts opts.help()
 end

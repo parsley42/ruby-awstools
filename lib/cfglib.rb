@@ -4,9 +4,9 @@
 class ConfigFile
 	def initialize(filename)
 		@config = YAML::load(File::read(filename))
-		[ "Bucket", "Region", "AvailabilityZones", "SubnetTypes" ].each do |c|
+		[ "Bucket", "Region", "VPCCIDR", "AvailabilityZones", "SubnetTypes" ].each do |c|
 			if ! @config[c]
-				raise "Missing top-level configuration item in #{filename}: #{c}"
+				raise "Missing required top-level configuration item in #{filename}: #{c}"
 			end
 		end
 	end

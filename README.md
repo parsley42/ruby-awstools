@@ -60,8 +60,8 @@ repository, similar to what might be done with with `puppet` or `ansible`.
 ## Features
 * Simpler Tags specification; { foo: bar } vs. { Key: foo, Value: bar } (can
 be mixed)
-* { Ref: $Var } will expand to the Var: definition from cloudconfig.yaml
-* { Ref: $$CidrList } will perform intelligent expansion of lists of CIDRs
+* Global $Var expansion to the Var: definition from cloudconfig.yaml
+* $$CidrList will perform intelligent expansion of lists of CIDRs
 provided in cloudconfig.yaml; see **Resource Processing**
 
 ## Conventions

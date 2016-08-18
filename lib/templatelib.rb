@@ -77,28 +77,25 @@ class CFTemplate
 	end
 
 	# Resolve $var references to cfg items, no error checking on types
-	def resolve_refs(parent, item)
+	def resolve_vars(parent, item)
 		case parent[item].class().to_s()
 		when "Array"
 			parent[item].each_index() do |index|
-				resolve_refs(parent[item], index)
+				resolve_vars(parent[item], index)
 			end
 		when "Hash"
-			if parent[item]["Ref"]
-				raise "Invalid Ref in #{self.name}: Refs can only be in single-item hashes" if parent[item].size > 1
-				ref = parent[item]["Ref"]
-				if ref[0] == '$' && ref[1] != '$'
-					cfgref = ref[1..-1]
-					if @cloudcfg[cfgref] == nil
-						raise "Bad reference: \"#{cfgref}\" not defined in cloudconfig.yaml"
-					end
-					parent[item] = @cloudcfg[cfgref]
+			parent[item].each_key() do |key|
+				resolve_vars(parent[item], key)
+			end # Hash each
+		when "String"
+			var = parent[item]
+			if var[0] == '$' && var[1] != '$'
+				cfgvar = var[1..-1]
+				if @cloudcfg[cfgvar] == nil
+					raise "Bad varerence: \"#{cfgvar}\" not defined in cloudconfig.yaml"
 				end
-			else
-				parent[item].each_key() do |key|
-					resolve_refs(parent[item], key)
-				end # Hash each
-			end # item["Ref"]
+				parent[item] = @cloudcfg[cfgvar]
+			end
 		end # case item.class
 	end	
 
@@ -114,7 +111,7 @@ class CFTemplate
 				return [ clists[ref] ]
 			end
 		else
-			raise "Bad configuration item: \"#{ref}\" not defined in \"CIDRLists\" section of cloudconfig.yaml"
+			raise "Bad configuration item: \"#{ref}\" from #{self.name} not defined in \"CIDRLists\" section of cloudconfig.yaml"
 		end
 	end
 
@@ -133,7 +130,7 @@ class CFTemplate
 		reskeys = @res.keys()
 		reskeys.each do |reskey|
 			@res[reskey]["Properties"] ||= {}
-			resolve_refs(@res[reskey], "Properties")
+			resolve_vars(@res[reskey], "Properties")
 			case @res[reskey]["Type"]
 			# Just tag these
 			when "AWS::EC2::InternetGateway", "AWS::EC2::RouteTable", "AWS::EC2::NetworkAcl", "AWS::EC2::Instance", "AWS::EC2::Volume", "AWS::EC2::VPC", "AWS::S3::Bucket"
@@ -164,9 +161,9 @@ class CFTemplate
 					next if sglist == nil
 					additions = []
 					sglist.delete_if() do |rule|
-						next unless rule["CidrIp"]["Ref"]
-						next unless rule["CidrIp"]["Ref"][0]='$'
-						cfgref = rule["CidrIp"]["Ref"][2..-1]
+						next unless rule["CidrIp"]
+						next unless rule["CidrIp"][0]=='$'
+						cfgref = rule["CidrIp"][2..-1]
 						rawrule = Marshal.dump(rule)
 						resolve_cidr(cfgref).each() do |cidr|
 							newrule = Marshal.load(rawrule)
@@ -178,7 +175,7 @@ class CFTemplate
 					@res[reskey]["Properties"][sgtype] = sglist + additions
 				end
 			when "AWS::EC2::NetworkAclEntry"
-				ref = @res[reskey]["Properties"]["CidrBlock"]["Ref"]
+				ref = @res[reskey]["Properties"]["CidrBlock"]
 				if ref && ref[0] == '$'
 					cfgref = ref[2..-1]
 					cidr_arr = resolve_cidr(cfgref)

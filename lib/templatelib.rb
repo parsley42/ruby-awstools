@@ -140,6 +140,7 @@ class CFTemplate
 				update_tags(@res[reskey], reskey)
 			when "AWS::Route53::HostedZone"
 				update_tags(@res[reskey],nil,"HostedZoneTags")
+				@outputs["#{reskey}Id"] = Output.new("Hosted Zone Id for #{reskey}", reskey).output
 			when "AWS::EC2::Subnet"
 				if @st[reskey] == nil
 					raise "No configured subnet type for \"#{reskey}\" defined in network template"

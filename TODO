@@ -1,0 +1,3 @@
+- Modify Parameter: Includes to have a stack name and regex filter
+- Use change set to implement 'cfn preview'; display yaml dump of data?
+- More documentation

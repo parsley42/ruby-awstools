@@ -28,12 +28,6 @@ class CFTemplate
 	end
 
 	def <=>(other)
-		#DEBUG
-		#puts "Comparing #{self.name}:"
-		#puts self.param_includes
-		#puts "to #{other.name}:"
-		#puts other.param_includes
-		#puts
 		return 0 if ( ! self.param_includes && ! other.param_includes )
 		return 1 if  ( self.param_includes && ! other.param_includes )
 		return -1 if  ( other.param_includes && ! self.param_includes )
@@ -51,19 +45,29 @@ class CFTemplate
 	def write(directory)
 		f = File.open(directory + "/" + @name.downcase() + ".json", "w")
 		f.write(JSON::pretty_generate(@cfg))
+		f.close()
 	end
 
 	# If a resource defines a tag, configured tags won't overwrite it
-	def merge_tags(resource, tagkey="Tags")
+	def update_tags(resource, name=nil, tagkey="Tags")
 		cfgtags = @cloudcfg["Tags"]
 		if resource["Properties"][tagkey] == nil
-			resource["Properties"][tagkey] = cfgtags
+			# Make a deep copy of the cfgtags
+			resource["Properties"][tagkey] = Marshal.load(Marshal.dump(cfgtags))
+			resource["Properties"][tagkey] << { "Key" => "Name", "Value" => name } if name
 			return
 		end
 		restags = resource["Properties"][tagkey]
-		reskeys = []
-		restags.each() do |tag|
-			reskeys.push(tag["Key"])
+		raise "Wrong class for Tags in #{self.name} (Found Hash, need Array)" if restags.class == "Hash"
+		restags.delete_if() do |hash|
+			next if hash["Key"]
+			tag = hash.first()
+			restags.push({ "Key" => tag[0], "Value" => tag[1] })
+		end
+		reskeys = restags.map{|hash| hash["Key"]}
+		if name && ! reskeys.include?("Name")
+			restags.push({ "Key" => "Name", "Value" => name })
+			reskeys << "Name"
 		end
 		cfgtags.each do |cfgtag|
 			if ! reskeys.include?(cfgtag["Key"])
@@ -73,32 +77,44 @@ class CFTemplate
 	end
 
 	# Resolve $var references to cfg items, no error checking on types
-	def resolve_ref(item, key)
-		ref = item[key]["Ref"]
-		if ref == nil
-			return
-		end
-		if ref[0] == '$'
-			cfgref = ref[1..-1]
-			if @cloudcfg[cfgref] == nil
-				raise "Bad reference: \"#{cfgref}\" not defined in cloudconfig.yaml"
+	def resolve_refs(parent, item)
+		case parent[item].class().to_s()
+		when "Array"
+			parent[item].each_index() do |index|
+				resolve_refs(parent[item], index)
 			end
-			item[key] = @cloudcfg[cfgref]
-		end
+		when "Hash"
+			if parent[item]["Ref"]
+				raise "Invalid Ref in #{self.name}: Refs can only be in single-item hashes" if parent[item].size > 1
+				ref = parent[item]["Ref"]
+				if ref[0] == '$' && ref[1] != '$'
+					cfgref = ref[1..-1]
+					if @cloudcfg[cfgref] == nil
+						raise "Bad reference: \"#{cfgref}\" not defined in cloudconfig.yaml"
+					end
+					parent[item] = @cloudcfg[cfgref]
+				end
+			else
+				parent[item].each_key() do |key|
+					resolve_refs(parent[item], key)
+				end # Hash each
+			end # item["Ref"]
+		end # case item.class
 	end	
 
 	# Returns an Array of string CIDRs, even if it's only 1 long
 	def resolve_cidr(ref)
+		clists = @cloudcfg["CIDRLists"]
 		if @cloudcfg["SubnetTypes"][ref] != nil
 			return [ @cloudcfg["SubnetTypes"][ref].cidr ]
-		elsif @cloudcfg[ref] != nil
-			if @cloudcfg[ref].class == Array
-				return @cloudcfg[ref]
+		elsif clists[ref] != nil
+			if clists[ref].class == Array
+				return clists[ref]
 			else
-				return [ @cloudcfg[ref] ]
+				return [ clists[ref] ]
 			end
 		else
-			raise "Bad configuration item: \"#{ref}\" not defined in cloudconfig.yaml"
+			raise "Bad configuration item: \"#{ref}\" not defined in \"CIDRLists\" section of cloudconfig.yaml"
 		end
 	end
 
@@ -117,24 +133,17 @@ class CFTemplate
 		reskeys = @res.keys()
 		reskeys.each do |reskey|
 			@res[reskey]["Properties"] ||= {}
+			resolve_refs(@res[reskey], "Properties")
 			case @res[reskey]["Type"]
 			# Just tag these
-			when "AWS::EC2::InternetGateway", "AWS::EC2::RouteTable", "AWS::EC2::NetworkAcl"
-				merge_tags(@res[reskey])
-			when "AWS::EC2::VPC"
-				merge_tags(@res[reskey])
-				@res[reskey]["Properties"]["CidrBlock"] = @cloudcfg["VPCCIDR"]
-			when "AWS::S3::Bucket"
-				merge_tags(@res[reskey])
-				resolve_ref(@res[reskey]["Properties"], "BucketName")
+			when "AWS::EC2::InternetGateway", "AWS::EC2::RouteTable", "AWS::EC2::NetworkAcl", "AWS::EC2::Instance", "AWS::EC2::Volume", "AWS::EC2::VPC", "AWS::S3::Bucket"
+				update_tags(@res[reskey], reskey)
 			when "AWS::Route53::HostedZone"
-				merge_tags(@res[reskey],"HostedZoneTags")
-				resolve_ref(@res[reskey]["Properties"], "Name")
+				update_tags(@res[reskey],nil,"HostedZoneTags")
 			when "AWS::EC2::Subnet"
 				if @st[reskey] == nil
 					raise "No configured subnet type for \"#{reskey}\" defined in network template"
 				end
-				merge_tags(@res[reskey])
 				raw_sn = Marshal.dump(@res[reskey])
 				@res.delete(reskey)
 				# Generate new subnet definitions for each AZ
@@ -142,11 +151,12 @@ class CFTemplate
 					newsn = Marshal.load(raw_sn)
 					newsn["Properties"]["CidrBlock"]=@st[reskey].subnets[i]
 					sname = reskey + @az[i].upcase()
+					update_tags(newsn, sname)
 					@res[sname] = newsn
 					@outputs[sname] = Output.new("SubnetId of #{sname} subnet", sname).output
 				end
 			when "AWS::EC2::SecurityGroup"
-				merge_tags(@res[reskey])
+				update_tags(@res[reskey], reskey)
 				@outputs[reskey] = Output.new("#{reskey} security group", reskey).output
 				[ "SecurityGroupIngress", "SecurityGroupEgress" ].each() do |sgtype|
 					sglist = @res[reskey]["Properties"][sgtype]
@@ -155,9 +165,9 @@ class CFTemplate
 					sglist.delete_if() do |rule|
 						next unless rule["CidrIp"]["Ref"]
 						next unless rule["CidrIp"]["Ref"][0]='$'
-						ref = rule["CidrIp"]["Ref"][1..-1]
+						cfgref = rule["CidrIp"]["Ref"][2..-1]
 						rawrule = Marshal.dump(rule)
-						resolve_cidr(ref).each() do |cidr|
+						resolve_cidr(cfgref).each() do |cidr|
 							newrule = Marshal.load(rawrule)
 							newrule["CidrIp"] = cidr
 							additions.push(newrule)
@@ -168,11 +178,8 @@ class CFTemplate
 				end
 			when "AWS::EC2::NetworkAclEntry"
 				ref = @res[reskey]["Properties"]["CidrBlock"]["Ref"]
-				if ref == nil
-					next
-				end
-				if ref[0] == '$'
-					cfgref = ref[1..-1]
+				if ref && ref[0] == '$'
+					cfgref = ref[2..-1]
 					cidr_arr = resolve_cidr(cfgref)
 					if cidr_arr.length == 1
 						@res[reskey]["Properties"]["CidrBlock"] = cidr_arr[0]
@@ -183,7 +190,7 @@ class CFTemplate
 							newacl = Marshal.load(raw_acl)
 							prop = newacl["Properties"]
 							prop["RuleNumber"] = prop["RuleNumber"].to_i + i
-							prop["CidrBlock"] = @cloudcfg[cfgref][i]
+							prop["CidrBlock"] = cidr_arr[i]
 							aclname = reskey + i.to_s
 							@res[aclname] = newacl
 						end
@@ -213,8 +220,9 @@ class CFTemplate
 				@res[reskey]["Properties"] ||= {}
 				if @res[reskey]["Properties"]["Parameters"]
 					param_includes = @res[reskey]["Properties"]["Parameters"]["Includes"]
+					@res[reskey]["Properties"]["Parameters"].delete("Includes") if param_includes
 				end
-				merge_tags(@res[reskey])
+				update_tags(@res[reskey], reskey)
 				childname = reskey.chomp("Stack")
 				@res[reskey]["Properties"]["TemplateURL"] = [ "https://s3.amazonaws.com", @cloudcfg["Bucket"], @cloudcfg["Prefix"], @directory, childname.downcase() + ".json" ].join("/")
 				@outputs[reskey] = Output.new("#{reskey} child stack", reskey).output
@@ -236,9 +244,6 @@ class MainTemplate < CFTemplate
 	def process_children()
 		# If one child lists another in it's parameter_includes, it sorts higher
 		@children.sort!()
-		# DEBUT
-		#puts "Sorted:"
-		#puts @children.map() { |child| child.name }
 		@children.each() do |child|
 			child.process()
 			if child.param_includes

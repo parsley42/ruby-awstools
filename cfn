@@ -17,6 +17,7 @@ Dir::chdir(project_dir)
 cfgfile = "cloudconfig.yaml"
 outputdir = "output"
 upload = true
+disable_rollback = false
 
 opts = OptionParser.new
 
@@ -36,6 +37,9 @@ opts.on("-t", "--jsondir DIRECTORY", "Use json templates from <templatedir>/DIRE
 end
 opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
 	cfgfile = file
+end
+opts.on("-d", "--disable-rollback", "Disable rollback when a create or update fails") do |disable|
+	disable_rollback = true
 end
 
 class UsageException < Exception
@@ -156,6 +160,7 @@ when "create", "update", "validate"
 					stack_name: stackname,
 					tags: cfg["tags"],
 					capabilities: required_capabilities,
+					disable_rollback: disable_rollback,
 					template_body: json,
 				}
 				if command == "create"
@@ -163,6 +168,7 @@ when "create", "update", "validate"
 					stackout = cfn.create_stack(params)
 				else
 					puts "Updating #{stackname}"
+					params.delete(:disable_rollback)
 					stackout = cfn.update_stack(params)
 				end
 				puts "Stack ID: #{stackout.stack_id}"
@@ -182,6 +188,7 @@ when "create", "update", "validate"
 			stack_name: stackname,
 			tags: cfg["tags"],
 			capabilities: stack_required_capabilities,
+			disable_rollback: disable_rollback,
 			template_url: template_url,
 		}
 		if command == "create"
@@ -189,6 +196,7 @@ when "create", "update", "validate"
 			stackout = cfn.create_stack(params)
 		else
 			puts "Updating #{stackname}"
+			params.delete(:disable_rollback)
 			stackout = cfn.update_stack(params)
 		end
 		puts "Stack ID: #{stackout.stack_id}"

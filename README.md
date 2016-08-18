@@ -31,7 +31,7 @@ hand-writing JSON. Ruby can do this trivially, but that led to another idea:
 as long as we're loading YAML into a data structure, why not perform some
 (relatively) simple processing, to:
 - Centralize configuration into a single file (as much as possible)
-- Intelligently handle arrays of CIDRs depending on resources being generated
+- Reduce the amount of hand-edited templates
 - Use automatic generation of things like Outputs, Parameters and tags to
 make templates more robust and less error-prone
 
@@ -56,6 +56,13 @@ on the type of resource being processed.
 to your own project. The intention is that a project will encapsulate
 your AWS CF stacks and configuration, and be managed in an internal
 repository, similar to what might be done with with `puppet` or `ansible`.
+
+## Features
+* Simpler Tags specification; { foo: bar } vs. { Key: foo, Value: bar } (can
+be mixed)
+* { Ref: $Var } will expand to the Var: definition from cloudconfig.yaml
+* { Ref: $$CidrList } will perform intelligent expansion of lists of CIDRs
+provided in cloudconfig.yaml; see **Resource Processing**
 
 ## Conventions
 To enable intelligent processing and automatic generation, `cfn` uses certain

@@ -139,19 +139,45 @@ class CFTemplate
 				update_tags(@res[reskey],nil,"HostedZoneTags")
 				@outputs["#{reskey}Id"] = Output.new("Hosted Zone Id for #{reskey}", reskey).output
 			when "AWS::EC2::Subnet"
-				if @st[reskey] == nil
-					raise "No configured subnet type for \"#{reskey}\" defined in network template"
+				ref = @res[reskey]["Properties"]["CidrBlock"]
+				if ref && ref[0] == '$'
+					cfgref = ref[2..-1]
+					if @st[cfgref] == nil
+						raise "No configured subnet type for \"#{cfgref}\" defined in network template"
+					end
+					STDERR.puts "WARNING: Resource identifier (#{reskey}) didn't match referenced subnet, using #{cfgref}" if reskey != cfgref
+					raw_sn = Marshal.dump(@res[reskey])
+					@res.delete(reskey)
+					# Generate new subnet definitions for each AZ
+					@az.each_index do |i|
+						newsn = Marshal.load(raw_sn)
+						newsn["Properties"]["CidrBlock"] = @st[cfgref].subnets[i]
+						newsn["Properties"]["AvailabilityZone"] = @cloudcfg["Region"] + @az[i]
+						sname = cfgref + @az[i].upcase()
+						update_tags(newsn, sname)
+						@res[sname] = newsn
+						@outputs[sname] = Output.new("SubnetId of #{sname} subnet", sname).output
+					end
 				end
-				raw_sn = Marshal.dump(@res[reskey])
-				@res.delete(reskey)
-				# Generate new subnet definitions for each AZ
-				@az.each_index do |i|
-					newsn = Marshal.load(raw_sn)
-					newsn["Properties"]["CidrBlock"]=@st[reskey].subnets[i]
-					sname = reskey + @az[i].upcase()
-					update_tags(newsn, sname)
-					@res[sname] = newsn
-					@outputs[sname] = Output.new("SubnetId of #{sname} subnet", sname).output
+			when "AWS::EC2::SubnetRouteTableAssociation", "AWS::EC2::SubnetNetworkAclAssociation"
+				ref = @res[reskey]["Properties"]["SubnetId"]
+				if ref && ref[0] == '$'
+					cfgref = ref[2..-1]
+					assn = @res[reskey]
+					@res.delete(reskey)
+					if @st[cfgref] == nil
+						raise "No configured subnet type for \"#{cfgref}\" defined in network template, referenced in resource #{reskey}"
+					end
+					# Generate new SubnetRouteTableAssociation definitions for each AZ
+					@az.each_index do |i|
+						# NOTE: a mere clone() is shallow; using Marshal we can get a deep clone
+						raw_assn = Marshal.dump(assn)
+						nassn = Marshal.load(raw_assn)
+						sname = cfgref + @az[i].upcase()
+						nassn["Properties"]["SubnetId"] = { "Ref" => sname }
+						assn_name = reskey + @az[i].upcase()
+						@res[assn_name] = nassn
+					end
 				end
 			when "AWS::EC2::SecurityGroup"
 				update_tags(@res[reskey], reskey)
@@ -193,23 +219,6 @@ class CFTemplate
 							@res[aclname] = newacl
 						end
 					end
-				end
-			when "AWS::EC2::SubnetRouteTableAssociation", "AWS::EC2::SubnetNetworkAclAssociation"
-				assn = @res[reskey]
-				@res.delete(reskey)
-				sn = assn["Properties"]["SubnetId"]["Ref"]
-				if @st[sn] == nil
-					raise "No configured subnet type for \"#{sn}\" defined in network template, reference in resource #{reskey}"
-				end
-				# Generate new SubnetRouteTableAssociation definitions for each AZ
-				@az.each_index do |i|
-					# NOTE: a mere clone() is shallow; using Marshal we can get a deep clone
-					raw_assn = Marshal.dump(assn)
-					nassn = Marshal.load(raw_assn)
-					sname = sn + @az[i].upcase()
-					nassn["Properties"]["SubnetId"]["Ref"] = sname
-					assn_name = reskey + @az[i].upcase()
-					@res[assn_name] = nassn
 				end
 			when "AWS::CloudFormation::Stack"
 				if @name != "main"

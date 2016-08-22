@@ -11,6 +11,7 @@ Dir::chdir(script_dir)
 require 'bundler/setup'
 require 'aws-sdk'
 require_relative 'lib/cfglib'
+#require_relative 'lib/cfnlib'
 Dir::chdir(project_dir)
 
 cfgfile = "cloudconfig.yaml"
@@ -20,8 +21,9 @@ opts = OptionParser.new
 opts.banner = <<-EOF
 Usage: ec2 <command> (options) (args) - manage a CloudFormation stack
  Where <command> is one of:
-  genkeypair <keyname> (outputdir) - generate a keypair and store it in <keyname>.pem
   deletekeypair <keyname>
+  genkeypair <keyname> (outputdir) - generate a keypair and store it in <keyname>.pem
+  start <instancename|instanceId> - start a stopped instance; i-* are assumed instance ID
  Options are:
 EOF
 opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
@@ -36,10 +38,18 @@ end
 
 begin
 
-commands = [ "genkeypair", "deletekeypair" ]
+commands = [ "deletekeypair", "genkeypair", "start" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
+
+case command
+when "start"
+	dnsname = nil
+	opts.on("-d", "--dns-name HOSTNAME", "Update the HOSTNAME after the instance starts (uses PublicDNS from cloudconfig.yaml)") do |host|
+		dnsname = host
+	end
+end
 
 opts.parse!
 
@@ -54,6 +64,10 @@ ec2 = Aws::EC2::Client.new( region: cfg["Region"] )
 #s3 = Aws::S3::Resource.new( region: cfg["Region"] )
 
 case command
+when "start"
+	ispec = ARGV.shift()
+	raise UsageException.new("Missing <instancename|instanceId> argument") unless ispec
+	puts "Starting #{ispec}, dnsname is #{dnsname}.#{cfg["PublicDNS"]}"
 when "genkeypair"
 	keyname = ARGV.shift()
 	raise UsageException.new("Missing <keyname> argument") unless keyname

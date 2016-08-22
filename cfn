@@ -22,7 +22,7 @@ disable_rollback = false
 opts = OptionParser.new
 
 opts.banner = <<-EOF
-Usage: cfn <command> (options) <templatedir> - manage a CloudFormation stack
+Usage: cfn <command> (options) <templatename|templatedir> - manage a CloudFormation stack
  Where <command> is one of:
   generate - generate json templates for the stack
   list - list all stacks for the account
@@ -30,9 +30,10 @@ Usage: cfn <command> (options) <templatedir> - manage a CloudFormation stack
   delete - delete a stack (warning: without confirmation, no resources retained)
   update - update a stack
   validate - run templates through validation
+ <templatename> corresponds to a directory under cfn/, or you can specify the full path
  Options are:
 EOF
-opts.on("-t", "--jsondir DIRECTORY", "Use json templates from <templatedir>/DIRECTORY instead of <templatedir>/output") do |dir|
+opts.on("-t", "--jsondir DIRECTORY", "Use <templatedir>/DIRECTORY instead of <templatedir>/output for JSON files") do |dir|
 	outputdir = dir
 end
 opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
@@ -108,11 +109,20 @@ when "list"
 	exit 0
 end
 
-templatedir = ARGV.shift()
-raise UsageException.new("Missing <templatedir>") unless templatedir
+template_arg = ARGV.shift()
+raise UsageException.new("Missing <templatename|templatedir>") unless template_arg
 
-templatedir = templatedir.chomp("/")
-raise UsageException.new("<templatedir> must be a subdirectory of the current directory") if templatedir.include?("/")
+template_arg = template_arg.chomp("/")
+if template_arg.include?("/")
+	templatename = File::basename(template_arg)
+	templatedir = template_arg
+else
+	templatename = template_arg
+	templatedir = "cfn/#{templatename}"
+end
+
+raise UsageException.new("Directory not found: #{templatedir}") unless File::exist?(templatedir)
+raise UsageException.new("Not a directory: #{templatedir}") unless File::stat(templatedir).directory?
 
 outputdir = templatedir + "/" + outputdir
 
@@ -126,11 +136,8 @@ else
 	end
 end
 
-raise UsageException.new("Directory not found: #{templatedir}") unless File::exist?(templatedir)
-raise UsageException.new("Not a directory: #{templatedir}") unless File::stat(templatedir).directory?
-
 # Generate the hub template that owns other templates
-maincfg = MainTemplate.new(templatedir, cfg)
+maincfg = MainTemplate.new(templatedir, templatename, cfg)
 maincfg.process()
 puts # blank line after 'Loading ...'
 
@@ -138,7 +145,7 @@ filenames = [ "main" ] + maincfg.children.map { |child| child.name().downcase() 
 upload = false if filenames.length() == 1
 
 stackprefix = (cfg["StackPrefix"]?cfg["StackPrefix"]:"")
-stackname = stackprefix + templatedir
+stackname = stackprefix + templatename
 stack_required_capabilities = []
 
 case command
@@ -173,7 +180,7 @@ when "create", "update", "validate"
 				end
 				puts "Stack ID: #{stackout.stack_id}"
 			else
-				obj = s3.bucket(cfg["Bucket"]).object("#{cfg["Prefix"]}/#{templatedir}/#{tfile}.json")
+				obj = s3.bucket(cfg["Bucket"]).object("#{cfg["Prefix"]}/#{templatename}/#{tfile}.json")
 				puts "Uploading #{tfile}"
 				obj.upload_file("#{outputdir}/#{tfile}.json")
 				stack_required_capabilities = (stack_required_capabilities + required_capabilities).uniq()
@@ -182,8 +189,7 @@ when "create", "update", "validate"
 	end
 	if upload && [ "create", "update" ].include?(command)
 		json = File::read(outputdir + "/main.json")
-		stackname = stackprefix + templatedir
-		template_url = "https://s3.amazonaws.com/#{cfg["Bucket"]}/#{cfg["Prefix"]}/#{templatedir}/main.json"
+		template_url = "https://s3.amazonaws.com/#{cfg["Bucket"]}/#{cfg["Prefix"]}/#{templatename}/main.json"
 		params = {
 			stack_name: stackname,
 			tags: cfg["tags"],

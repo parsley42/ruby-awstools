@@ -222,7 +222,7 @@ class CFTemplate
 				end
 				update_tags(@res[reskey], reskey)
 				childname = reskey.chomp("Stack")
-				@res[reskey]["Properties"]["TemplateURL"] = [ "https://s3.amazonaws.com", @cloudcfg["Bucket"], @cloudcfg["Prefix"], @directory, childname.downcase() + ".json" ].join("/")
+				@res[reskey]["Properties"]["TemplateURL"] = [ "https://s3.amazonaws.com", @cloudcfg["Bucket"], @cloudcfg["Prefix"], @templatename, childname.downcase() + ".json" ].join("/")
 				@outputs[reskey] = Output.new("#{reskey} child stack", reskey).output
 				@children.push(CFTemplate.new(@directory, childname, @cloudcfg, param_includes, self))
 			end # case
@@ -233,7 +233,8 @@ end
 class MainTemplate < CFTemplate
 	attr_reader :children
 
-	def initialize(directory, cloudcfg)
+	def initialize(directory, templatename, cloudcfg)
+		@templatename = templatename
 		@children = []
 		@directory = directory
 		super(directory, "main", cloudcfg, nil, nil)

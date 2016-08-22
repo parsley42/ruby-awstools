@@ -1,3 +1,7 @@
+- Modify AWS::EC2::Subnet and AWS::EC2::SubnetNetworkAclAssociation to require
+  $$Subnet for 'smart expansion'
+- Allow for additional cfn/<stack>/config.yaml to merge with e.g. different
+  Project tags
 - Update resolve_vars to allow indexing, e.g. $foo["bar"][3]
 - Create cfnlib for looking up stack outputs, e.g.
   stackname.child.outputname (results should cache in memory during a

@@ -1,3 +1,5 @@
+- Implement Resource "$Include(instances/footype.yaml, studioone, m3.medium)"
+- Upload single file stacks to S3 when stack size > 51,200 bytes
 - Allow for additional cfn/<stack>/config.yaml to merge with e.g. different
   Project tags
 - Update resolve_vars to allow indexing, e.g. $foo["bar"][3]

@@ -62,7 +62,6 @@ raise UsageException.new("Missing configuration file: #{cfgfile}") unless File::
 raise UsageException.new("Not a regular file: #{cfgfile}") unless File::stat(cfgfile).file?
 
 cfg = ConfigFile.new(cfgfile)
-cfg = cfg.process()
 
 class Aws::CloudFormation::Client
 	def validate(template, verbose=true)

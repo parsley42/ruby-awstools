@@ -1,31 +1,5 @@
 # Classes for loading and processing the configuration file
 
-# For reading in the configuration file
-class ConfigFile
-	def initialize(filename)
-		@config = YAML::load(File::read(filename))
-		[ "Bucket", "Region", "VPCCIDR", "AvailabilityZones", "SubnetTypes" ].each do |c|
-			if ! @config[c]
-				raise "Missing required top-level configuration item in #{filename}: #{c}"
-			end
-		end
-	end
-
-	def process
-		subnet_types = {}
-		@config["SubnetTypes"].each_key do |st|
-			subnet_types[st] = SubnetDefinition.new(@config["SubnetTypes"][st]["CIDR"], @config["SubnetTypes"][st]["Subnets"])
-		end
-		@config["SubnetTypes"] = subnet_types
-
-		tags = CfgTags.new(@config["Tags"])
-		@config["Tags"] = tags.output
-		@config["tags"] = tags.loweroutput
-
-		@config
-	end
-end
-
 class SubnetDefinition
 	attr_reader :cidr, :subnets
 
@@ -49,5 +23,30 @@ class CfgTags
 				@loweroutput.push({ "key" => k, "value" => hash[k] })
 			end
 		end
+	end
+end
+
+# For reading in the configuration file
+class ConfigFile
+	def initialize(filename)
+		@config = YAML::load(File::read(filename))
+		[ "Bucket", "Region", "VPCCIDR", "AvailabilityZones", "SubnetTypes" ].each do |c|
+			if ! @config[c]
+				raise "Missing required top-level configuration item in #{filename}: #{c}"
+			end
+		end
+		subnet_types = {}
+		@config["SubnetTypes"].each_key do |st|
+			subnet_types[st] = SubnetDefinition.new(@config["SubnetTypes"][st]["CIDR"], @config["SubnetTypes"][st]["Subnets"])
+		end
+		@config["SubnetTypes"] = subnet_types
+
+		tags = CfgTags.new(@config["Tags"])
+		@config["Tags"] = tags.output
+		@config["tags"] = tags.loweroutput
+	end
+
+	def [](key)
+		@config[key]
 	end
 end

@@ -114,8 +114,6 @@ naming conventions in template files:
 Failing to adhere to some of these conventions might result in an
 exception being raised.
 
-## Variable Expansion
-
 ## Walk-through: creating a VPC+
 This section will walk you through getting started with creating a general-purpose
 VPC from the sample project.

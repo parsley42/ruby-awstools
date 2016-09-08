@@ -2,22 +2,21 @@
 
 require 'pathname'
 script_dir = File.dirname(Pathname.new(__FILE__).realpath)
-project_dir = Dir::getwd()
 
 require 'optparse'
 require 'yaml'
 require 'rubygems'
-Dir::chdir(script_dir)
-require 'bundler/setup'
-require 'aws-sdk'
-require_relative 'lib/templatelib'
-require_relative 'lib/cfglib'
-Dir::chdir(project_dir)
+Dir::chdir(script_dir) do
+	require 'bundler/setup'
+	require 'aws-sdk'
+	require_relative 'lib/templatelib'
+	require_relative 'lib/cfglib'
+end
 
-cfgfile = "cloudconfig.yaml"
 outputdir = "output"
 upload = true
 disable_rollback = false
+cfgfile = ENV["RAWS_CLOUDCFG"]
 
 opts = OptionParser.new
 
@@ -57,6 +56,8 @@ raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
 
 opts.parse!
+
+cfgfile = "cloudconfig.yaml" unless cfgfile
 
 raise UsageException.new("Missing configuration file: #{cfgfile}") unless File::exist?(cfgfile)
 raise UsageException.new("Not a regular file: #{cfgfile}") unless File::stat(cfgfile).file?

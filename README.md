@@ -22,6 +22,44 @@ $ bundle install
 This tells bundler to install the gems from vendor/cache to vendor/ruby
 4. Create symlinks to scripts in the `bin/` directory of your choice; `/usr/local/bin` or `$HOME/bin` are both good choices.
 
+# Common Configuration and Conventions
+
+YAML is the standard file-format for `ruby-awstools` configuration files.
+If you're unfamiliar with YAML (also used with Ansible), you should
+familiarize yourself with it.
+
+## Project Repositories
+
+`ruby-awstools` centers around the idea of a project repository where all
+the configuration data and templates for a single-region/VPC AWS presence live
+in a single directory with a well-defined format:
+
+```
+cloudconfig.yaml - default central configuration file specifying a region, VPC
+CIDR, subnet definitions, DNS zone info, etc. (can be overridden with -c, or
+$RAWS_CLOUDCFG environment variable)
+	cfn/ - subdirectory for cloud formation templates
+	ec2/ - subdirectory for ec2 instance templates
+```
+
+## Variable Expansion
+
+One of the features that makes `ruby-awstools` powerful is it's variable
+expansion functionality, allowing centralized configuration data
+to be retrieved from the central YAML file, CloudFormation template outputs,
+DNS, etc. String keys and values in YAML configuration files can be expanded
+with the following syntax:
+
+* $Var - Direct expansion of a variable from the cloud config file,
+  can be optionally indexed with \[key\]([subkey])...
+* $$Network - Context-sensitive expansion; individual tools interpret
+  these in a service-specific fashion (e.g. see `cfn`, below)
+* $=Template(:child):Output - retrieve an output from a previously-created
+  cloudformation template. When Output is of the form `~(glob)`, a random
+  value from all matching outputs is used; e.g. '~PublicSubnet?'
+* $%Record - Look up a DNS TXT record from the ConfigSubDom defined in
+  the cloud config file
+
 # cfn - CloudFormation template generator and management
 
 ## Background
@@ -60,7 +98,8 @@ repository, similar to what might be done with with `puppet` or `ansible`.
 ## Features
 * Simpler Tags specification; { foo: bar } vs. { Key: foo, Value: bar } (can
 be mixed)
-* Global $Var expansion to the Var: definition from cloudconfig.yaml
+* Variable expansion to get values from global config, cloudformation outputs,
+etc.
 * $$CidrList will perform intelligent expansion of lists of CIDRs
 provided in cloudconfig.yaml; see **Resource Processing**
 
@@ -74,6 +113,8 @@ naming conventions in template files:
   outputs
 Failing to adhere to some of these conventions might result in an
 exception being raised.
+
+## Variable Expansion
 
 ## Walk-through: creating a VPC+
 This section will walk you through getting started with creating a general-purpose

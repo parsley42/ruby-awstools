@@ -29,10 +29,13 @@ end
 # For reading in the configuration file and initializing service clients
 # and resources
 class ConfigFile
-	attr_reader :cfn, :cfnres, :s3, :ec2, :ec2res
+	attr_reader :installdir, :cfn, :cfnres, :s3, :ec2, :ec2res, :r53
 
-	def initialize(filename)
+	def initialize(filename, installdir)
 		@filename = filename
+		@installdir = installdir
+		@params = {}
+
 		@config = YAML::load(File::read(filename))
 		[ "Bucket", "Region", "VPCCIDR", "AvailabilityZones", "SubnetTypes" ].each do |c|
 			if ! @config[c]
@@ -54,13 +57,39 @@ class ConfigFile
 		@s3 = Aws::S3::Resource.new( region: @config["Region"] )
 		@ec2 = Aws::EC2::Client.new( region: @config["Region"] )
 		@ec2res = Aws::EC2::Resource.new(client: @ec2)
+		@r53 = Aws::Route53::Client.new( region: @config["Region"] )
+	end
+
+	def setparams(hash)
+		@params = hash
+	end
+
+	def setparam(param, value)
+		@params[param] = value
+	end
+
+	def getparam(param)
+		@params[param]
 	end
 
 	def [](key)
 		@config[key]
 	end
 
-		# Resolve $var references to cfg items, no error checking on types
+	def resolve_value(var)
+		cfgvar = var[1..-1]
+		case cfgvar[0]
+		when "@"
+			return get(cfgvar[1..-1])
+		else
+			if @config[cfgvar] == nil
+				raise "Bad variable reference: \"#{cfgvar}\" not defined in #{@filename}"
+			end
+			return @config[cfgvar]
+		end
+	end
+
+	# Resolve $var references to cfg items, no error checking on types
 	def resolve_vars(parent, item)
 		case parent[item].class().to_s()
 		when "Array"
@@ -74,12 +103,25 @@ class ConfigFile
 		when "String"
 			var = parent[item]
 			if var[0] == '$' && var[1] != '$'
-				cfgvar = var[1..-1]
-				if @config[cfgvar] == nil
-					raise "Bad variable reference: \"#{cfgvar}\" not defined in #{@filename}"
-				end
-				parent[item] = @config[cfgvar]
+				parent[item] = resolve_value(var)
 			end
 		end # case item.class
+	end
+
+	def r53_set(where, template)
+		templatefile = nil
+		if File::exist?("#{template}.json")
+			templatefile = "#{template}.json"
+		else
+			templatefile = "#{@installdir}/defaults/route53/#{template}.json"
+		end
+		set = YAML::load(File::read(templatefile))
+		case where
+		when :public
+			set["hosted_zone_id"] = @config["PublicDNSId"]
+		when :private
+			set["hosted_zone_id"] = @config["PrivateDNSId"]
+		end
+		resolve_vars( { "child" => set }, "child" )
 	end
 end

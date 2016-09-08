@@ -52,6 +52,8 @@ with the following syntax:
 
 * $Var - Direct expansion of a variable from the cloud config file,
   can be optionally indexed with \[key\]([subkey])...
+* $@param - use the value of params[param], obtained from the command line
+  or interactively
 * $$Network - Context-sensitive expansion; individual tools interpret
   these in a service-specific fashion (e.g. see `cfn`, below)
 * $=Template(:child):Output - retrieve an output from a previously-created

@@ -77,7 +77,7 @@ class Aws::CloudFormation::Client
 	end
 end
 
-cfg = ConfigFile.new(cfgfile)
+cfg = ConfigFile.new(cfgfile, script_dir)
 
 case command
 when "list"

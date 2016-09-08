@@ -22,6 +22,7 @@ class CFTemplate
 		raw = File::read(directory + "/" + @name.downcase() + ".yaml")
 		puts "Loading #{@name}"
 		@cfg = YAML::load(raw)
+		@cloudcfg.resolve_vars({ "child" => @cfg }, "child")
 		@res = @cfg["Resources"]
 		@cfg["Outputs"] ||= {}
 		@outputs = @cfg["Outputs"]
@@ -76,29 +77,6 @@ class CFTemplate
 		end
 	end
 
-	# Resolve $var references to cfg items, no error checking on types
-	def resolve_vars(parent, item)
-		case parent[item].class().to_s()
-		when "Array"
-			parent[item].each_index() do |index|
-				resolve_vars(parent[item], index)
-			end
-		when "Hash"
-			parent[item].each_key() do |key|
-				resolve_vars(parent[item], key)
-			end # Hash each
-		when "String"
-			var = parent[item]
-			if var[0] == '$' && var[1] != '$'
-				cfgvar = var[1..-1]
-				if @cloudcfg[cfgvar] == nil
-					raise "Bad varerence: \"#{cfgvar}\" not defined in cloudconfig.yaml"
-				end
-				parent[item] = @cloudcfg[cfgvar]
-			end
-		end # case item.class
-	end	
-
 	# Returns an Array of string CIDRs, even if it's only 1 long
 	def resolve_cidr(ref)
 		clists = @cloudcfg["CIDRLists"]
@@ -130,7 +108,6 @@ class CFTemplate
 		reskeys = @res.keys()
 		reskeys.each do |reskey|
 			@res[reskey]["Properties"] ||= {}
-			resolve_vars(@res[reskey], "Properties")
 			case @res[reskey]["Type"]
 			# Just tag these
 			when "AWS::EC2::InternetGateway", "AWS::EC2::RouteTable", "AWS::EC2::NetworkAcl", "AWS::EC2::Instance", "AWS::EC2::Volume", "AWS::EC2::VPC", "AWS::S3::Bucket"

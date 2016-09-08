@@ -26,13 +26,17 @@ class CfgTags
 	end
 end
 
-# For reading in the configuration file
+# For reading in the configuration file and initializing service clients
+# and resources
 class ConfigFile
+	attr_reader :cfn, :cfnres, :s3, :ec2, :ec2res
+
 	def initialize(filename)
+		@filename = filename
 		@config = YAML::load(File::read(filename))
 		[ "Bucket", "Region", "VPCCIDR", "AvailabilityZones", "SubnetTypes" ].each do |c|
 			if ! @config[c]
-				raise "Missing required top-level configuration item in #{filename}: #{c}"
+				raise "Missing required top-level configuration item in #{@filename}: #{c}"
 			end
 		end
 		subnet_types = {}
@@ -44,9 +48,38 @@ class ConfigFile
 		tags = CfgTags.new(@config["Tags"])
 		@config["Tags"] = tags.output
 		@config["tags"] = tags.loweroutput
+
+		@cfn = Aws::CloudFormation::Client.new( region: @config["Region"] )
+		@cfnres = Aws::CloudFormation::Resource.new( client: cfn )
+		@s3 = Aws::S3::Resource.new( region: @config["Region"] )
+		@ec2 = Aws::EC2::Client.new( region: @config["Region"] )
+		@ec2res = Aws::EC2::Resource.new(client: @ec2)
 	end
 
 	def [](key)
 		@config[key]
+	end
+
+		# Resolve $var references to cfg items, no error checking on types
+	def resolve_vars(parent, item)
+		case parent[item].class().to_s()
+		when "Array"
+			parent[item].each_index() do |index|
+				resolve_vars(parent[item], index)
+			end
+		when "Hash"
+			parent[item].each_key() do |key|
+				resolve_vars(parent[item], key)
+			end # Hash each
+		when "String"
+			var = parent[item]
+			if var[0] == '$' && var[1] != '$'
+				cfgvar = var[1..-1]
+				if @config[cfgvar] == nil
+					raise "Bad variable reference: \"#{cfgvar}\" not defined in #{@filename}"
+				end
+				parent[item] = @config[cfgvar]
+			end
+		end # case item.class
 	end
 end

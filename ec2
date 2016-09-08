@@ -58,11 +58,6 @@ raise UsageException.new("Missing configuration file: #{cfgfile}") unless File::
 raise UsageException.new("Not a regular file: #{cfgfile}") unless File::stat(cfgfile).file?
 
 cfg = ConfigFile.new(cfgfile)
-cfg = cfg.process()
-
-ec2 = Aws::EC2::Client.new( region: cfg["Region"] )
-
-#s3 = Aws::S3::Resource.new( region: cfg["Region"] )
 
 case command
 when "start"
@@ -82,14 +77,14 @@ when "genkeypair"
 	end
 	raise UsageException.new("File already exists: #{keyfilename}") if File::exist?(keyfilename)
 	puts "Creating keypair #{keyname} and storing in #{keyfilename}"
-	key = ec2.create_key_pair({key_name: keyname})
+	key = cfg.ec2.create_key_pair({key_name: keyname})
 	keyfile = File.open(keyfilename, "w")
 	keyfile.write(key.key_material())
 	keyfile.close()
 when "deletekeypair"
 	keyname = ARGV.shift()
 	raise UsageException.new("Missing <keyname> argument") unless keyname
-	ec2.delete_key_pair({key_name: keyname})
+	cfg.ec2.delete_key_pair({key_name: keyname})
 	puts "Deleted"
 end
 

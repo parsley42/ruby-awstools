@@ -10,7 +10,7 @@ Dir::chdir(script_dir) do
 	require 'bundler/setup'
 	require 'aws-sdk'
 	require_relative 'lib/templatelib'
-	require_relative 'lib/cfglib'
+	require_relative 'lib/cloud'
 end
 
 outputdir = "output"
@@ -77,7 +77,7 @@ class Aws::CloudFormation::Client
 	end
 end
 
-cfg = ConfigFile.new(cfgfile, script_dir)
+cfg = RAWSTools::CloudManager.new(cfgfile, script_dir)
 
 case command
 when "list"

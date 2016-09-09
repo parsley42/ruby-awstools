@@ -57,7 +57,7 @@ cfgfile = "cloudconfig.yaml" unless cfgfile
 raise UsageException.new("Missing configuration file: #{cfgfile}") unless File::exist?(cfgfile)
 raise UsageException.new("Not a regular file: #{cfgfile}") unless File::stat(cfgfile).file?
 
-cfg = ConfigFile.new(cfgfile, script_dir)
+cfg = RAWSTools::ConfigFile.new(cfgfile, script_dir)
 
 case command
 when "start"

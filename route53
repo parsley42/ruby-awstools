@@ -1,0 +1,92 @@
+#!/usr/bin/ruby
+
+require 'pathname'
+script_dir = File.dirname(Pathname.new(__FILE__).realpath)
+
+require 'optparse'
+require 'yaml'
+require 'rubygems'
+Dir::chdir(script_dir) do
+	require 'bundler/setup'
+	require 'aws-sdk'
+	require_relative 'lib/cfglib'
+	#require_relative 'lib/cfnlib'
+end
+
+cfgfile = ENV["RAWS_CLOUDCFG"]
+
+opts = OptionParser.new
+params = {}
+
+opts.banner = <<-EOF
+Usage: route53 <command> (options) (args) - manage route53 records
+ Where <command> is one of:
+  arec <public|private|both> <host(.subdom)> <ipaddr> - inserts/updates A records in given domains, uses route53/arec.yaml
+  txt <public|private|both> <name(.subdom)> "string" - inserts/updates a TXT record, uses route53/txt.yaml
+  template <public|private|both> <template basename> (param=value ...) - use a custom <template>.yaml and supply params
+ Options are:
+EOF
+opts.on("-t", "--tty TTY", "Use TTY instead of configured default") do |tty|
+	params["tty"] = tty
+end
+opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
+	cfgfile = file
+end
+
+class UsageException < Exception
+	def initialize(msg="Invalid command / option / argument")
+		super(msg)
+	end
+end
+
+begin
+
+commands = [ "arec", "txt", "template" ]
+command = ARGV.shift()
+raise UsageException.new("Missing <command>") unless command
+raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
+
+opts.parse!
+
+cfgfile = "cloudconfig.yaml" unless cfgfile
+
+raise UsageException.new("Missing configuration file: #{cfgfile}") unless File::exist?(cfgfile)
+raise UsageException.new("Not a regular file: #{cfgfile}") unless File::stat(cfgfile).file?
+
+cfg = ConfigFile.new(cfgfile, script_dir)
+where = nil
+template = nil
+
+case command
+when "arec"
+	where, name, ipaddr = ARGV.shift(3)
+	cfg.setparam("tty", cfg["ARecTTL"]) unless cfg.getparam("tty")
+	raise UsageException.new("Missing required argument") unless ipaddr
+	cfg.setparam("name", name)
+	cfg.setparam("ipaddr", ipaddr)
+	template = "arec"
+when "txt"
+	where, name, txtvalue = ARGV.shift(3)
+	cfg.setparam("tty", cfg["TXTRecTTL"]) unless cfg.getparam("tty")
+	raise UsageException.new("Missing required argument") unless txtvalue
+	cfg.setparam("name", name)
+	cfg.setparam("txtvalue", txtvalue)
+	template = "txt"
+when "template"
+	puts "TODO: not implemented"
+end
+
+if where == "public" or where == "both"
+	puts "Adding #{name} to public DNS zone"
+	pubset = cfg.r53_set(:public, template)
+end
+
+if where == "private" or where == "both"
+	puts "Adding #{name} to private DNS zone"
+	privset = cfg.r53_set(:private, template)
+end
+
+rescue UsageException => e
+	puts "\n#{e.message}\n\n"
+	puts opts.help()
+end

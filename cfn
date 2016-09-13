@@ -2,22 +2,21 @@
 
 require 'pathname'
 script_dir = File.dirname(Pathname.new(__FILE__).realpath)
-project_dir = Dir::getwd()
 
 require 'optparse'
 require 'yaml'
 require 'rubygems'
-Dir::chdir(script_dir)
-require 'bundler/setup'
-require 'aws-sdk'
-require_relative 'lib/templatelib'
-require_relative 'lib/cfglib'
-Dir::chdir(project_dir)
+Dir::chdir(script_dir) do
+	require 'bundler/setup'
+	require 'aws-sdk'
+	require_relative 'lib/templatelib'
+	require_relative 'lib/cloud'
+end
 
-cfgfile = "cloudconfig.yaml"
 outputdir = "output"
 upload = true
 disable_rollback = false
+cfgfile = ENV["RAWS_CLOUDCFG"]
 
 opts = OptionParser.new
 
@@ -58,11 +57,10 @@ raise UsageException.new("Unknown command: #{command}") unless commands.include?
 
 opts.parse!
 
+cfgfile = "cloudconfig.yaml" unless cfgfile
+
 raise UsageException.new("Missing configuration file: #{cfgfile}") unless File::exist?(cfgfile)
 raise UsageException.new("Not a regular file: #{cfgfile}") unless File::stat(cfgfile).file?
-
-cfg = ConfigFile.new(cfgfile)
-cfg = cfg.process()
 
 class Aws::CloudFormation::Client
 	def validate(template, verbose=true)
@@ -79,23 +77,20 @@ class Aws::CloudFormation::Client
 	end
 end
 
-cfn = Aws::CloudFormation::Client.new( region: cfg["Region"] )
-cnfres = Aws::CloudFormation::Resource.new( client: cfn )
-
-s3 = Aws::S3::Resource.new( region: cfg["Region"] )
+cfg = RAWSTools::CloudManager.new(cfgfile, script_dir)
 
 case command
 when "list"
 	stacklist = []
 	stack_states = [ "CREATE_IN_PROGRESS", "CREATE_FAILED", "CREATE_COMPLETE", "ROLLBACK_IN_PROGRESS", "ROLLBACK_FAILED", "ROLLBACK_COMPLETE", "DELETE_IN_PROGRESS", "DELETE_FAILED", "UPDATE_IN_PROGRESS", "UPDATE_COMPLETE_CLEANUP_IN_PROGRESS", "UPDATE_COMPLETE", "UPDATE_ROLLBACK_IN_PROGRESS", "UPDATE_ROLLBACK_FAILED", "UPDATE_ROLLBACK_COMPLETE_CLEANUP_IN_PROGRESS", "UPDATE_ROLLBACK_COMPLETE" ]
-	response = cfn.list_stacks({ stack_status_filter: stack_states })
+	response = cfg.cfn.list_stacks({ stack_status_filter: stack_states })
 	while true
 		response.stack_summaries.each() do |stack|
 			stacklist.push("#{stack.stack_name}: #{stack.stack_status}")
 		end
 		next_token = response.next_token
 		break unless next_token
-		response = cfn.list_stacks({
+		response = cfg.cfn.list_stacks({
 			stack_staus_filter: stack_states,
 			next_token: next_token,
 		})
@@ -158,9 +153,9 @@ when "create", "update", "validate"
 		case command
 		when "validate"
 			puts "Validating #{tfile}"
-			cfn.validate(json)
+			cfg.cfn.validate(json)
 		when "create", "update"
-			required_capabilities = cfn.validate(json, false)
+			required_capabilities = cfg.cfn.validate(json, false)
 			if ! upload
 				json = File::read(outputdir + "/" + tfile + ".json")
 				params = {
@@ -172,11 +167,11 @@ when "create", "update", "validate"
 				}
 				if command == "create"
 					puts "Creating #{stackname}"
-					stackout = cfn.create_stack(params)
+					stackout = cfg.cfn.create_stack(params)
 				else
 					puts "Updating #{stackname}"
 					params.delete(:disable_rollback)
-					stackout = cfn.update_stack(params)
+					stackout = cfg.cfn.update_stack(params)
 				end
 				puts "Stack ID: #{stackout.stack_id}"
 			else
@@ -199,17 +194,17 @@ when "create", "update", "validate"
 		}
 		if command == "create"
 			puts "Creating #{stackname} from #{template_url}"
-			stackout = cfn.create_stack(params)
+			stackout = cfg.cfn.create_stack(params)
 		else
 			puts "Updating #{stackname}"
 			params.delete(:disable_rollback)
-			stackout = cfn.update_stack(params)
+			stackout = cfg.cfn.update_stack(params)
 		end
 		puts "Stack ID: #{stackout.stack_id}"
 	end
 when "delete"
 	puts "Deleting #{stackname}"
-	cfn.delete_stack({ stack_name: stackname })
+	cfg.cfn.delete_stack({ stack_name: stackname })
 end
 
 rescue UsageException => e

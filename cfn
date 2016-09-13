@@ -175,7 +175,7 @@ when "create", "update", "validate"
 				end
 				puts "Stack ID: #{stackout.stack_id}"
 			else
-				obj = s3.bucket(cfg["Bucket"]).object("#{cfg["Prefix"]}/#{templatename}/#{tfile}.json")
+				obj = cfg.s3res.bucket(cfg["Bucket"]).object("#{cfg["Prefix"]}/#{templatename}/#{tfile}.json")
 				puts "Uploading #{tfile}"
 				obj.upload_file("#{outputdir}/#{tfile}.json")
 				stack_required_capabilities = (stack_required_capabilities + required_capabilities).uniq()

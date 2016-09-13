@@ -5,7 +5,6 @@ change_batch:
   - action: UPSERT
     resource_record_set:
       name: $@name
-      type: A
+      type: TXT
       ttl: $@ttl
-      resource_records:
-      - value: $@ipaddr
+      resource_records: $@txtrecords

@@ -4,8 +4,8 @@ change_batch:
   changes:
   - action: UPSERT
     resource_record_set:
-      name: $@name
-      type: A
+      name: $@cname
+      type: CNAME
       ttl: $@ttl
       resource_records:
-      - value: $@ipaddr
+      - value: $@name

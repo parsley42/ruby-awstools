@@ -9,11 +9,12 @@ require 'rubygems'
 Dir::chdir(script_dir) do
 	require 'bundler/setup'
 	require 'aws-sdk'
-	require_relative 'lib/cfglib'
+	require_relative 'lib/cloud'
 	#require_relative 'lib/cfnlib'
 end
 
 cfgfile = ENV["RAWS_CLOUDCFG"]
+wait = false
 
 opts = OptionParser.new
 params = {}
@@ -22,12 +23,15 @@ opts.banner = <<-EOF
 Usage: route53 <command> (options) (args) - manage route53 records
  Where <command> is one of:
   arec <public|private|both> <host(.subdom)> <ipaddr> - inserts/updates A records in given domains, uses route53/arec.yaml
+  cname <public|private|both> <cnamehost(.subdom)> <arechost(.subdom)> - inserts/updates CNAME records in given domains, uses route53/cname.yaml
   txt <public|private|both> <name(.subdom)> "string" - inserts/updates a TXT record, uses route53/txt.yaml
-  template <public|private|both> <template basename> (param=value ...) - use a custom <template>.yaml and supply params
  Options are:
 EOF
-opts.on("-t", "--tty TTY", "Use TTY instead of configured default") do |tty|
-	params["tty"] = tty
+opts.on("-t", "--ttl TTL", "Use TTY instead of configured default") do |ttl|
+	params["ttl"] = ttl
+end
+opts.on("-w", "--wait", "Wait for records to sync before exiting") do |ttl|
+	wait = true
 end
 opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
 	cfgfile = file
@@ -41,7 +45,7 @@ end
 
 begin
 
-commands = [ "arec", "txt", "template" ]
+commands = [ "arec", "txt", "cname" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
@@ -53,38 +57,49 @@ cfgfile = "cloudconfig.yaml" unless cfgfile
 raise UsageException.new("Missing configuration file: #{cfgfile}") unless File::exist?(cfgfile)
 raise UsageException.new("Not a regular file: #{cfgfile}") unless File::stat(cfgfile).file?
 
-cfg = ConfigFile.new(cfgfile, script_dir)
+cfg = RAWSTools::CloudManager.new(cfgfile, script_dir)
 where = nil
 template = nil
 
 case command
+when "cname"
+	where, cname, name = ARGV.shift(3)
+	cfg.setparam("ttl", cfg["CNAMERecTTL"]) unless cfg.getparam("ttl")
+	raise UsageException.new("Missing required argument") unless cname
+	cfg.setparam("name", name)
+	cfg.setparam("cname", cname)
+	template = "cname"
+	puts "Pointing #{cname} to #{name} using template cname"
 when "arec"
-	where, name, ipaddr = ARGV.shift(3)
-	cfg.setparam("tty", cfg["ARecTTL"]) unless cfg.getparam("tty")
+	where, cname, name = ARGV.shift(3)
+	cfg.setparam("ttl", cfg["ARecTTL"]) unless cfg.getparam("ttl")
 	raise UsageException.new("Missing required argument") unless ipaddr
 	cfg.setparam("name", name)
-	cfg.setparam("ipaddr", ipaddr)
+	cfg.setparam("cname", cname)
 	template = "arec"
+	puts "Pointing #{name} to #{ipaddr} using template arec"
 when "txt"
 	where, name, txtvalue = ARGV.shift(3)
-	cfg.setparam("tty", cfg["TXTRecTTL"]) unless cfg.getparam("tty")
+	cfg.setparam("ttl", cfg["TXTRecTTL"]) unless cfg.getparam("ttl")
 	raise UsageException.new("Missing required argument") unless txtvalue
 	cfg.setparam("name", name)
-	cfg.setparam("txtvalue", txtvalue)
+
+	# Break long TXT records up into 255 byte strings
+	txtrecords = []
+	while txtvalue.length > 255
+		txtrecords << { :value => "\"#{txtvalue[0..254]}\"" }
+		txtvalue = txtvalue[255..-1]
+	end
+	txtrecords << { :value => "\"#{txtvalue}\"" }
+
+	cfg.setparam("txtrecords", txtrecords)
 	template = "txt"
-when "template"
-	puts "TODO: not implemented"
+	puts "Pointing #{name} to #{txtrecords} using template txt"
 end
 
-if where == "public" or where == "both"
-	puts "Adding #{name} to public DNS zone"
-	pubset = cfg.r53_set(:public, template)
-end
-
-if where == "private" or where == "both"
-	puts "Adding #{name} to private DNS zone"
-	privset = cfg.r53_set(:private, template)
-end
+puts "... waiting for zone(s) to synchronize" if wait
+cfg.route53.change_records(where.to_sym(), template, wait)
+puts "synchronized" if wait
 
 rescue UsageException => e
 	puts "\n#{e.message}\n\n"

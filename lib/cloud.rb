@@ -28,10 +28,44 @@ module RAWSTools
 		end
 	end
 
+	class Ec2
+		attr_reader :client, :resource
+
+		def initialize(cloudmgr)
+			@mgr = cloudmgr
+			@client = Aws::EC2::Client.new( region: @mgr["Region"] )
+			@resource = Aws::EC2::Resource.new(client: @client)
+		end
+
+		def create_instance(name)
+		end
+	end
+
 	class Route53
+		attr_reader :client
+
 		def initialize(cloudmgr)
 			@mgr = cloudmgr
 			@client = Aws::Route53::Client.new( region: @mgr["Region"] )
+		end
+
+		def lookup(name, type)
+			name = "#{name}.#{@mgr["DNSDomain"]}" unless name.end_with?(@mgr["DNSDomain"])
+			if type == :private
+				zone_id = @mgr["PrivateDNSId"]
+			else
+				zone_id = @mgr["PublicDNSId"]
+			end
+			records = @client.list_resource_record_sets({
+				hosted_zone_id: zone_id,
+				start_record_name: name,
+				max_items: 1,
+			})
+			values = []
+			records.resource_record_sets[0].resource_records.each do |record|
+				values << record.value
+			end
+			values
 		end
 
 		def change_records(where, template, wait = false)
@@ -173,11 +207,10 @@ module RAWSTools
 			@config["Tags"] = tags.output
 			@config["tags"] = tags.loweroutput
 
+			@ec2 = Ec2.new(self)
 			@cfn = CloudFormation.new(self)
 			@s3 = Aws::S3::Client.new( region: @config["Region"] )
 			@s3res = Aws::S3::Resource.new( client: @s3 )
-			@ec2 = Aws::EC2::Client.new( region: @config["Region"] )
-			@ec2res = Aws::EC2::Resource.new(client: @ec2)
 			@route53 = Route53.new(self)
 		end
 
@@ -244,7 +277,19 @@ module RAWSTools
 					end
 				when "="
 					output = var[1..-1]
-					@cfn.getoutput(output)
+					value = @cfn.getoutput(output)
+					raise "Output not found while expanding \"#{var}\"" unless value
+				when "%"
+					cfgdom = @config["ConfigDom"]
+					record = var[1..-1]
+					record = record + cfgdom unless record.end_with?(cfgdom)
+					values = @route53.lookup(record, :private)
+					raise "Failed to receive single-value record looking up \"#{record}\" in #{cfgdom}" unless values.length == 1
+					value = values[0]
+					trim = '"'
+					value = value[1..-1] if value.start_with?(trim)
+					value = value[0..-2] if value.end_with?(trim)
+					value
 				else
 					if @config[var] == nil
 						raise "Bad variable reference: \"#{var}\" not defined in #{@filename}"
@@ -273,11 +318,18 @@ module RAWSTools
 				var = parent[item]
 				if var[0] == '$' && var[1] != '$'
 					cfgvar = var[1..-1]
-					if cfgvar[0] == "@"
+					case cfgvar[0]
+					when "@"
 						param = cfgvar[1..-1]
 						value = getparam(param)
 						raise "Reference to undefined parameter \"#{param}\" during data element expansion of \"#{var}\"" unless value
 						parent[item] = value
+					when "%"
+						record = cfgvar[1..-1]
+						record = record + cfgdom unless record.end_with?(cfgdom)
+						values = @route53.lookup(record, :private)
+						raise "No values returned from lookup of #{record}" unless values.length > 0
+						parent[item] = values
 					else
 						if @config[cfgvar] == nil
 							raise "Bad variable reference: \"#{cfgvar}\" not defined in #{@filename}"

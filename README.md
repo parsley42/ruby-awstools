@@ -64,9 +64,9 @@ form ${...}.
   If <default> is of the form `$var`, the value is taken from the cloud config
   similarly to ${var} above.
 * ${=Template(:child):Output} - retrieve an output from a previously-created
-  cloudformation template. (NOT IMPLEMENTED)
+  cloudformation template.
 * ${%Record} - Look up a DNS TXT record from the ConfigSubDom defined in
-  the cloud config file. (NOT IMPLEMENTED)
+  the cloud config file.
 
 ### Data Element Expansion
 
@@ -81,6 +81,9 @@ can be used to index into a structure.
 * $@param - look up complex parameter; this must be created and set by the
   tool and is only for special cases such as TXT records, where the string
   value must be split into an array of 255-char substrings.
+* $%record - look up value(s) from the private DNS hosted zone, appending
+  the value of ConfigDom from the cloud config file; e.g. $%c7image would
+  return an array of values from a lookup of c7image.<ConfigDom>.
 
 ### Context Specific Expansion
 

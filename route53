@@ -25,6 +25,7 @@ Usage: route53 <command> (options) (args) - manage route53 records
   arec <public|private|both> <host(.subdom)> <ipaddr> - inserts/updates A records in given domains, uses route53/arec.yaml
   cname <public|private|both> <cnamehost(.subdom)> <arechost(.subdom)> - inserts/updates CNAME records in given domains, uses route53/cname.yaml
   txt <public|private|both> <name(.subdom)> "string" - inserts/updates a TXT record, uses route53/txt.yaml
+  lookup <public|private> <name> - query route53 for the value(s) corresponding to a name
  Options are:
 EOF
 opts.on("-t", "--ttl TTL", "Use TTY instead of configured default") do |value|
@@ -45,7 +46,7 @@ end
 
 begin
 
-commands = [ "arec", "txt", "cname" ]
+commands = [ "arec", "txt", "cname", "lookup" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
@@ -63,6 +64,16 @@ where = nil
 template = nil
 
 case command
+when "lookup"
+	where, name = ARGV.shift(2)
+	raise UsageException.new("Missing required argument") unless name
+	values = cfg.route53.lookup(name, where.to_sym())
+	if values.length() > 0
+		values.each() { |value| puts value }
+	else
+		puts
+	end
+	exit 0
 when "cname"
 	where, cname, name = ARGV.shift(3)
 	raise UsageException.new("Missing required argument") unless cname

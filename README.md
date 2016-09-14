@@ -38,7 +38,7 @@ in a single directory with a well-defined format:
 cloudconfig.yaml - default central configuration file specifying a region, VPC
 CIDR, subnet definitions, DNS zone info, etc. (can be overridden with -c, or
 $RAWS_CLOUDCFG environment variable)
-	cfn/ - subdirectory for cloud formation templates
+	cfn/ - subdirectory for cloud formation templates (expanded below in cfn section)
 	ec2/ - subdirectory for ec2 instance templates
 ```
 
@@ -47,20 +47,40 @@ $RAWS_CLOUDCFG environment variable)
 One of the features that makes `ruby-awstools` powerful is it's variable
 expansion functionality, allowing centralized configuration data
 to be retrieved from the central YAML file, CloudFormation template outputs,
-DNS, etc. String keys and values in YAML configuration files can be expanded
-with the following syntax:
+DNS, etc.
 
-* $Var - Direct expansion of a variable from the cloud config file,
-  can be optionally indexed with \[key\]([subkey])...
-* $@param - use the value of params[param], obtained from the command line
-  or interactively
-* $$Network - Context-sensitive expansion; individual tools interpret
+### Template String Expansion
+
+`ruby-awstools` is heavily template based, reading in YAML data structures
+which get processed and used in AWS method calls. After reading in a template,
+but before parsing the YAML, string replacement is done on variables of the
+form ${...}.
+
+* ${var} - retrieve a string from the cloud config file, may optionally be
+  indexed with \[key\]([subkey])...; throws an exception if the reference value
+  isn't a string.
+* ${@param(:default)} - use the value of a parameter obtained from the command line
+  or interactively, or use the default value if the parameter is undefined.
+* ${=Template(:child):Output} - retrieve an output from a previously-created
+  cloudformation template. (NOT IMPLEMENTED)
+* ${%Record} - Look up a DNS TXT record from the ConfigSubDom defined in
+  the cloud config file. (NOT IMPLEMENTED)
+
+### Data Element Expansion
+
+After parsing the YAML into a data structure, `ruby-awstools` walks the
+tree and looks for right-hand-side string elements of the form `$var`.
+This allows you to replace array elements and hash values with arbitrarily
+complex data structures from the cloud config file, e.g. an array
+of hashes. `$var[key]([subkey])...` can be used to index into a structure.
+
+### Context Specific Expansion
+
+Individual tools like `cfn` will perform context specific expansion of
+certain elements of the form $$var, and these will documented with the
+individual tool
+* $$Network - Context-specific expansion; individual tools interpret
   these in a service-specific fashion (e.g. see `cfn`, below)
-* $=Template(:child):Output - retrieve an output from a previously-created
-  cloudformation template. When Output is of the form `~(glob)`, a random
-  value from all matching outputs is used; e.g. '~PublicSubnet?'
-* $%Record - Look up a DNS TXT record from the ConfigSubDom defined in
-  the cloud config file
 
 # cfn - CloudFormation template generator and management
 
@@ -71,7 +91,7 @@ hand-writing JSON. Ruby can do this trivially, but that led to another idea:
 as long as we're loading YAML into a data structure, why not perform some
 (relatively) simple processing, to:
 - Centralize configuration into a single file (as much as possible)
-- Reduce the amount of hand-edited templates
+- Reduce the amount of hand-editing of templates
 - Use automatic generation of things like Outputs, Parameters and tags to
 make templates more robust and less error-prone
 
@@ -108,13 +128,34 @@ provided in cloudconfig.yaml; see **Resource Processing**
 ## Conventions
 To enable intelligent processing and automatic generation, `cfn` uses certain
 naming conventions in template files:
-* Stack names all have names like **<Something>Stack**, e.g.
+* Stack resources all have names like **<Something>Stack**, e.g.
   **SecurityGroupsStack**
 * Names of Outputs are the same as the name of the resource they reference,
   except in special cases where a single resource generates multiple related
   outputs
-Failing to adhere to some of these conventions might result in an
-exception being raised.
+
+## Directory Structure
+
+`cfn` has features that make it easier to break large stacks out into
+individual files that are easier to read and maintain. An individual stack
+will always have a `main.yaml` for the main stack, and optionally other
+`<stackname>.yaml` files that are child resources of `main.yaml`.
+
+The directory structure for `cfn` looks like this:
+```
+cloudconfig.yaml - project-wide settings
+	cfn/
+		<stackname>/ - `cfn` creates a stack named after the subdirectory,
+		  prefixed with `StackPrefix` if it's set in cloudconfig.yaml.
+			main.yaml - the list of resources for this stack, may include
+			  other stacks with resource names of <Something>Stack
+			something.yaml - When main.yaml includes a <Something>Stack
+			  resource, `cfn` gets the resources from `<something>.yaml`
+			somethingelse.yaml
+			...
+		<stackname>/
+		...
+```
 
 ## Walk-through: creating a VPC+
 This section will walk you through getting started with creating a general-purpose
@@ -122,10 +163,9 @@ VPC from the sample project.
 
 **TODO** Write this
 
-## Resource Processing
+## Resource Processing and $$Variable Expansion
 This section details the special handling of each of the CF resource types.
 
-**TODO** write this
 
 ## Network Structure from the sample project
 One of the templates created by CG is the network template,

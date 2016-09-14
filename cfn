@@ -25,6 +25,8 @@ Usage: cfn <command> (options) <templatename|templatedir> - manage a CloudFormat
  Where <command> is one of:
   generate - generate json templates for the stack
   list - list all stacks for the account
+  outputs <stackname>(:childstack) - list all the outputs of a given stack
+  output <stackname>(:childstack):<outputname> - get a specific output
   create - create a new stack
   delete - delete a stack (warning: without confirmation, no resources retained)
   update - update a stack
@@ -50,7 +52,7 @@ end
 
 begin
 
-commands = [ "create", "delete", "generate", "list", "update", "validate" ]
+commands = [ "create", "delete", "generate", "list", "outputs", "output", "update", "validate" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
@@ -62,44 +64,39 @@ cfgfile = "cloudconfig.yaml" unless cfgfile
 raise UsageException.new("Missing configuration file: #{cfgfile}") unless File::exist?(cfgfile)
 raise UsageException.new("Not a regular file: #{cfgfile}") unless File::stat(cfgfile).file?
 
-class Aws::CloudFormation::Client
-	def validate(template, verbose=true)
-		resp = validate_template({ template_body: template })
-		if verbose
-			puts "Description: #{resp.description}"
-			if resp.capabilities.length > 0
-				puts "Capabilities: #{resp.capabilities.join(",")}"
-				puts "Reason: #{resp.capabilities_reason}"
-			end
-			puts
-		end
-		return resp.capabilities
-	end
-end
-
 cfg = RAWSTools::CloudManager.new(cfgfile, script_dir)
 
 case command
 when "list"
-	stacklist = []
-	stack_states = [ "CREATE_IN_PROGRESS", "CREATE_FAILED", "CREATE_COMPLETE", "ROLLBACK_IN_PROGRESS", "ROLLBACK_FAILED", "ROLLBACK_COMPLETE", "DELETE_IN_PROGRESS", "DELETE_FAILED", "UPDATE_IN_PROGRESS", "UPDATE_COMPLETE_CLEANUP_IN_PROGRESS", "UPDATE_COMPLETE", "UPDATE_ROLLBACK_IN_PROGRESS", "UPDATE_ROLLBACK_FAILED", "UPDATE_ROLLBACK_COMPLETE_CLEANUP_IN_PROGRESS", "UPDATE_ROLLBACK_COMPLETE" ]
-	response = cfg.cfn.list_stacks({ stack_status_filter: stack_states })
-	while true
-		response.stack_summaries.each() do |stack|
-			stacklist.push("#{stack.stack_name}: #{stack.stack_status}")
-		end
-		next_token = response.next_token
-		break unless next_token
-		response = cfg.cfn.list_stacks({
-			stack_staus_filter: stack_states,
-			next_token: next_token,
-		})
-	end
+	stacklist = cfg.cfn.list_stacks()
 	if stacklist.length() > 0
 		puts "Stacks:"
 		puts stacklist
 	else
 		puts "No stacks found"
+	end
+	exit 0
+when "outputs"
+	stack = ARGV.shift()
+	raise UsageException.new("Missing required argument") unless stack
+	outputs = cfg.cfn.getoutputs(stack)
+	if outputs.length() > 0
+		puts "Outputs:"
+		outputs.each_key() do |key|
+			puts "#{key} => #{outputs[key]}"
+		end
+	else
+		puts "No outputs found for #{stack}"
+	end
+	exit 0
+when "output"
+	output = ARGV.shift()
+	raise UsageException.new("Missing required argument") unless output
+	value = cfg.cfn.getoutput(output)
+	if value
+		puts value
+	else
+		puts
 	end
 	exit 0
 end
@@ -167,11 +164,11 @@ when "create", "update", "validate"
 				}
 				if command == "create"
 					puts "Creating #{stackname}"
-					stackout = cfg.cfn.create_stack(params)
+					stackout = cfg.cfn.client.create_stack(params)
 				else
 					puts "Updating #{stackname}"
 					params.delete(:disable_rollback)
-					stackout = cfg.cfn.update_stack(params)
+					stackout = cfg.cfn.client.update_stack(params)
 				end
 				puts "Stack ID: #{stackout.stack_id}"
 			else
@@ -194,17 +191,17 @@ when "create", "update", "validate"
 		}
 		if command == "create"
 			puts "Creating #{stackname} from #{template_url}"
-			stackout = cfg.cfn.create_stack(params)
+			stackout = cfg.cfn.client.create_stack(params)
 		else
 			puts "Updating #{stackname}"
 			params.delete(:disable_rollback)
-			stackout = cfg.cfn.update_stack(params)
+			stackout = cfg.cfn.client.update_stack(params)
 		end
 		puts "Stack ID: #{stackout.stack_id}"
 	end
 when "delete"
 	puts "Deleting #{stackname}"
-	cfg.cfn.delete_stack({ stack_name: stackname })
+	cfg.cfn.client.delete_stack({ stack_name: stackname })
 end
 
 rescue UsageException => e

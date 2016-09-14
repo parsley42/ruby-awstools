@@ -4,8 +4,9 @@ change_batch:
   changes:
   - action: UPSERT
     resource_record_set:
-      name: $@name
+      name: ${@name}.${DNSDomain}
       type: A
-      ttl: $@ttl
+      # Use the supplied ttl parameter, or default to configured ARecTTL
+      ttl: ${@ttl:$ARecTTL}
       resource_records:
-      - value: $@ipaddr
+      - value: ${@ipaddr}

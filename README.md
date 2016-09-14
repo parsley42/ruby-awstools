@@ -59,8 +59,10 @@ form ${...}.
 * ${var} - retrieve a string from the cloud config file, may optionally be
   indexed with \[key\]([subkey])...; throws an exception if the reference value
   isn't a string.
-* ${@param(:default)} - use the value of a parameter obtained from the command line
+* ${@param(:<default>)} - use the value of a parameter obtained from the command line
   or interactively, or use the default value if the parameter is undefined.
+  If <default> is of the form `$var`, the value is taken from the cloud config
+  similarly to ${var} above.
 * ${=Template(:child):Output} - retrieve an output from a previously-created
   cloudformation template. (NOT IMPLEMENTED)
 * ${%Record} - Look up a DNS TXT record from the ConfigSubDom defined in
@@ -69,10 +71,16 @@ form ${...}.
 ### Data Element Expansion
 
 After parsing the YAML into a data structure, `ruby-awstools` walks the
-tree and looks for right-hand-side string elements of the form `$var`.
+tree and looks for right-hand-side string elements of the form `$var`/`$@param`.
 This allows you to replace array elements and hash values with arbitrarily
-complex data structures from the cloud config file, e.g. an array
-of hashes. `$var[key]([subkey])...` can be used to index into a structure.
+complex data structures from the cloud config file or generated parameter
+structures; e.g. an array of hashes. As with other vars, \[key\]([subkey])...`
+can be used to index into a structure.
+
+* $var - look up data structure in the cloud config file.
+* $@param - look up complex parameter; this must be created and set by the
+  tool and is only for special cases such as TXT records, where the string
+  value must be split into an array of 255-char substrings.
 
 ### Context Specific Expansion
 

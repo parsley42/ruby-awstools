@@ -1,5 +1,6 @@
 module RAWSTools
 	# Classes for loading and processing the configuration file
+	Valid_Classes = [ "String", "Fixnum", "TrueClass", "FalseClass" ]
 
 	class SubnetDefinition
 		attr_reader :cidr, :subnets
@@ -40,16 +41,9 @@ module RAWSTools
 			else
 				templatefile = "#{@mgr.installdir}/defaults/route53/#{template}.yaml"
 			end
-			set = YAML::load(File::read(templatefile))
-
-			name = @mgr.getparam("name")
-			if not name.end_with?(@mgr["DNSDomain"])
-				@mgr.setparam("name", "#{name}.#{@mgr["DNSDomain"]}")
-			end
-			cname = @mgr.getparam("cname")
-			if cname and not cname.end_with?(@mgr["DNSDomain"])
-				@mgr.setparam("cname", "#{cname}.#{@mgr["DNSDomain"]}")
-			end
+			raw = File::read(templatefile)
+			raw = @mgr.expand_strings(raw)
+			set = YAML::load(raw)
 
 			@mgr.resolve_vars( { "child" => set }, "child" )
 			@mgr.symbol_keys(set)
@@ -221,24 +215,43 @@ module RAWSTools
 		end
 
 		def expand_strings(rawdata)
-			rawdata.gsub(/\${([@=:%\w]+)}/) do |var|
+			rawdata.gsub(/\${([@=:%$\w]+)}/) do |ref|
+				var = $1
+				#puts "Expanding #{ref}, var is #{var}"
 				case var[0]
 				when "@"
 					param, default = var.split(':')
+					param = param[1..-1]
 					value = getparam(param)
 					if value
 						value
 					elsif default
-						default
+						if default[0] == "$"
+							cfgvar = default[1..-1]
+							if @config[cfgvar] == nil
+								raise "Invalid default for \"#{var}\": \"#{cfgvar}\" not defined in #{@filename}"
+							end
+							varclass = @config[cfgvar].class().to_s()
+							unless Valid_Classes.include?(varclass)
+								raise "Bad default value for \"#{var}\" during string expansion: \"$#{cfgvar}\" expands to non-scalar class #{varclass}"
+							end
+							@config[cfgvar]
+						else
+							default
+						end
 					else
-						raise "Reference to undefined parameter: \"#{var}\""
+						raise "Reference to undefined parameter: \"#{param}\""
 					end
+				when "="
+					output = var[1..-1]
+					@cfn.getoutput(output)
 				else
 					if @config[var] == nil
 						raise "Bad variable reference: \"#{var}\" not defined in #{@filename}"
 					end
-					if @config[var].class().to_s() != "String"
-						raise "Bad variable reference during string expansion: \"$#{var}\" expands to non-String class"
+					varclass = @config[var].class().to_s()
+					unless Valid_Classes.include?(varclass)
+						raise "Bad variable reference during string expansion: \"$#{var}\" expands to non-scalar class #{varclass}"
 					end
 					@config[var]
 				end
@@ -260,10 +273,17 @@ module RAWSTools
 				var = parent[item]
 				if var[0] == '$' && var[1] != '$'
 					cfgvar = var[1..-1]
-					if @config[cfgvar] == nil
-						raise "Bad variable reference: \"#{cfgvar}\" not defined in #{@filename}"
+					if cfgvar[0] == "@"
+						param = cfgvar[1..-1]
+						value = getparam(param)
+						raise "Reference to undefined parameter \"#{param}\" during data element expansion of \"#{var}\"" unless value
+						parent[item] = value
+					else
+						if @config[cfgvar] == nil
+							raise "Bad variable reference: \"#{cfgvar}\" not defined in #{@filename}"
+						end
+						parent[item] = @config[cfgvar]
 					end
-					parent[item] = @config[cfgvar]
 				end
 			end # case item.class
 		end

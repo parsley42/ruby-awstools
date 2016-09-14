@@ -4,7 +4,9 @@ change_batch:
   changes:
   - action: UPSERT
     resource_record_set:
-      name: $@name
+      name: ${@name}.${DNSDomain}
       type: TXT
-      ttl: $@ttl
+      ttl: ${@ttl:$TXTRecTTL}
+      # Note that the complex parameter txtrecords is created by the route53
+      # cli tool.
       resource_records: $@txtrecords

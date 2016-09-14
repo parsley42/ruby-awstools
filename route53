@@ -17,7 +17,7 @@ cfgfile = ENV["RAWS_CLOUDCFG"]
 wait = false
 
 opts = OptionParser.new
-params = {}
+ttl = nil
 
 opts.banner = <<-EOF
 Usage: route53 <command> (options) (args) - manage route53 records
@@ -27,10 +27,10 @@ Usage: route53 <command> (options) (args) - manage route53 records
   txt <public|private|both> <name(.subdom)> "string" - inserts/updates a TXT record, uses route53/txt.yaml
  Options are:
 EOF
-opts.on("-t", "--ttl TTL", "Use TTY instead of configured default") do |ttl|
-	params["ttl"] = ttl
+opts.on("-t", "--ttl TTL", "Use TTY instead of configured default") do |value|
+	ttl = value
 end
-opts.on("-w", "--wait", "Wait for records to sync before exiting") do |ttl|
+opts.on("-w", "--wait", "Wait for records to sync before exiting") do
 	wait = true
 end
 opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
@@ -58,29 +58,27 @@ raise UsageException.new("Missing configuration file: #{cfgfile}") unless File::
 raise UsageException.new("Not a regular file: #{cfgfile}") unless File::stat(cfgfile).file?
 
 cfg = RAWSTools::CloudManager.new(cfgfile, script_dir)
+cfg.setparam("ttl", ttl) if ttl
 where = nil
 template = nil
 
 case command
 when "cname"
 	where, cname, name = ARGV.shift(3)
-	cfg.setparam("ttl", cfg["CNAMERecTTL"]) unless cfg.getparam("ttl")
 	raise UsageException.new("Missing required argument") unless cname
 	cfg.setparam("name", name)
 	cfg.setparam("cname", cname)
 	template = "cname"
 	puts "Pointing #{cname} to #{name} using template cname"
 when "arec"
-	where, cname, name = ARGV.shift(3)
-	cfg.setparam("ttl", cfg["ARecTTL"]) unless cfg.getparam("ttl")
+	where, name, ipaddr = ARGV.shift(3)
 	raise UsageException.new("Missing required argument") unless ipaddr
 	cfg.setparam("name", name)
-	cfg.setparam("cname", cname)
+	cfg.setparam("ipaddr", ipaddr)
 	template = "arec"
 	puts "Pointing #{name} to #{ipaddr} using template arec"
 when "txt"
 	where, name, txtvalue = ARGV.shift(3)
-	cfg.setparam("ttl", cfg["TXTRecTTL"]) unless cfg.getparam("ttl")
 	raise UsageException.new("Missing required argument") unless txtvalue
 	cfg.setparam("name", name)
 

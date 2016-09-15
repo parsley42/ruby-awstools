@@ -49,15 +49,9 @@ module RAWSTools
 			@client = Aws::Route53::Client.new( region: @mgr["Region"] )
 		end
 
-		def lookup(name, type)
-			name = "#{name}.#{@mgr["DNSDomain"]}" unless name.end_with?(@mgr["DNSDomain"])
-			if type == :private
-				zone_id = @mgr["PrivateDNSId"]
-			else
-				zone_id = @mgr["PublicDNSId"]
-			end
+		def lookup(name)
 			records = @client.list_resource_record_sets({
-				hosted_zone_id: zone_id,
+				hosted_zone_id: @mgr.getparam("zone_id"),
 				start_record_name: name,
 				max_items: 1,
 			})
@@ -68,12 +62,12 @@ module RAWSTools
 			values
 		end
 
-		def change_records(where, template, wait = false)
+		def change_records(template)
 			templatefile = nil
-			if File::exist?("#{template}.json")
-				templatefile = "#{template}.json"
+			if File::exist?("route53/#{template}.json")
+				templatefile = "route53/#{template}.json"
 			else
-				templatefile = "#{@mgr.installdir}/defaults/route53/#{template}.yaml"
+				templatefile = "#{@mgr.installdir}/templates/route53/#{template}.yaml"
 			end
 			raw = File::read(templatefile)
 			raw = @mgr.expand_strings(raw)
@@ -82,23 +76,12 @@ module RAWSTools
 			@mgr.resolve_vars( { "child" => set }, "child" )
 			@mgr.symbol_keys(set)
 
-			if where == :public or where == :both
-				set[:hosted_zone_id] = @mgr["PublicDNSId"]
-				pubresp = @client.change_resource_record_sets(set)
-			end
-			if where == :private or where == :both
-				set[:hosted_zone_id] = @mgr["PrivateDNSId"]
-				privresp = @client.change_resource_record_sets(set)
-			end
+			resp = @client.change_resource_record_sets(set)
+			resp.change_info.id
+		end
 
-			return unless wait
-
-			if where == :public or where == :both
-				@client.wait_until(:resource_record_sets_changed, id: pubresp.change_info.id )
-			end
-			if where == :private or where == :both
-				@client.wait_until(:resource_record_sets_changed, id: privresp.change_info.id )
-			end
+		def sync_wait(change_id)
+			@client.wait_until(:resource_record_sets_changed, id: change_id )
 		end
 	end
 

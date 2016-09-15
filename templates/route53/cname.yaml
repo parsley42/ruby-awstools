@@ -1,5 +1,5 @@
 ---
-# hosted_zone_id will be Filled in by library
+hosted_zone_id: ${@zone_id:$PublicDNSId}
 change_batch:
   changes:
   - action: UPSERT

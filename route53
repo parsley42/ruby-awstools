@@ -67,7 +67,13 @@ case command
 when "lookup"
 	where, name = ARGV.shift(2)
 	raise UsageException.new("Missing required argument") unless name
-	values = cfg.route53.lookup(name, where.to_sym())
+	name = "#{name}.#{cfg["DNSDomain"]}" unless name.end_with?(cfg["DNSDomain"])
+	if where == "public"
+		cfg.setparam("zone_id", cfg["PublicDNSId"])
+	else
+		cfg.setparam("zone_id", cfg["PrivateDNSId"])
+	end
+	values = cfg.route53.lookup(name)
 	if values.length() > 0
 		values.each() { |value| puts value }
 	else
@@ -106,9 +112,22 @@ when "txt"
 	puts "Pointing #{name} to #{txtrecords} using template txt"
 end
 
-puts "... waiting for zone(s) to synchronize" if wait
-cfg.route53.change_records(where.to_sym(), template, wait)
-puts "synchronized" if wait
+change_ids = []
+if where == "public" or where == "both"
+	puts "Updating public zone"
+	cfg.setparam("zone_id", cfg["PublicDNSId"])
+	change_ids << cfg.route53.change_records(template)
+end
+if where == "private" or where == "both"
+	puts "Updating private zone"
+	cfg.setparam("zone_id", cfg["PrivateDNSId"])
+	change_ids << cfg.route53.change_records(template)
+end
+if wait
+	puts "... waiting for zone(s) to synchronize"
+	change_ids.each() { |id| cfg.route53.sync_wait(id) }
+	puts "synchronized"
+end
 
 rescue UsageException => e
 	puts "\n#{e.message}\n\n"

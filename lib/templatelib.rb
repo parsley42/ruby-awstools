@@ -20,6 +20,7 @@ class CFTemplate
 		@st = @cloudcfg["SubnetTypes"]
 		@az = @cloudcfg["AvailabilityZones"]
 		raw = File::read(directory + "/" + @name.downcase() + ".yaml")
+		raw = @cloudcfg.expand_strings(raw)
 		puts "Loading #{@name}"
 		@cfg = YAML::load(raw)
 		@cloudcfg.resolve_vars({ "child" => @cfg }, "child")

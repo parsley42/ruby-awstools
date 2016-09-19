@@ -20,6 +20,7 @@ opts = OptionParser.new
 opts.banner = <<-EOF
 Usage: ec2 <command> (options) (args) - manage a CloudFormation stack
  Where <command> is one of:
+  create <templatename> <name/dns prefix> - create one or more instances from a template
   deletekeypair <keyname>
   genkeypair <keyname> (outputdir) - generate a keypair and store it in <keyname>.pem
   start <instancename|instanceId> - start a stopped instance; i-* are assumed instance ID
@@ -43,9 +44,9 @@ raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
 
 case command
-when "start"
+when "create"
 	dnsname = nil
-	opts.on("-d", "--dns-name HOSTNAME", "Update the HOSTNAME after the instance starts (uses PublicDNS from cloudconfig.yaml)") do |host|
+	opts.on("-d", "--dns", "Update the HOSTNAME after the instance starts (uses PublicDNS from cloudconfig.yaml)") do |host|
 		dnsname = host
 	end
 end

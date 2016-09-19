@@ -69,11 +69,11 @@ when "lookup"
 	raise UsageException.new("Missing required argument") unless name
 	name = "#{name}.#{cfg["DNSDomain"]}" unless name.end_with?(cfg["DNSDomain"])
 	if where == "public"
-		cfg.setparam("zone_id", cfg["PublicDNSId"])
+		zone = cfg["PublicDNSId"]
 	else
-		cfg.setparam("zone_id", cfg["PrivateDNSId"])
+		zone = cfg["PrivateDNSId"]
 	end
-	values = cfg.route53.lookup(name)
+	values = cfg.route53.lookup(name, zone)
 	if values.length() > 0
 		values.each() { |value| puts value }
 	else
@@ -123,9 +123,10 @@ if where == "private" or where == "both"
 	cfg.setparam("zone_id", cfg["PrivateDNSId"])
 	change_ids << cfg.route53.change_records(template)
 end
+
 if wait
 	puts "... waiting for zone(s) to synchronize"
-	change_ids.each() { |id| cfg.route53.sync_wait(id) }
+	change_ids.each() { |id| cfg.route53.wait_sync(id) }
 	puts "synchronized"
 end
 

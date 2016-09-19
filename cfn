@@ -139,6 +139,7 @@ upload = false if filenames.length() == 1
 stackprefix = (cfg["StackPrefix"]?cfg["StackPrefix"]:"")
 stackname = stackprefix + templatename
 stack_required_capabilities = []
+stack_tags = cfg.tags().ltags()
 
 case command
 when "generate"
@@ -157,7 +158,7 @@ when "create", "update", "validate"
 				json = File::read(outputdir + "/" + tfile + ".json")
 				params = {
 					stack_name: stackname,
-					tags: cfg["tags"],
+					tags: stack_tags,
 					capabilities: required_capabilities,
 					disable_rollback: disable_rollback,
 					template_body: json,
@@ -184,7 +185,7 @@ when "create", "update", "validate"
 		template_url = "https://s3.amazonaws.com/#{cfg["Bucket"]}/#{cfg["Prefix"]}/#{templatename}/main.json"
 		params = {
 			stack_name: stackname,
-			tags: cfg["tags"],
+			tags: stack_tags,
 			capabilities: stack_required_capabilities,
 			disable_rollback: disable_rollback,
 			template_url: template_url,

@@ -52,30 +52,10 @@ class CFTemplate
 
 	# If a resource defines a tag, configured tags won't overwrite it
 	def update_tags(resource, name=nil, tagkey="Tags")
-		cfgtags = @cloudcfg["Tags"]
-		if resource["Properties"][tagkey] == nil
-			# Make a deep copy of the cfgtags
-			resource["Properties"][tagkey] = Marshal.load(Marshal.dump(cfgtags))
-			resource["Properties"][tagkey] << { "Key" => "Name", "Value" => name } if name
-			return
-		end
-		restags = resource["Properties"][tagkey]
-		raise "Wrong class for Tags in #{self.name} (Found Hash, need Array)" if restags.class == "Hash"
-		restags.delete_if() do |hash|
-			next if hash["Key"]
-			tag = hash.first()
-			restags.push({ "Key" => tag[0], "Value" => tag[1] })
-		end
-		reskeys = restags.map{|hash| hash["Key"]}
-		if name && ! reskeys.include?("Name")
-			restags.push({ "Key" => "Name", "Value" => name })
-			reskeys << "Name"
-		end
-		cfgtags.each do |cfgtag|
-			if ! reskeys.include?(cfgtag["Key"])
-				restags.push(cfgtag)
-			end
-		end
+		cfgtags = @cloudcfg.tags()
+		cfgtags["Name"] = name if name
+		cfgtags.add(resource["Properties"][tagkey]) if resource["Properties"][tagkey]
+		resource["Properties"][tagkey] = cfgtags.tags()
 	end
 
 	# Returns an Array of string CIDRs, even if it's only 1 long

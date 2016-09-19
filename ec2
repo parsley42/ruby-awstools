@@ -9,8 +9,7 @@ require 'rubygems'
 Dir::chdir(script_dir) do
 	require 'bundler/setup'
 	require 'aws-sdk'
-	require_relative 'lib/cfglib'
-	#require_relative 'lib/cfnlib'
+	require_relative 'lib/cloud'
 end
 
 cfgfile = ENV["RAWS_CLOUDCFG"]
@@ -20,7 +19,7 @@ opts = OptionParser.new
 opts.banner = <<-EOF
 Usage: ec2 <command> (options) (args) - manage a CloudFormation stack
  Where <command> is one of:
-  create <templatename> <name/dns prefix> - create one or more instances from a template
+  create <name/dns prefix> <keyname> <template> - create one or more instances from a template (name or path)
   deletekeypair <keyname>
   genkeypair <keyname> (outputdir) - generate a keypair and store it in <keyname>.pem
   start <instancename|instanceId> - start a stopped instance; i-* are assumed instance ID
@@ -38,16 +37,33 @@ end
 
 begin
 
-commands = [ "deletekeypair", "genkeypair", "start" ]
+commands = [ "create", "deletekeypair", "genkeypair", "start" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
 
+params = {}
+dns = false
+
 case command
 when "create"
-	dnsname = nil
-	opts.on("-d", "--dns", "Update the HOSTNAME after the instance starts (uses PublicDNS from cloudconfig.yaml)") do |host|
-		dnsname = host
+	opts.on("-d", "--dns", "Add public/private DNS records for <name>.${DNSDomain}") do |dns|
+		dns = true
+	end
+	opts.on("-e", "--ebs-optimized", "Create ebs-optimized instances") do |ebsoptimized|
+		params["ebsoptimized"] = true
+	end
+	opts.on("-m", "--monitoring", "Enable ec2 monitoring (CPU, disk/network, status checks)") do |monitor|
+		params["monitor"] = true
+	end
+	opts.on("-t", "--instance-type TYPE", "Use TYPE for instance type instead of template default") do |type|
+		params["type"] = type
+	end
+	opts.on("-s", "--subnet-name SUBNET", "Run instance(s) in named SUBNET") do |subnet|
+		params["subnet"] = subnet
+	end
+	opts.on("-n", "--count COUNT", "Use TYPE for instance type instead of template default") do |count|
+		params["count"] = count
 	end
 end
 
@@ -58,9 +74,19 @@ cfgfile = "cloudconfig.yaml" unless cfgfile
 raise UsageException.new("Missing configuration file: #{cfgfile}") unless File::exist?(cfgfile)
 raise UsageException.new("Not a regular file: #{cfgfile}") unless File::stat(cfgfile).file?
 
-cfg = RAWSTools::ConfigFile.new(cfgfile, script_dir)
+cfg = RAWSTools::CloudManager.new(cfgfile, script_dir)
+cfg.setparams(params)
 
 case command
+when "create"
+	name, key, template = ARGV.shift(3)
+	raise UsageException.new("Missing required argument") unless template
+	cfg.setparam("name", name)
+	cfg.setparam("key", key)
+	idata = cfg.ec2.create_from_template(template)
+	puts "Created #{idata.map(&:id)}, waiting for state: running..."
+	cfg.ec2.wait_running(idata)
+	puts "Running."
 when "start"
 	ispec = ARGV.shift()
 	raise UsageException.new("Missing <instancename|instanceId> argument") unless ispec

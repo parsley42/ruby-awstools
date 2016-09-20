@@ -20,10 +20,11 @@ class Route53
 			normalized = @mgr.getparam(name)
 			next unless normalized
 			next if normalized.end_with?(@mgr["ConfigDom"] + ".")
+			normalized = normalized[0..-2] if normalized.end_with?(".")
 			suffix = @mgr["DNSDomain"]
 			suffix = "." + suffix unless suffix.start_with?(".")
 			normalized = normalized + suffix unless normalized.end_with?(suffix)
-			normalized = normalized + "." unless normalized.end_with?(".")
+			normalized = normalized + "."
 			@mgr.setparam(name, normalized)
 		end
 		name = @mgr.getparam("name")

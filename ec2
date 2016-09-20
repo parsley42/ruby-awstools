@@ -19,7 +19,8 @@ opts = OptionParser.new
 opts.banner = <<-EOF
 Usage: ec2 <command> (options) (args) - manage a CloudFormation stack
  Where <command> is one of:
-  create <name/dns prefix> <keyname> <template> - create one or more instances from a template (name or path)
+  create <name/dns prefix> <keyname> <template> <availability_zone> - create one or more instances from a template (name or path)
+  updatedns <instancename|instanceid> - update A records for an instance
   deletekeypair <keyname>
   genkeypair <keyname> (outputdir) - generate a keypair and store it in <keyname>.pem
   start <instancename|instanceId> - start a stopped instance; i-* are assumed instance ID
@@ -37,33 +38,54 @@ end
 
 begin
 
-commands = [ "create", "deletekeypair", "genkeypair", "start" ]
+commands = [ "create", "updatedns", "deletekeypair", "genkeypair", "start" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
 
 params = {}
+tags = {}
 dns = false
+wait = false
 
 case command
 when "create"
-	opts.on("-d", "--dns", "Add public/private DNS records for <name>.${DNSDomain}") do |dns|
+	opts.on("-d", "--dns", "Add public/private DNS records for <name>.${DNSDomain}") do
 		dns = true
 	end
-	opts.on("-e", "--ebs-optimized", "Create ebs-optimized instances") do |ebsoptimized|
+	opts.on("-w", "--wait", "Wait for DNS records to sync") do
+		wait = true
+	end
+	opts.on("-e", "--ebs-optimized", "Create ebs-optimized instances") do
 		params["ebsoptimized"] = true
 	end
-	opts.on("-m", "--monitoring", "Enable ec2 monitoring (CPU, disk/network, status checks)") do |monitor|
+	opts.on("-m", "--monitoring", "Enable ec2 monitoring (CPU, disk/network, status checks)") do
 		params["monitor"] = true
 	end
-	opts.on("-t", "--instance-type TYPE", "Use TYPE for instance type instead of template default") do |type|
+	opts.on("-i", "--instance-type TYPE", "Use TYPE for instance type instead of template default") do |type|
 		params["type"] = type
 	end
-	opts.on("-s", "--subnet-name SUBNET", "Run instance(s) in named SUBNET") do |subnet|
-		params["subnet"] = subnet
+	opts.on("-r", "--root-size SIZE", "Increase root volume size to SIZE") do |size|
+		params["rootsize"] = size
+	end
+	opts.on("-t", "--tag KEYVAL", "Add tag where KEYVAL is of the form key=value") do |keyval|
+		e = keyval.index("=")
+		key = keyval[0..(e-1)]
+		value = keyval[(e+1)..-1]
+		tags[key] = value
+	end
+	opts.on("-p", "--parameter PARAMVAL", "Set an arbitrary parameter where PARAMVAL is of the form parameter=value") do |keyval|
+		e = keyval.index("=")
+		key = keyval[0..(e-1)]
+		value = keyval[(e+1)..-1]
+		params[key] = value
 	end
 	opts.on("-n", "--count COUNT", "Use TYPE for instance type instead of template default") do |count|
 		params["count"] = count
+	end
+when "updatedns"
+	opts.on("-w", "--wait", "Wait for DNS records to sync") do
+		wait = true
 	end
 end
 
@@ -79,14 +101,33 @@ cfg.setparams(params)
 
 case command
 when "create"
-	name, key, template = ARGV.shift(3)
-	raise UsageException.new("Missing required argument") unless template
+	name, key, template, az = ARGV.shift(4)
+	raise UsageException.new("Missing required argument") unless az
 	cfg.setparam("name", name)
 	cfg.setparam("key", key)
+	cfg.setparam("az", az.upcase())
 	idata = cfg.ec2.create_from_template(template)
-	puts "Created #{idata.map(&:id)}, waiting for state: running..."
+	puts "Created #{idata.map(&:id)}, waiting for state: running ..."
 	cfg.ec2.wait_running(idata)
 	puts "Running."
+	cfg.ec2.tag_instance_resources(idata)
+	if dns
+		puts "Updating dns for #{name}"
+		if idata.size == 1
+			puts "waiting for zones to synchronize..." if wait
+			cfg.ec2.update_dns(idata[0].id, wait)
+			puts "synchronized" if wait
+		else
+			STDERR.puts "Warning: skipping dns update for multiple instances"
+		end
+	end
+when "updatedns"
+	instance = ARGV.shift()
+	raise UsageException.new("Missing required argument") unless instance
+	puts "Updating DNS for #{instance}"
+	puts "waiting for zones to synchronize..." if wait
+	cfg.ec2.update_dns(instance, wait)
+	puts "synchronized" if wait
 when "start"
 	ispec = ARGV.shift()
 	raise UsageException.new("Missing <instancename|instanceId> argument") unless ispec

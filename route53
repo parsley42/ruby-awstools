@@ -22,10 +22,11 @@ ttl = nil
 opts.banner = <<-EOF
 Usage: route53 <command> (options) (args) - manage route53 records
  Where <command> is one of:
-  arec <public|private|both> <host(.subdom)> <ipaddr> - inserts/updates A records in given domains, uses route53/arec.yaml
-  cname <public|private|both> <cnamehost(.subdom)> <arechost(.subdom)> - inserts/updates CNAME records in given domains, uses route53/cname.yaml
-  txt <public|private|both> <name(.subdom)> "string" - inserts/updates a TXT record, uses route53/txt.yaml
+  arec <public|private|both> <host(.subdom)> <ipaddr> - inserts/updates A records in given zones, uses route53/arec.yaml
+  cname <public|private|both> <cnamehost(.subdom)> <arechost(.subdom)> - inserts/updates CNAME records in given zones, uses route53/cname.yaml
+  txt <public|private|both> <name(.subdom)> "string" - inserts/updates a TXT record in given zone(s), uses route53/txt.yaml
   lookup <public|private> <name> - query route53 for the value(s) corresponding to a name
+  delete <public|private|both> <name> - delete record(s) in given zone(s)
  Options are:
 EOF
 opts.on("-t", "--ttl TTL", "Use TTY instead of configured default") do |value|
@@ -46,7 +47,7 @@ end
 
 begin
 
-commands = [ "arec", "txt", "cname", "lookup" ]
+commands = [ "arec", "txt", "cname", "lookup", "delete" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
@@ -79,6 +80,9 @@ when "lookup"
 		puts
 	end
 	exit 0
+when "delete"
+	where, rec = ARGV.shift(2)
+	raise UsageException.new("Missing required argument") unless rec
 when "cname"
 	where, cname, name = ARGV.shift(3)
 	raise UsageException.new("Missing required argument") unless cname
@@ -115,12 +119,20 @@ change_ids = []
 if where == "public" or where == "both"
 	puts "Updating public zone"
 	cfg.setparam("zone_id", cfg["PublicDNSId"])
-	change_ids << cfg.route53.change_records(template)
+	if command == "delete"
+		change_ids << cfg.route53.delete(rec, cfg["PublicDNSId"])
+	else
+		change_ids << cfg.route53.change_records(template)
+	end
 end
 if where == "private" or where == "both"
 	puts "Updating private zone"
 	cfg.setparam("zone_id", cfg["PrivateDNSId"])
-	change_ids << cfg.route53.change_records(template)
+	if command == "delete"
+		change_ids << cfg.route53.delete(rec, cfg["PrivateDNSId"])
+	else
+		change_ids << cfg.route53.change_records(template)
+	end
 end
 
 if wait

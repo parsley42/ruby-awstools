@@ -53,6 +53,37 @@ class Route53
 		return values
 	end
 
+	def delete(name, zone)
+		name = normalize_name(name)
+		lookup = {
+			hosted_zone_id: zone,
+			start_record_name: name,
+			max_items: 1,
+		}
+		#puts "Looking up: #{lookup}"
+		records = @client.list_resource_record_sets(lookup)
+		record = records.resource_record_sets[0]
+		return unless record.name == name
+		dset = {
+			hosted_zone_id: zone,
+			change_batch: {
+				changes: [
+					{
+						action: "DELETE",
+						resource_record_set: {
+							name: name,
+							type: record.type,
+							ttl: record.ttl,
+							resource_records: record.resource_records
+						}
+					}
+				]
+			}
+		}
+		resp = @client.change_resource_record_sets(dset)
+		return resp
+	end
+
 	def change_records(template)
 		normalize_name_parameters()
 		templatefile = nil

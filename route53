@@ -67,7 +67,6 @@ case command
 when "lookup"
 	where, name = ARGV.shift(2)
 	raise UsageException.new("Missing required argument") unless name
-	name = "#{name}.#{cfg["DNSDomain"]}" unless name.end_with?(cfg["DNSDomain"])
 	if where == "public"
 		zone = cfg["PublicDNSId"]
 	else

@@ -67,15 +67,18 @@ module RAWSTools
 					raise "Missing required top-level configuration item in #{@filename}: #{c}"
 				end
 			end
+			[ "DNSBase", "DNSDomain", "ConfigDom" ].each do |dnsdom|
+				name = @config[dnsdom]
+				if name.end_with?(".")
+					STDERR.puts("Warning: removing trailing dot from #{dnsdom}")
+					@config[dnsdom] = name[0..-2]
+				end
+			end
 			subnet_types = {}
 			@config["SubnetTypes"].each_key do |st|
 				subnet_types[st] = SubnetDefinition.new(@config["SubnetTypes"][st]["CIDR"], @config["SubnetTypes"][st]["Subnets"])
 			end
 			@config["SubnetTypes"] = subnet_types
-
-			tags = Tags.new(@config["Tags"])
-#			@config["Tags"] = tags.output
-#			@config["tags"] = tags.loweroutput
 
 			@ec2 = Ec2.new(self)
 			@cfn = CloudFormation.new(self)
@@ -157,11 +160,13 @@ module RAWSTools
 						raise "Output not found while expanding \"#{var}\"" unless value
 						value
 					when "%"
-						cfgdom = @config["ConfigDom"]
 						record = var[1..-1]
-						record = record + "." + cfgdom unless record.end_with?(cfgdom)
+						suffix = @config["ConfigDom"]
+						suffix = "." + suffix unless suffix.start_with?(".")
+						record = record + suffix unless record.end_with?(suffix)
+						record = record + "." unless record.end_with?(".")
 						values = @route53.lookup(record, @config["PrivateDNSId"])
-						raise "Failed to receive single-value record looking up \"#{record}\" in #{cfgdom}" unless values.length == 1
+						raise "Failed to receive single-value record looking up \"#{record}\" in #{suffix}" unless values.length == 1
 						value = values[0]
 						trim = '"'
 						value = value[1..-1] if value.start_with?(trim)

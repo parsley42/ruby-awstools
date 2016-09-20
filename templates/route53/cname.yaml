@@ -4,8 +4,8 @@ change_batch:
   changes:
   - action: UPSERT
     resource_record_set:
-      name: ${@cname}.${DNSDomain}
+      name: ${@cname}
       type: CNAME
       ttl: ${@ttl:$CNAMERecTTL}
       resource_records:
-      - value: ${@name}.${DNSDomain}
+      - value: ${@name}

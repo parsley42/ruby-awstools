@@ -49,6 +49,24 @@ expansion functionality, allowing centralized configuration data
 to be retrieved from the central YAML file, CloudFormation template outputs,
 DNS, etc.
 
+### Parameters
+
+`ruby-awstools` is largely based on yaml templates, and many of these templates
+take parameters for various options. Since different templates may have different
+parameters, these parameters aren't passed as method arguments but rather stored
+as a ConfigManager parameter, and expanded in the template through the
+${@param(:default)} construct.
+
+#### Standard Parameters
+
+A number of parameters are standardized and get special treatment by the library:
+* name, cname - DNS names; these will have the configured DNSDomain appended
+  unless it's already present. (See RAWSTools::Route53#normalize\_name\_parameters)
+* iname - Reserved parameter for instance name; this is automatically generated
+  by the library and used when setting the "Name" tag on created instances. It
+  gets set to the 'name' parameter after removing the configured DNSBase suffix.
+  (See RAWSTools::Route53#normalize\_name\_parameters)
+
 ### Template String Expansion
 
 `ruby-awstools` is heavily template based, reading in YAML data structures

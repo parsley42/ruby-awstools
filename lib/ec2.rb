@@ -17,6 +17,7 @@ class Ec2
 					values: [ "pending", "running", "shutting-down", "stopping", "stopped" ],
 				}
 			]
+			f << @mgr["Filter"] if @mgr["Filter"]
 			i = @resource.instances(filters: f)
 			count = i.count()
 			raise "Multiple matches for Name: #{instance}" if count > 1
@@ -32,6 +33,7 @@ class Ec2
 		if volume.class == String
 			return volume if volume.start_with?("vol-")
 			f = [ { name: "tag:Name", values: [volume] } ]
+			f << @mgr["Filter"] if @mgr["Filter"]
 			v = @resource.volumes(filters: f)
 			count = v.count()
 			raise "Multiple matches for Name: #{volume}" if count > 1
@@ -47,6 +49,7 @@ class Ec2
 		if snapshot.class == String
 			return snapshot if snapshot.start_with?("snap-")
 			f = [ { name: "tag:Name", values: [snapshot] } ]
+			f << @mgr["Filter"] if @mgr["Filter"]
 			s = @resource.snapshots(filters: f)
 			count = s.count()
 			raise "Multiple matches for Name: #{snapshot}" if count > 1
@@ -142,6 +145,67 @@ class Ec2
 		end
 	end
 
+	def start_instance(instance, wait=true)
+		instance = resolve_instance_id(instance)
+		i = @resource.intstance(instance)
+		i.start()
+		return unless wait
+		@client.wait_until(:instance_running, instance_ids: [ i.id() ])
+	end
+
+	def stop_instance(instance, wait=true)
+		instance = resolve_instance_id(instance)
+		i = @resource.intstance(instance)
+		i.stop()
+		return unless wait
+		@client.wait_until(:instance_stopped, instance_ids: [ i.id() ])
+	end
+
+	def terminate_instance(instance, wait=true)
+		instance = resolve_instance_id(instance)
+		i = @resource.intstance(instance)
+		i.terminate()
+		return unless wait
+		@client.wait_until(:instance_terminated, instance_ids: [ i.id() ])
+	end
+
+	def delete_volume(volume, wait=true)
+		volume = resolve_volume_id(volume)
+		v = @resource.intstance(volume)
+		v.delete()
+		return unless wait
+		@client.wait_until(:volume_deleted, volume_ids: [ v.id() ])
+	end
+
+	def remove_dns(instance, wait=false)
+		instance = resolve_instance_id(instance)
+		i = @resource.intstance(instance)
+		dnsname = nil
+		i.tags.each() do |tag|
+			if tag.key() == "Name"
+				dnsname = tag.value() + "." + @mgr["DNSBase"] + "."
+				break
+			end
+		end
+		return unless dnsname
+
+		pub_ip = i.public_ip_address
+		priv_ip = i.private_ip_address
+
+		pubzone = @mgr["PublicDNSId"]
+		privzone = @mgr["PrivateDNSId"]
+
+		change_ids = []
+		if pub_ip and pubzone
+			change_ids << @mgr.route53.delete(dnsname, pubzone)
+		end
+		if priv_ip and privzone
+			change_ids << @mgr.route53.delete(dnsname, privzone)
+		end
+		return unless wait
+		change_ids.each() { |id| @mgr.route53.wait_sync(id) }
+	end
+
 	def update_dns(instance, wait=false)
 		instance = resolve_instance_id(instance)
 		i = @resource.instance(instance)
@@ -172,9 +236,8 @@ class Ec2
 			@mgr.setparam("ipaddr", priv_ip)
 			change_ids << @mgr.route53.change_records("arec")
 		end
-		if wait
-			change_ids.each() { |id| @mgr.route53.wait_sync(id) }
-		end
+		return unless wait
+		change_ids.each() { |id| @mgr.route53.wait_sync(id) }
 	end
 	
 	def wait_running(instance)

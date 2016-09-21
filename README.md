@@ -1,12 +1,18 @@
 # Overview
 
-ruby-awstools consists of various ruby cli scripts using the Ruby aws-sdk, intended to:
-* Simplify creation of AWS resources
+`ruby-awstools` consists of a library and various ruby cli scripts using the
+Ruby aws-sdk, intended to:
+* Simplify creation of AWS resources in a scriptable manner
 * Manage sets of CloudFormation stacks
 * Centralize configuration data with an aim towards "configuration as code"
 
-Currently the only tool provided is `cfn`, for managing CloudFormation
-stacks.
+To greatly simplify matters, the library and tools have a number of assumptions
+built-in; if any of these don't hold true for your intended use, you may get
+only limited funcationality:
+* VPC's, subnets, security groups, and other long-lived resources will be
+  created with CloudFormation templates (with samples provided)
+* You will have (or create) AWS-integrated DNS hosted zones, preferably
+  public and private zones for the same domain
 
 # Installation
 1. Clone the repository

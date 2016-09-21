@@ -45,13 +45,19 @@ raise UsageException.new("Unknown command: #{command}") unless commands.include?
 
 params = {}
 tags = {}
-dns = false
+dns = true
 wait = false
+datasize = nil
+snapshot = nil
+volume = nil
 
 case command
 when "create"
-	opts.on("-d", "--dns", "Add public/private DNS records for <name>.${DNSDomain}") do
-		dns = true
+	opts.on("-d", "--data-vol SIZE", "Create with a new data volume of size SIZE") do |dsize|
+		datasize = dsize
+	end
+	opts.on("-N", "--no-dns", "Don't create DNS records for <name>.${DNSDomain}") do
+		dns = false
 	end
 	opts.on("-w", "--wait", "Wait for DNS records to sync") do
 		wait = true
@@ -59,16 +65,28 @@ when "create"
 	opts.on("-e", "--ebs-optimized", "Create ebs-optimized instances") do
 		params["ebsoptimized"] = true
 	end
+	opts.on("-i", "--iops IOPS", "Specify provisioned iops, only used with io1 volumes") do |iops|
+		params["iops"] = iops
+	end
 	opts.on("-m", "--monitoring", "Enable ec2 monitoring (CPU, disk/network, status checks)") do
 		params["monitor"] = true
 	end
-	opts.on("-i", "--instance-type TYPE", "Use TYPE for instance type instead of template default") do |type|
+	opts.on("-s", "--snapshot SNAP", "Create data volume from snapshot (id or name)") do |snap|
+		snapshot = snap
+	end
+	opts.on("-v", "--volume VOL", "Attach the given data volume (id or name)") do |vol|
+		volume = vol
+	end
+	opts.on("-V", "--volume-type TYPE", "Create a new volume of type TYPE (gp2, io1, etc.)") do |vtype|
+		params["volume_type"] = vtype
+	end
+	opts.on("-t", "--instance-type TYPE", "Use TYPE for instance type instead of template default") do |type|
 		params["type"] = type
 	end
 	opts.on("-r", "--root-size SIZE", "Increase root volume size to SIZE") do |size|
 		params["rootsize"] = size
 	end
-	opts.on("-t", "--tag KEYVAL", "Add tag where KEYVAL is of the form key=value") do |keyval|
+	opts.on("-T", "--tag KEYVAL", "Add tag where KEYVAL is of the form key=value") do |keyval|
 		e = keyval.index("=")
 		key = keyval[0..(e-1)]
 		value = keyval[(e+1)..-1]
@@ -79,9 +97,6 @@ when "create"
 		key = keyval[0..(e-1)]
 		value = keyval[(e+1)..-1]
 		params[key] = value
-	end
-	opts.on("-n", "--count COUNT", "Use TYPE for instance type instead of template default") do |count|
-		params["count"] = count
 	end
 when "updatedns"
 	opts.on("-w", "--wait", "Wait for DNS records to sync") do
@@ -105,21 +120,34 @@ when "create"
 	raise UsageException.new("Missing required argument") unless az
 	cfg.setparam("name", name)
 	cfg.setparam("key", key)
+	cfg.route53.normalize_name_parameters()
+	# one-liner to validate the key
+	cfg.ec2.resource.key_pair(key).key_name()
+	raise "Instance #{name} already exists" if cfg.ec2.resolve_instance_id(cfg.getparam("iname"), false)
 	cfg.setparam("az", az.upcase())
-	idata = cfg.ec2.create_from_template(template)
-	puts "Created #{idata.map(&:id)}, waiting for state: running ..."
+	raise UsageException.new("Error: both snapshot and volume specified") if snapshot and volume
+	idata = cfg.ec2.create_instance_from_template(template)
+	puts "Created instance #{idata.id()}"
+	if volume
+		volume = cfg.ec2.resolve_volume_id(volume)
+	end
+	if snapshot or datasize
+		puts "Creating new data volume"
+		volume = cfg.ec2.create_volume(datasize, snapshot).id()
+	end
+	puts "Waiting for instance to enter state \"running\" ..."
 	cfg.ec2.wait_running(idata)
 	puts "Running."
+	if volume
+		puts "Attaching volume"
+		cfg.ec2.attach_volume(idata, volume)
+	end
 	cfg.ec2.tag_instance_resources(idata)
 	if dns
 		puts "Updating dns for #{name}"
-		if idata.size == 1
-			puts "waiting for zones to synchronize..." if wait
-			cfg.ec2.update_dns(idata[0].id, wait)
-			puts "synchronized" if wait
-		else
-			STDERR.puts "Warning: skipping dns update for multiple instances"
-		end
+		puts "waiting for zones to synchronize..." if wait
+		cfg.ec2.update_dns(idata.id, wait)
+		puts "synchronized" if wait
 	end
 when "updatedns"
 	instance = ARGV.shift()

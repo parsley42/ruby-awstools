@@ -124,64 +124,66 @@ module RAWSTools
 			end
 		end
 
-		def expand_strings(rawdata)
-			data = rawdata
-			while data.match(/\${[@=:%$.\w]+}/)
-				data = data.gsub(/\${([@=:%$.\w]+)}/) do |ref|
-					var = $1
-					#puts "Expanding #{ref}, var is #{var}"
-					case var[0]
-					when "@"
-						param, default = var.split(':')
-						param = param[1..-1]
-						value = getparam(param)
-						if value
-							value
-						elsif default
-							if default[0] == "$"
-								cfgvar = default[1..-1]
-								if @config[cfgvar] == nil
-									raise "Invalid default for \"#{var}\": \"#{cfgvar}\" not defined in #{@filename}"
-								end
-								varclass = @config[cfgvar].class().to_s()
-								unless Valid_Classes.include?(varclass)
-									raise "Bad default value for \"#{var}\" during string expansion: \"$#{cfgvar}\" expands to non-scalar class #{varclass}"
-								end
-								@config[cfgvar]
-							else
-								default
-							end
-						else
-							raise "Reference to undefined parameter: \"#{param}\""
+		def expand_string(var)
+			var = $1 if var.match(/\${([@=:%$.\w]+)}/)
+			case var[0]
+			when "@"
+				param, default = var.split(':')
+				param = param[1..-1]
+				value = getparam(param)
+				if value
+					value
+				elsif default
+					if default[0] == "$"
+						cfgvar = default[1..-1]
+						if @config[cfgvar] == nil
+							raise "Invalid default for \"#{var}\": \"#{cfgvar}\" not defined in #{@filename}"
 						end
-					when "="
-						output = var[1..-1]
-						value = @cfn.getoutput(output)
-						raise "Output not found while expanding \"#{var}\"" unless value
-						value
-					when "%"
-						record = var[1..-1]
-						suffix = @config["ConfigDom"]
-						suffix = "." + suffix unless suffix.start_with?(".")
-						record = record + suffix unless record.end_with?(suffix)
-						record = record + "." unless record.end_with?(".")
-						values = @route53.lookup(record, @config["PrivateDNSId"])
-						raise "Failed to receive single-value record looking up \"#{record}\" in #{suffix}" unless values.length == 1
-						value = values[0]
-						trim = '"'
-						value = value[1..-1] if value.start_with?(trim)
-						value = value[0..-2] if value.end_with?(trim)
-						value
-					else
-						if @config[var] == nil
-							raise "Bad variable reference: \"#{var}\" not defined in #{@filename}"
-						end
-						varclass = @config[var].class().to_s()
+						varclass = @config[cfgvar].class().to_s()
 						unless Valid_Classes.include?(varclass)
-							raise "Bad variable reference during string expansion: \"$#{var}\" expands to non-scalar class #{varclass}"
+							raise "Bad default value for \"#{var}\" during string expansion: \"$#{cfgvar}\" expands to non-scalar class #{varclass}"
 						end
-						@config[var]
+						return @config[cfgvar]
+					else
+						return default
 					end
+				else
+					raise "Reference to undefined parameter: \"#{param}\""
+				end
+			when "="
+				output = var[1..-1]
+				value = @cfn.getoutput(output)
+				raise "Output not found while expanding \"#{var}\"" unless value
+				return value
+			when "%"
+				record = var[1..-1]
+				suffix = @config["ConfigDom"]
+				suffix = "." + suffix unless suffix.start_with?(".")
+				record = record + suffix unless record.end_with?(suffix)
+				record = record + "." unless record.end_with?(".")
+				values = @route53.lookup(record, @config["PrivateDNSId"])
+				raise "Failed to receive single-value record looking up \"#{record}\" in #{suffix}" unless values.length == 1
+				value = values[0]
+				trim = '"'
+				value = value[1..-1] if value.start_with?(trim)
+				value = value[0..-2] if value.end_with?(trim)
+				return value
+			else
+				if @config[var] == nil
+					raise "Bad variable reference: \"#{var}\" not defined in #{@filename}"
+				end
+				varclass = @config[var].class().to_s()
+				unless Valid_Classes.include?(varclass)
+					raise "Bad variable reference during string expansion: \"$#{var}\" expands to non-scalar class #{varclass}"
+				end
+				return @config[var]
+			end
+		end
+
+		def expand_strings(data)
+			while data.match(/\${[@=:%$.\w]+}/)
+				data = data.gsub(/\${([@=:%$.\w]+)}/) do
+					expand_string($1)
 				end
 			end
 			return data

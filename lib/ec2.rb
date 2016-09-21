@@ -7,16 +7,102 @@ class Ec2
 		@resource = Aws::EC2::Resource.new(client: @client)
 	end
 
-	def resolve(instance)
-		return instance if instance.start_with?("i-")
-		f = [ { name: "tag:Name", values: [instance] } ]
-		i = @resource.instances(filters: f).first()
-		raise "No instance found with Name: #{instance}" unless i
-		return i.id()
+	def resolve_instance_id(instance, must_exist=true)
+		if instance.class == String
+			return instance if instance.start_with?("i-")
+			f = [
+				{ name: "tag:Name", values: [instance] },
+				{
+					name: "instance-state-name",
+					values: [ "pending", "running", "shutting-down", "stopping", "stopped" ],
+				}
+			]
+			i = @resource.instances(filters: f)
+			count = i.count()
+			raise "Multiple matches for Name: #{instance}" if count > 1
+			raise "No instance found with Name: #{instance}" if must_exist and count != 1
+			return nil if count == 0
+			return i.first().id()
+		else
+			return instance.id()
+		end
 	end
 
-	def create_from_template(template)
-		@mgr.route53.normalize_name_parameters()
+	def resolve_volume_id(volume, must_exist=true)
+		if volume.class == String
+			return volume if volume.start_with?("vol-")
+			f = [ { name: "tag:Name", values: [volume] } ]
+			v = @resource.volumes(filters: f)
+			count = v.count()
+			raise "Multiple matches for Name: #{volume}" if count > 1
+			raise "No volume found with Name: #{volume}" if must_exist and count != 1
+			return nil if count == 0
+			return v.first().id()
+		else
+			return volume.id()
+		end
+	end
+
+	def resolve_snapshot_id(snapshot, must_exist=true)
+		if snapshot.class == String
+			return snapshot if snapshot.start_with?("snap-")
+			f = [ { name: "tag:Name", values: [snapshot] } ]
+			s = @resource.snapshots(filters: f)
+			count = s.count()
+			raise "Multiple matches for Name: #{snapshot}" if count > 1
+			raise "No snapshot found with Name: #{snapshot}" if must_exist and count != 1
+			return nil if count == 0
+			return s.first().id()
+		else
+			return snapshot.id()
+		end
+	end
+
+	def create_volume(size, snapshot, wait=true)
+		raise "No size or snapshot specified calling create_volume" unless size or snapshot
+		voltype = @mgr.expand_strings("${@volume_type:${DefaultVolumeType}}")
+		az = @mgr.expand_strings("${Region}${@az}").downcase()
+		volspec = {
+			availability_zone: az,
+			volume_type: voltype,
+		}
+		if snapshot
+			volspec[:snapshot_id] = resolve_snapshot_id(snapshot)
+		else
+			volspec[:encrypted] = true
+		end
+		volspec[:size] = size if size
+		if voltype.downcase() == "io1"
+			iops = @mgr.getparam("iops")
+			raise "No iops parameter specified for volume type io1" unless iops
+			volspec[:iops] = iops
+		end
+		vol = @resource.create_volume(volspec)
+		@client.wait_until(:volume_available, volume_ids: [ vol.id() ]) if wait
+		return vol
+	end
+
+	def attach_volume(instance, volume)
+		instance = resolve_instance_id(instance)
+		volume = resolve_volume_id(volume)
+		idata = @resource.instance(instance)
+		last = "f"
+		idata.block_device_mappings.each() do |b|
+			d = b.device_name[-1]
+			next if d == "1"
+			next if d <= last
+			last = d
+		end
+		raise "Too many volumes attached to #{instance}" if last == "p"
+		dev = last.next()
+		idata.attach_volume({
+			volume_id: volume,
+			device: "/dev/sd#{dev.next()}",
+		})
+		@client.wait_until(:volume_in_use, volume_ids: [ volume ])
+	end
+
+	def create_instance_from_template(template)
 		templatefile = nil
 		if template.end_with?(".yaml")
 			templatefile = template
@@ -35,28 +121,29 @@ class Ec2
 		#puts "Creating: #{ispec}"
 
 		instances = @resource.create_instances(ispec)
-		return instances
+		return instances.first()
 	end
 
-	def tag_instance_resources(idata)
+	def tag_instance_resources(instance)
+		instance = resolve_instance_id(instance)
 		cfgtags = @mgr.tags()
 		cfgtags["Name"] = @mgr.getparam("iname")
-		tags = cfgtags.ltags()
 
-		ilist = idata.map(&:id)
-		instances = @resource.instances(instance_ids: ilist)
-		#puts "Tags: #{tags}"
-		instances.batch_create_tags(tags: tags)
+		idata = @resource.instance(instance)
+		idata.create_tags(tags: cfgtags.ltags())
 
-		volumes = []
-		ilist.each() do |instance|
-			volumes += @resource.instance(instance).block_device_mappings().map() { |b| b.ebs.volume_id() }
+		idata.block_device_mappings().each() do |b|
+			if b.device_name.end_with?("a") or b.device_name.end_with?("1")
+				cfgtags["Name"] = "#{@mgr.getparam("iname")}-root"
+			else
+				cfgtags["Name"] = "#{@mgr.getparam("iname")}-data"
+			end
+			@resource.volume(b.ebs.volume_id()).create_tags(tags: cfgtags.ltags())
 		end
-		@client.create_tags(resources: volumes, tags: tags)
 	end
 
 	def update_dns(instance, wait=false)
-		instance = resolve(instance)
+		instance = resolve_instance_id(instance)
 		i = @resource.instance(instance)
 		unless @mgr.getparam("name")
 			i.tags.each() do |tag|
@@ -90,8 +177,8 @@ class Ec2
 		end
 	end
 	
-	def wait_running(instances)
-		instance_list = instances.map(&:id)
-		@client.wait_until(:instance_running, instance_ids: instance_list)
+	def wait_running(instance)
+		instance = resolve_instance_id(instance)
+		@client.wait_until(:instance_running, instance_ids: [ instance ])
 	end
 end

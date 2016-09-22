@@ -4,7 +4,7 @@ change_batch:
   changes:
   - action: UPSERT
     resource_record_set:
-      name: ${@name}
+      name: ${@fqdn}
       type: TXT
       ttl: ${@ttl:$TXTRecTTL}
       # Note that the complex parameter txtrecords is created by the route53

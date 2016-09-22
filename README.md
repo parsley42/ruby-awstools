@@ -50,10 +50,10 @@ $RAWS_CLOUDCFG environment variable)
 
 ## Variable Expansion
 
-One of the features that makes `ruby-awstools` powerful is it's variable
-expansion functionality, allowing centralized configuration data
-to be retrieved from the central YAML file, CloudFormation template outputs,
-DNS, etc.
+One of the features that makes `ruby-awstools` powerful is it's use of
+templates with variable expansion functionality, allowing centralized
+configuration data to be retrieved from the cloudconfig.yaml file,
+CloudFormation template outputs, DNS, and provided parameters.
 
 ### Parameters
 
@@ -63,15 +63,54 @@ parameters, these parameters aren't passed as method arguments but rather stored
 as a ConfigManager parameter, and expanded in the template through the
 ${@param(:default)} construct.
 
-#### Standard Parameters
+#### DNS Zones, Naming, and DNS Parameters
 
-A number of parameters are standardized and get special treatment by the library:
-* name, cname - DNS names; these will have the configured DNSDomain appended
-  unless it's already present. (See RAWSTools::Route53#normalize\_name\_parameters)
-* iname - Reserved parameter for instance name; this is automatically generated
-  by the library and used when setting the "Name" tag on created instances. It
-  gets set to the 'name' parameter after removing the configured DNSBase suffix.
-  (See RAWSTools::Route53#normalize\_name\_parameters)
+For simplicity, `ruby-awstools` design uses DNS-based naming conventions
+where resources are referred to by the hostname (and possibly subdomain).
+This makes it fairly easy to have multiple projects in different subdomains
+of a single domain - "dev", "test", and "prod", for instance. When applying
+tags to resources, `ruby-awstools` uses the short qualified name for the
+`Name` tag, and the FQDN for the `FQDN` tag, for disambiguating among
+multiple projects. A consequence of this is that all resources of a given
+type (instances, volumes, snapshots, etc.) must have a unique FQDN - though
+you may have, e.g., an instance and a volume with the same FQDN.
+
+A cloudconfig.yaml file should specify three DNS domain names, without a
+leading or trailing dot:
+* DNSBase: The DNS domain name of the AWS hosted zone, common across multiple
+  projects, e.g. `mycompany.com`.
+* DNSDomain: The DNS domain for all resources in a particular project, e.g.
+  `dev.mycompany.com`.
+* ConfigDomain: The DNS domain where configuration variables are stored in
+  TXT records. This may be the same for multiple projects. (Note that a common
+  use of such config variables us to map human-readable names of AMI
+  images to their ami-xxx identifiers.)
+
+Thus, whenever a name is provided, it will canonicalized and a FQDN generated
+based on the configured domains. Some examples should make this clear:
+
+When DNSDomain is `foo.com`, DNSBase is `foo.com`, and ConfigDomain is
+`cfg.foo.com`, the name is translated to a canonical name and fqdn as
+follows:
+* `bar` -> `bar`, `bar.foo.com`
+* `bar.baz` -> `bar.baz`, `bar.baz.foo.com`
+* `bar.foo.com` -> `bar`, `bar.foo.com`
+* `baz.cfg` -> `baz.cfg`, `baz.cfg.foo.com`
+
+When DNSDomain is `dev.foo.com`:
+* `bar` -> `bar.dev`, `bar.dev.foo.com`
+* `bar.dev` -> `bar.dev`, `bar.dev.foo.com`
+* `baz.cfg` -> `baz.cfg.foo.com`
+
+Note that the library provides a `normalize_name_parameters` function
+that performs this normalization on the following parameters:
+* name (instance or DNS record name)
+* cname
+* volname
+* snapname
+
+For `name` and `cname`, the function also creates and populates parameter
+values for `fqdn` and `cfqdn` for a`cname` parameter.
 
 ### Template String Expansion
 
@@ -106,8 +145,8 @@ can be used to index into a structure.
   tool and is only for special cases such as TXT records, where the string
   value must be split into an array of 255-char substrings.
 * $%record - look up value(s) from the private DNS hosted zone, appending
-  the value of ConfigDom from the cloud config file; e.g. $%c7image would
-  return an array of values from a lookup of c7image.<ConfigDom>.
+  the value of ConfigDomain from the cloud config file; e.g. $%c7image would
+  return an array of values from a lookup of c7image.<ConfigDomain>.
 
 ### Context Specific Expansion
 

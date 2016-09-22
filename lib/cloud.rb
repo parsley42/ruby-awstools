@@ -54,12 +54,14 @@ module RAWSTools
 	# For reading in the configuration file and initializing service clients
 	# and resources
 	class CloudManager
-		attr_reader :installdir, :cfn, :cfnres, :s3, :s3res, :ec2, :ec2res, :route53
+		attr_reader :installdir, :subdom, :cfgsubdom, :cfn, :s3, :s3res, :ec2, :route53
 
 		def initialize(filename, installdir)
 			@filename = filename
 			@installdir = installdir
 			@params = {}
+			@subdom = nil
+			@cfgsubdom = nil
 
 			@config = YAML::load(File::read(filename))
 			[ "Bucket", "Region", "VPCCIDR", "AvailabilityZones", "SubnetTypes" ].each do |c|
@@ -67,13 +69,29 @@ module RAWSTools
 					raise "Missing required top-level configuration item in #{@filename}: #{c}"
 				end
 			end
-			[ "DNSBase", "DNSDomain", "ConfigDom" ].each do |dnsdom|
+
+			[ "DNSBase", "DNSDomain", "ConfigDomain" ].each do |dnsdom|
 				name = @config[dnsdom]
 				if name.end_with?(".")
 					STDERR.puts("Warning: removing trailing dot from #{dnsdom}")
 					@config[dnsdom] = name[0..-2]
 				end
+				if name.start_with?(".")
+					STDERR.puts("Warning: removing leading dot from #{dnsdom}")
+					@config[dnsdom] = name[1..-1]
+				end
 			end
+			raise "Invalid configuration, ConfigDomain not a subdomain of DNSBase" unless @config["ConfigDomain"].end_with?(@config["DNSBase"])
+			raise "Invalid configuration, DNSDomain same as or subdomain of DNSBase" unless @config["DNSDomain"].end_with?(@config["DNSBase"])
+			if @config["DNSDomain"] != @config["DNSBase"]
+				i = @config["DNSDomain"].index(@config["DNSBase"])
+				@subdom = @config["DNSDomain"][0..(i-2)]
+			end
+			if @config["ConfigDomain"] != @config["DNSBase"]
+				i = @config["ConfigDomain"].index(@config["DNSBase"])
+				@cfgsubdom = @config["ConfigDomain"][0..(i-2)]
+			end
+
 			subnet_types = {}
 			@config["SubnetTypes"].each_key do |st|
 				subnet_types[st] = SubnetDefinition.new(@config["SubnetTypes"][st]["CIDR"], @config["SubnetTypes"][st]["Subnets"])
@@ -85,6 +103,48 @@ module RAWSTools
 			@s3 = Aws::S3::Client.new( region: @config["Region"] )
 			@s3res = Aws::S3::Resource.new( client: @s3 )
 			@route53 = Route53.new(self)
+		end
+
+		def normalize_name_parameters()
+			domain = @config["DNSDomain"]
+			cfgdom = @config["ConfigDomain"]
+			base = @config["DNSBase"]
+			# NOTE: skipping 'snapname' for now, since they will likely
+			# be of the form <name>-<timestamp>
+			["name", "cname", "volname", "snapname"].each() do |name|
+				norm = getparam(name)
+				next unless norm
+				norm = norm[0..-2] if norm.end_with?(".")
+				if norm.end_with?(domain)
+					fqdn = norm + "."
+					i = norm.index(base)
+					norm = norm[0..(i-2)]
+				elsif norm.end_with?(cfgdom)
+					fqdn = norm + "."
+					i = norm.index(cfgdom)
+					norm = norm[0..(i-2)]
+				elsif @cfgsubdom and norm.end_with?(@cfgsubdom)
+					fqdn = norm + "." + domain + "."
+				elsif @subdom and norm.end_with?(@subdom)
+					fqdn = norm + "." + domain + "."
+				elsif @subdom
+					fqdn = norm + "." + domain
+					norm = norm + "." + @subdom
+				else
+					fqdn = norm + "." + domain
+				end
+				setparam(name, norm)
+				case name
+				when "name"
+					setparam("fqdn", fqdn)
+				when "cname"
+					setparam("cfqdn", fqdn)
+				when "volname"
+					setparam("vfqdn", fqdn)
+				when "snapname"
+					setparam("sfqdn", fqdn)
+				end
+			end
 		end
 
 		def tags()
@@ -157,7 +217,7 @@ module RAWSTools
 				return value
 			when "%"
 				record = var[1..-1]
-				suffix = @config["ConfigDom"]
+				suffix = @config["ConfigDomain"]
 				suffix = "." + suffix unless suffix.start_with?(".")
 				record = record + suffix unless record.end_with?(suffix)
 				record = record + "." unless record.end_with?(".")

@@ -5,63 +5,69 @@ class Ec2
 		@mgr = cloudmgr
 		@client = Aws::EC2::Client.new( region: @mgr["Region"] )
 		@resource = Aws::EC2::Resource.new(client: @client)
+		@instances = {}
+		@volumes = {}
+		@snapshots = {}
 	end
 
-	def resolve_instance_id(instance, must_exist=true)
-		if instance.class == String
-			return instance if instance.start_with?("i-")
-			f = [
-				{ name: "tag:Name", values: [instance] },
-				{
-					name: "instance-state-name",
-					values: [ "pending", "running", "shutting-down", "stopping", "stopped" ],
-				}
-			]
-			f << @mgr["Filter"] if @mgr["Filter"]
-			i = @resource.instances(filters: f)
-			count = i.count()
-			raise "Multiple matches for Name: #{instance}" if count > 1
-			raise "No instance found with Name: #{instance}" if must_exist and count != 1
-			return nil if count == 0
-			return i.first().id()
-		else
-			return instance.id()
-		end
+	def resolve_instance(must_exist=true)
+		iname = @mgr.getparam("name")
+		return @instances[iname] if @instances[iname]
+		fqdn = @mgr.getparam("fqdn")
+		f = [
+			{ name: "tag:FQDN", values: [ fqdn ] },
+			{
+				name: "instance-state-name",
+				values: [ "pending", "running", "shutting-down", "stopping", "stopped" ],
+			}
+		]
+		f << @mgr["Filter"] if @mgr["Filter"]
+		idata = @resource.instances(filters: f)
+		count = idata.count()
+		raise "Multiple matches for Name: #{instance}" if count > 1
+		raise "No instance found with Name: #{instance}" if must_exist and count != 1
+		return nil if count == 0
+		instance = idata.first()
+		@instances[i] = instance
+		return instance
 	end
 
-	def resolve_volume_id(volume, must_exist=true)
-		if volume.class == String
-			return volume if volume.start_with?("vol-")
-			f = [ { name: "tag:Name", values: [volume] } ]
+	def resolve_volume(must_exist=true)
+		vname = @mgr.getparam("volname")
+		return @volumes[vname] if @volumes[vname]
+		iname = @mgr.getparam("name")
+		f = [ { name: "tag:InstanceName", values: [ vname ] } ]
+		f << @mgr["Filter"] if @mgr["Filter"]
+		v = @resource.volumes(filters: f)
+		count = v.count()
+		if count == 0
+			f = [ { name: "tag:Name", values: [ @mgr.getparam("name") ] } ]
 			f << @mgr["Filter"] if @mgr["Filter"]
 			v = @resource.volumes(filters: f)
 			count = v.count()
-			raise "Multiple matches for Name: #{volume}" if count > 1
-			raise "No volume found with Name: #{volume}" if must_exist and count != 1
-			return nil if count == 0
-			return v.first().id()
-		else
-			return volume.id()
 		end
+		raise "Multiple matches for Name: #{volume}" if count > 1
+		raise "No volume found with Name: #{volume}" if must_exist and count != 1
+		return nil if count == 0
+		return v.first().id()
 	end
 
-	def resolve_snapshot_id(snapshot, must_exist=true)
-		if snapshot.class == String
-			return snapshot if snapshot.start_with?("snap-")
-			f = [ { name: "tag:Name", values: [snapshot] } ]
-			f << @mgr["Filter"] if @mgr["Filter"]
-			s = @resource.snapshots(filters: f)
-			count = s.count()
-			raise "Multiple matches for Name: #{snapshot}" if count > 1
-			raise "No snapshot found with Name: #{snapshot}" if must_exist and count != 1
-			return nil if count == 0
-			return s.first().id()
-		else
-			return snapshot.id()
-		end
+	# NOTE: snapshots should all have fqdns of the form <timestamp>.<name>, where
+	# <name> is the fqdn of the volume snapshotted.
+	def resolve_snapshot(must_exist=true)
+		f = [ { name: "tag:Name", values: [ @mgr.getparam("snapname") ] } ]
+		f << @mgr["Filter"] if @mgr["Filter"]
+		s = @resource.snapshots(filters: f)
+		count = s.count()
+		raise "Multiple matches for Name: #{snapshot}" if count > 1
+		raise "No snapshot found with Name: #{snapshot}" if must_exist and count != 1
+		return nil if count == 0
+		return s.first().id()
 	end
 
-	def create_volume(size, snapshot, wait=true)
+	def create_volume(size, wait=true)
+		snapshot = @mgr.getparam("snapname")
+		volname = @mgr.getparam("volname")
 		raise "No size or snapshot specified calling create_volume" unless size or snapshot
 		voltype = @mgr.expand_strings("${@volume_type:${DefaultVolumeType}}")
 		az = @mgr.expand_strings("${Region}${@az}").downcase()
@@ -70,7 +76,7 @@ class Ec2
 			volume_type: voltype,
 		}
 		if snapshot
-			volspec[:snapshot_id] = resolve_snapshot_id(snapshot)
+			volspec[:snapshot_id] = resolve_snapshot()
 		else
 			volspec[:encrypted] = true
 		end
@@ -82,12 +88,17 @@ class Ec2
 		end
 		vol = @resource.create_volume(volspec)
 		@client.wait_until(:volume_available, volume_ids: [ vol.id() ]) if wait
+		@volumes[volname] = volume
+		cfgtags = @mgr.tags()
+		cfgtags["Name"] = @mgr.getparam("name")
+		cfgtags["FQDN"] = @mgr.getparam("fqdn")
+		vol.create_tags(tags: cfgtags.ltags())
 		return vol
 	end
 
-	def attach_volume(instance, volume)
-		instance = resolve_instance_id(instance)
-		volume = resolve_volume_id(volume)
+	def attach_volume()
+		instance = resolve_instance_id(@mgr.getparam("name"))
+		volume = resolve_volume_id(@mgr.getparam("volname"))
 		idata = @resource.instance(instance)
 		last = "f"
 		idata.block_device_mappings.each() do |b|
@@ -127,25 +138,23 @@ class Ec2
 		return instances.first()
 	end
 
-	def tag_instance_resources(instance)
-		instance = resolve_instance_id(instance)
+	def tag_instance_resources()
+		instance = resolve_instance()
 		cfgtags = @mgr.tags()
-		cfgtags["Name"] = @mgr.getparam("iname")
+		cfgtags["Name"] = @mgr.getparam("name")
+		cfgtags["FQDN"] = @mgr.getparam("fqdn")
 
-		idata = @resource.instance(instance)
-		idata.create_tags(tags: cfgtags.ltags())
+		instance.create_tags(tags: cfgtags.ltags())
 
 		idata.block_device_mappings().each() do |b|
-			if b.device_name.end_with?("a") or b.device_name.end_with?("1")
-				cfgtags["Name"] = "#{@mgr.getparam("iname")}-root"
-			else
-				cfgtags["Name"] = "#{@mgr.getparam("iname")}-data"
-			end
+			next unless b.device_name.end_with?("a") or b.device_name.end_with?("1")
+			cfgtags["Name"] = "rootvol-#{@mgr.getparam("name")}"
+			cfgtags["InstanceName"] = @mgr.getparam("name")
 			@resource.volume(b.ebs.volume_id()).create_tags(tags: cfgtags.ltags())
 		end
 	end
 
-	def start_instance(instance, wait=true)
+	def start_instance(wait=true)
 		instance = resolve_instance_id(instance)
 		i = @resource.intstance(instance)
 		i.start()
@@ -153,7 +162,7 @@ class Ec2
 		@client.wait_until(:instance_running, instance_ids: [ i.id() ])
 	end
 
-	def stop_instance(instance, wait=true)
+	def stop_instance(wait=true)
 		instance = resolve_instance_id(instance)
 		i = @resource.intstance(instance)
 		i.stop()
@@ -161,7 +170,7 @@ class Ec2
 		@client.wait_until(:instance_stopped, instance_ids: [ i.id() ])
 	end
 
-	def terminate_instance(instance, wait=true)
+	def terminate_instance(wait=true)
 		instance = resolve_instance_id(instance)
 		i = @resource.intstance(instance)
 		i.terminate()
@@ -169,7 +178,7 @@ class Ec2
 		@client.wait_until(:instance_terminated, instance_ids: [ i.id() ])
 	end
 
-	def delete_volume(volume, wait=true)
+	def delete_volume( wait=true)
 		volume = resolve_volume_id(volume)
 		v = @resource.intstance(volume)
 		v.delete()
@@ -177,7 +186,7 @@ class Ec2
 		@client.wait_until(:volume_deleted, volume_ids: [ v.id() ])
 	end
 
-	def remove_dns(instance, wait=false)
+	def remove_dns(wait=false)
 		instance = resolve_instance_id(instance)
 		i = @resource.intstance(instance)
 		dnsname = nil
@@ -206,15 +215,14 @@ class Ec2
 		change_ids.each() { |id| @mgr.route53.wait_sync(id) }
 	end
 
-	def update_dns(instance, wait=false)
+	def update_dns(wait=false)
 		instance = resolve_instance_id(instance)
 		i = @resource.instance(instance)
 		unless @mgr.getparam("name")
 			i.tags.each() do |tag|
 				if tag.key() == "Name"
-					iname = tag.value()
-					name = iname + "." + @mgr["DNSBase"] + "."
-					@mgr.setparam("name", name)
+					@mgr.setparam("name", tag.value())
+					@mgr.normalize_name_parameters()
 					break
 				end
 			end
@@ -240,7 +248,7 @@ class Ec2
 		change_ids.each() { |id| @mgr.route53.wait_sync(id) }
 	end
 	
-	def wait_running(instance)
+	def wait_running()
 		instance = resolve_instance_id(instance)
 		@client.wait_until(:instance_running, instance_ids: [ instance ])
 	end

@@ -48,8 +48,6 @@ tags = {}
 dns = true
 wait = false
 datasize = nil
-snapshot = nil
-volume = nil
 
 case command
 when "create"
@@ -72,10 +70,10 @@ when "create"
 		params["monitor"] = true
 	end
 	opts.on("-s", "--snapshot SNAP", "Create data volume from snapshot (id or name)") do |snap|
-		snapshot = snap
+		params["snapname"] = snap
 	end
 	opts.on("-v", "--volume VOL", "Attach the given data volume (id or name)") do |vol|
-		volume = vol
+		params["volname"] = vol
 	end
 	opts.on("-V", "--volume-type TYPE", "Create a new volume of type TYPE (gp2, io1, etc.)") do |vtype|
 		params["volume_type"] = vtype
@@ -118,47 +116,54 @@ case command
 when "create"
 	name, key, template, az = ARGV.shift(4)
 	raise UsageException.new("Missing required argument") unless az
+	raise UsageException.new("Error: both snapshot and volume specified") if params["snapname"] and params["volname"]
 	cfg.setparam("name", name)
 	cfg.setparam("key", key)
-	cfg.route53.normalize_name_parameters()
+	cfg.normalize_name_parameters()
+	if params["volname"]
+		raise UsageException.new("Error: volume \"#{params}\" not found") unless cfg.ec2.resolve_volume()
+	else
+		cfg.setparam("volname", cfg.getparam("name"))
+		volume = cfg.ec2.resolve_volume(false)
+	end
 	# one-liner to validate the key
 	cfg.ec2.resource.key_pair(key).key_name()
-	raise "Instance #{name} already exists" if cfg.ec2.resolve_instance_id(cfg.getparam("iname"), false)
+	raise "Instance #{name} already exists" if cfg.ec2.resolve_instance(false)
 	cfg.setparam("az", az.upcase())
-	raise UsageException.new("Error: both snapshot and volume specified") if snapshot and volume
-	idata = cfg.ec2.create_instance_from_template(template)
-	puts "Created instance #{idata.id()}"
-	if volume
-		volume = cfg.ec2.resolve_volume_id(volume)
-	end
+	instance = cfg.ec2.create_instance_from_template(template)
+	puts "Created instance \"#{cfg.getparam("name")}\"(id: #{instance.id()})"
 	if snapshot or datasize
-		puts "Creating new data volume"
-		volume = cfg.ec2.create_volume(datasize, snapshot).id()
+		if volume
+			raise "Error: volume \"#{cfg.getparam("volname")}\" already exists; delete or rename before creating a new volume"
+		else
+			volume = cfg.ec2.create_volume(datasize)
+			puts "Created new data volume \"#{cfg.getparam("volname")}\"(id: #{volume.id()})"
+		end
 	end
 	puts "Waiting for instance to enter state \"running\" ..."
-	cfg.ec2.wait_running(idata)
-	puts "Running."
+	cfg.ec2.wait_running()
+	puts "Running"
 	if volume
-		puts "Attaching volume"
-		cfg.ec2.attach_volume(idata, volume)
+		puts "Attaching data volume \"#{cfg.getparam("volname")}\"(id: #{volume.id()})"
+		cfg.ec2.attach_volume()
 	end
-	cfg.ec2.tag_instance_resources(idata)
+	cfg.ec2.tag_instance_resources()
 	if dns
-		puts "Updating dns for #{name}"
-		puts "waiting for zones to synchronize..." if wait
-		cfg.ec2.update_dns(idata.id, wait)
-		puts "synchronized" if wait
+		puts "Updating DNS"
+		puts "Waiting for zones to synchronize..." if wait
+		cfg.ec2.update_dns(wait)
+		puts "Synchronized" if wait
 	end
 when "updatedns"
-	instance = ARGV.shift()
+	name = ARGV.shift()
 	raise UsageException.new("Missing required argument") unless instance
-	puts "Updating DNS for #{instance}"
-	puts "waiting for zones to synchronize..." if wait
-	cfg.ec2.update_dns(instance, wait)
-	puts "synchronized" if wait
+	puts "Updating DNS"
+	puts "Waiting for zones to synchronize..." if wait
+	cfg.ec2.update_dns(wait)
+	puts "Synchronized" if wait
 when "start"
-	ispec = ARGV.shift()
-	raise UsageException.new("Missing <instancename|instanceId> argument") unless ispec
+	instance = ARGV.shift()
+	raise UsageException.new("Missing <instancename|instanceId> argument") unless instance
 	puts "Starting #{ispec}, dnsname is #{dnsname}.#{cfg["PublicDNS"]}"
 when "genkeypair"
 	keyname = ARGV.shift()

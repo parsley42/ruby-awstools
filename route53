@@ -81,8 +81,9 @@ when "lookup"
 	end
 	exit 0
 when "delete"
-	where, rec = ARGV.shift(2)
-	raise UsageException.new("Missing required argument") unless rec
+	where, name = ARGV.shift(2)
+	cfg.setparam("name", name)
+	raise UsageException.new("Missing required argument") unless name
 when "cname"
 	where, cname, name = ARGV.shift(3)
 	raise UsageException.new("Missing required argument") unless cname
@@ -115,6 +116,7 @@ when "txt"
 	puts "Pointing #{name} to #{txtrecords} using template txt"
 end
 
+cfg.normalize_name_parameters()
 change_ids = []
 if where == "public" or where == "both"
 	puts "Updating public zone"

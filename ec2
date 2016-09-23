@@ -19,11 +19,13 @@ opts = OptionParser.new
 opts.banner = <<-EOF
 Usage: ec2 <command> (options) (args) - manage a CloudFormation stack
  Where <command> is one of:
-  create <name/dns prefix> <keyname> <template> <availability_zone> - create one or more instances from a template (name or path)
-  updatedns <instancename|instanceid> - update A records for an instance
+  create <name> <keyname> <template> - create one or more instances from a template (name or path)
+  updatedns <name> - update A records for an instance
   deletekeypair <keyname>
   genkeypair <keyname> (outputdir) - generate a keypair and store it in <keyname>.pem
-  start <instancename|instanceId> - start a stopped instance; i-* are assumed instance ID
+  start <name> - start a stopped instance
+  stop <name> - stop a running instance
+  terminate <name> - terminate an instance
  Options are:
 EOF
 opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
@@ -38,24 +40,28 @@ end
 
 begin
 
-commands = [ "create", "updatedns", "deletekeypair", "genkeypair", "start" ]
+commands = [ "create", "updatedns", "deletekeypair", "genkeypair", "start", "stop", "terminate" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
 
 params = {}
 tags = {}
-dns = true
 wait = false
+dryrun = false
 datasize = nil
+deletevol = false
 
 case command
 when "create"
 	opts.on("-d", "--data-vol SIZE", "Create with a new data volume of size SIZE") do |dsize|
 		datasize = dsize
 	end
+	opts.on("-D", "--dry-run", "Don't actually create anything, just verify parameters") do
+		params["dryrun"] = true
+	end
 	opts.on("-N", "--no-dns", "Don't create DNS records for <name>.${DNSDomain}") do
-		dns = false
+		params["nodns"] = true
 	end
 	opts.on("-w", "--wait", "Wait for DNS records to sync") do
 		wait = true
@@ -84,6 +90,9 @@ when "create"
 	opts.on("-r", "--root-size SIZE", "Increase root volume size to SIZE") do |size|
 		params["rootsize"] = size
 	end
+	opts.on("-z", "--availability-zone ZONE", "Create instance the given zone (letter only)") do |zone|
+		params["az"] = zone
+	end
 	opts.on("-T", "--tag KEYVAL", "Add tag where KEYVAL is of the form key=value") do |keyval|
 		e = keyval.index("=")
 		key = keyval[0..(e-1)]
@@ -96,9 +105,19 @@ when "create"
 		value = keyval[(e+1)..-1]
 		params[key] = value
 	end
-when "updatedns"
+when "updatedns", "stop", "start", "terminate"
 	opts.on("-w", "--wait", "Wait for DNS records to sync") do
 		wait = true
+	end
+	if command == "start"
+		opts.on("-N", "--no-dns", "Don't create DNS records for <name>.${DNSDomain}") do
+			params["nodns"] = true
+		end
+	end
+	if command == "terminate"
+		opts.on("-d", "--delete-volume", "Delete the data volume") do
+			deletevol = true
+		end
 	end
 end
 
@@ -114,57 +133,35 @@ cfg.setparams(params)
 
 case command
 when "create"
-	name, key, template, az = ARGV.shift(4)
-	raise UsageException.new("Missing required argument") unless az
-	raise UsageException.new("Error: both snapshot and volume specified") if params["snapname"] and params["volname"]
+	name, key, template = ARGV.shift(3)
+	raise UsageException.new("Missing required argument") unless template
+	raise UsageException.new("Error: both snapshot and volume specified") if params["volname"] and params["snapname"] or params["datasize"]
 	cfg.setparam("name", name)
 	cfg.setparam("key", key)
-	cfg.normalize_name_parameters()
-	if params["volname"]
-		raise UsageException.new("Error: volume \"#{params}\" not found") unless cfg.ec2.resolve_volume()
-	else
-		cfg.setparam("volname", cfg.getparam("name"))
-		volume = cfg.ec2.resolve_volume(false)
-	end
 	# one-liner to validate the key
 	cfg.ec2.resource.key_pair(key).key_name()
-	raise "Instance #{name} already exists" if cfg.ec2.resolve_instance(false)
-	cfg.setparam("az", az.upcase())
-	instance = cfg.ec2.create_instance_from_template(template)
-	puts "Created instance \"#{cfg.getparam("name")}\"(id: #{instance.id()})"
-	if snapshot or datasize
-		if volume
-			raise "Error: volume \"#{cfg.getparam("volname")}\" already exists; delete or rename before creating a new volume"
-		else
-			volume = cfg.ec2.create_volume(datasize)
-			puts "Created new data volume \"#{cfg.getparam("volname")}\"(id: #{volume.id()})"
-		end
-	end
-	puts "Waiting for instance to enter state \"running\" ..."
-	cfg.ec2.wait_running()
-	puts "Running"
-	if volume
-		puts "Attaching data volume \"#{cfg.getparam("volname")}\"(id: #{volume.id()})"
-		cfg.ec2.attach_volume()
-	end
-	cfg.ec2.tag_instance_resources()
-	if dns
-		puts "Updating DNS"
-		puts "Waiting for zones to synchronize..." if wait
-		cfg.ec2.update_dns(wait)
-		puts "Synchronized" if wait
+	instance = cfg.ec2.create_instance(template, wait) do |status|
+		puts status
 	end
 when "updatedns"
 	name = ARGV.shift()
-	raise UsageException.new("Missing required argument") unless instance
+	raise UsageException.new("Missing required argument") unless name
+	cfg.setparam("name", name)
 	puts "Updating DNS"
 	puts "Waiting for zones to synchronize..." if wait
 	cfg.ec2.update_dns(wait)
 	puts "Synchronized" if wait
 when "start"
-	instance = ARGV.shift()
-	raise UsageException.new("Missing <instancename|instanceId> argument") unless instance
-	puts "Starting #{ispec}, dnsname is #{dnsname}.#{cfg["PublicDNS"]}"
+	name = ARGV.shift()
+	raise UsageException.new("Missing <name> argument") unless name
+	cfg.setparam("name", name)
+	cfg.ec2.start_instance(wait)
+when "stop"
+	name = ARGV.shift()
+	raise UsageException.new("Missing <name> argument") unless name
+	cfg.setparam("name", name)
+	puts "Stopping #{name}"
+	cfg.ec2.stop_instance(wait)
 when "genkeypair"
 	keyname = ARGV.shift()
 	raise UsageException.new("Missing <keyname> argument") unless keyname

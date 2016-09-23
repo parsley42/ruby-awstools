@@ -6,9 +6,9 @@ class Route53
 		@client = Aws::Route53::Client.new( region: @mgr["Region"] )
 	end
 
-	def lookup(zone)
-		fqdn = @mgr.getparam("fqdn")
-		raise "fqdn parameter not set; missing a call to normalize_name_parameters?" unless fqdn
+	def lookup(zone, fqdn = nil)
+		fqdn = @mgr.getparam("fqdn") unless fqdn
+		raise "No fqdn parameter or function argument; missing a call to normalize_name_parameters?" unless fqdn
 		lookup = {
 			hosted_zone_id: zone,
 			start_record_name: fqdn,
@@ -24,8 +24,8 @@ class Route53
 		return values
 	end
 
-	def delete(zone)
-		fqdn = @mgr.getparam("fqdn")
+	def delete(zone, fqdn = nil)
+		fqdn = @mgr.getparam("fqdn") unless fqdn
 		raise "fqdn parameter not set; missing a call to normalize_name_parameters?" unless fqdn
 		lookup = {
 			hosted_zone_id: zone,
@@ -35,7 +35,7 @@ class Route53
 		#puts "Looking up: #{lookup}"
 		records = @client.list_resource_record_sets(lookup)
 		record = records.resource_record_sets[0]
-		return unless record.name == name
+		return unless record.name == fqdn
 		dset = {
 			hosted_zone_id: zone,
 			change_batch: {
@@ -43,7 +43,7 @@ class Route53
 					{
 						action: "DELETE",
 						resource_record_set: {
-							name: name,
+							name: fqdn,
 							type: record.type,
 							ttl: record.ttl,
 							resource_records: record.resource_records

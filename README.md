@@ -102,12 +102,16 @@ When DNSDomain is `dev.foo.com`:
 * `bar.dev` -> `bar.dev`, `bar.dev.foo.com`
 * `baz.cfg` -> `baz.cfg.foo.com`
 
-Note that the library provides a `normalize_name_parameters` function
-that performs this normalization on the following parameters:
+#### Standard Parameters and Normalization
+
+The library provides a `normalize_name_parameters` function that performs
+DNS name canonicalization and checks/fixes the following standard parameters:
 * name (instance or DNS record name)
 * cname
 * volname
 * snapname
+* az (uppercase availability zone, letter only, e.g. 'A')
+* availability\_zone (library created parameter = lowercase region + az)
 
 For `name` and `cname`, the function also creates and populates parameter
 values for `fqdn` and `cfqdn` for a`cname` parameter.

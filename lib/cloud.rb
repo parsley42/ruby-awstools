@@ -124,9 +124,9 @@ module RAWSTools
 					i = norm.index(cfgdom)
 					norm = norm[0..(i-2)]
 				elsif @cfgsubdom and norm.end_with?(@cfgsubdom)
-					fqdn = norm + "." + domain + "."
+					fqdn = norm + "." + base + "."
 				elsif @subdom and norm.end_with?(@subdom)
-					fqdn = norm + "." + domain + "."
+					fqdn = norm + "." + base + "."
 				elsif @subdom
 					fqdn = norm + "." + domain
 					norm = norm + "." + @subdom
@@ -145,6 +145,11 @@ module RAWSTools
 					setparam("sfqdn", fqdn)
 				end
 			end
+			az = getparam("az")
+			if az
+				setparam("az", az.upcase())
+				setparam("availability_zone", @config["Region"] + az.downcase())
+			end
 		end
 
 		def tags()
@@ -161,6 +166,12 @@ module RAWSTools
 
 		def getparam(param)
 			@params[param]
+		end
+
+		def getparams(*p)
+			r = []
+			p.each() { |k| r << @params[k] }
+			return r
 		end
 
 		def [](key)
@@ -185,7 +196,7 @@ module RAWSTools
 		end
 
 		def expand_string(var)
-			var = $1 if var.match(/\${([@=:%$.\w]+)}/)
+			var = $1 if var.match(/\${([@=:%$.\/\w]+)}/)
 			case var[0]
 			when "@"
 				param, default = var.split(':')
@@ -216,13 +227,9 @@ module RAWSTools
 				raise "Output not found while expanding \"#{var}\"" unless value
 				return value
 			when "%"
-				record = var[1..-1]
-				suffix = @config["ConfigDomain"]
-				suffix = "." + suffix unless suffix.start_with?(".")
-				record = record + suffix unless record.end_with?(suffix)
-				record = record + "." unless record.end_with?(".")
-				values = @route53.lookup(record, @config["PrivateDNSId"])
-				raise "Failed to receive single-value record looking up \"#{record}\" in #{suffix}" unless values.length == 1
+				record = "#{var[1..-1]}.#{@config["ConfigDomain"]}."
+				values = @route53.lookup(@config["PrivateDNSId"], record)
+				raise "Failed to receive single-value record looking up \"#{record}\" in #{@config["ConfigDomain"]}" unless values.length == 1
 				value = values[0]
 				trim = '"'
 				value = value[1..-1] if value.start_with?(trim)
@@ -241,8 +248,8 @@ module RAWSTools
 		end
 
 		def expand_strings(data)
-			while data.match(/\${[@=:%$.\w]+}/)
-				data = data.gsub(/\${([@=:%$.\w]+)}/) do
+			while data.match(/\${[@=:%$.\/\w]+}/)
+				data = data.gsub(/\${([@=:%$.\/\w]+)}/) do
 					expand_string($1)
 				end
 			end

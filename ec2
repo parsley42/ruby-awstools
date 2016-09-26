@@ -26,6 +26,7 @@ Usage: ec2 <command> (options) (args) - manage a CloudFormation stack
   start <name> - start a stopped instance
   stop <name> - stop a running instance
   terminate <name> - terminate an instance
+  list <instances|snapshots|volumes> - list instances/snapshots/volumes for the current project
  Options are:
 EOF
 opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
@@ -40,7 +41,7 @@ end
 
 begin
 
-commands = [ "create", "updatedns", "deletekeypair", "genkeypair", "start", "stop", "terminate" ]
+commands = [ "create", "updatedns", "deletekeypair", "genkeypair", "list", "start", "stop", "terminate" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
@@ -75,10 +76,10 @@ when "create"
 	opts.on("-m", "--monitoring", "Enable ec2 monitoring (CPU, disk/network, status checks)") do
 		params["monitor"] = true
 	end
-	opts.on("-s", "--snapshot SNAP", "Create data volume from snapshot (id or name)") do |snap|
+	opts.on("-s", "--snapshot SNAP", "Create data volume from snapshot SNAP") do |snap|
 		params["snapname"] = snap
 	end
-	opts.on("-v", "--volume VOL", "Attach the given data volume (id or name)") do |vol|
+	opts.on("-v", "--volume VOL", "Attach the given data volume") do |vol|
 		params["volname"] = vol
 	end
 	opts.on("-V", "--volume-type TYPE", "Create a new volume of type TYPE (gp2, io1, etc.)") do |vtype|
@@ -132,6 +133,29 @@ cfg = RAWSTools::CloudManager.new(cfgfile, script_dir)
 cfg.setparams(params)
 
 case command
+when "list"
+	type = ARGV.shift()
+	raise UsageException.new("Missing required argument") unless type
+	case type
+	when "instances"
+		format = "%-15s %-14s"
+		puts format % [ "Name", "State" ]
+		cfg.ec2.list_instances().each() do |i|
+			puts format % [ cfg.ec2.get_tag(i, "Name"), i.state.name() ]
+		end
+	when "snapshots"
+		format = "%-30s %-14s"
+		puts format % [ "Name", "State" ]
+		cfg.ec2.list_snapshots().each() do |s|
+			puts format % [ cfg.ec2.get_tag(s, "Name"), s.state() ]
+		end
+	when "volumes"
+		format = "%-21s %-14s"
+		puts format % [ "Name", "State" ]
+		cfg.ec2.list_volumes().each() do |v|
+			puts format % [ cfg.ec2.get_tag(v, "Name"), v.state() ]
+		end
+	end
 when "create"
 	name, key, template = ARGV.shift(3)
 	raise UsageException.new("Missing required argument") unless template
@@ -140,9 +164,7 @@ when "create"
 	cfg.setparam("key", key)
 	# one-liner to validate the key
 	cfg.ec2.resource.key_pair(key).key_name()
-	instance = cfg.ec2.create_instance(template, wait) do |status|
-		puts status
-	end
+	instance = cfg.ec2.create_instance(template, wait) { |status| puts status }
 when "updatedns"
 	name = ARGV.shift()
 	raise UsageException.new("Missing required argument") unless name
@@ -155,13 +177,17 @@ when "start"
 	name = ARGV.shift()
 	raise UsageException.new("Missing <name> argument") unless name
 	cfg.setparam("name", name)
-	cfg.ec2.start_instance(wait)
+	cfg.ec2.start_instance(wait) { |status| puts status }
 when "stop"
 	name = ARGV.shift()
 	raise UsageException.new("Missing <name> argument") unless name
 	cfg.setparam("name", name)
-	puts "Stopping #{name}"
-	cfg.ec2.stop_instance(wait)
+	cfg.ec2.stop_instance(wait) { |status| puts status }
+when "terminate"
+	name = ARGV.shift()
+	raise UsageException.new("Missing <name> argument") unless name
+	cfg.setparam("name", name)
+	cfg.ec2.terminate_instance(wait, deletevol) { |status| puts status }
 when "genkeypair"
 	keyname = ARGV.shift()
 	raise UsageException.new("Missing <keyname> argument") unless keyname

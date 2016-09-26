@@ -6,8 +6,6 @@ class Ec2
 		@client = Aws::EC2::Client.new( region: @mgr["Region"] )
 		@resource = Aws::EC2::Resource.new(client: @client)
 		@instances = {}
-		@volumes = {}
-		@snapshots = {}
 	end
 
 	def resolve_instance(must_exist=true, state=nil)
@@ -27,7 +25,6 @@ class Ec2
 			}
 		]
 		f << @mgr["Filter"] if @mgr["Filter"]
-#		puts "Filter: #{f}"
 		instances = @resource.instances(filters: f)
 		count = instances.count()
 		raise "Multiple matches for Name: #{instance}" if count > 1
@@ -38,36 +35,72 @@ class Ec2
 		return instance
 	end
 
-	def resolve_volume(must_exist=true)
+	def list_instances(states=nil)
+		states = [ "pending", "running", "shutting-down", "stopping", "stopped" ] unless states
+		f = [
+			{ name: "instance-state-name", values: states },
+			{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
+		]
+		f << @mgr["Filter"] if @mgr["Filter"]
+		instances = @resource.instances(filters: f)
+		return instances
+	end
+
+	def get_tag(item, tagname)
+		item.tags.each() do |tag|
+			return tag.value if tag.key == tagname
+		end
+	end
+
+	def resolve_volume(must_exist=true, status="available")
 		vname = @mgr.getparam("volname")
-		return @volumes[vname] if @volumes[vname]
 		f = [
 			{ name: "tag:Name", values: [ vname ] },
 			{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
+			{ name: "status", values: [ status ] },
 		]
 		f << @mgr["Filter"] if @mgr["Filter"]
 		v = @resource.volumes(filters: f)
 		count = v.count()
 		raise "Multiple matches for Name: #{volume}" if count > 1
-		raise "No volume found with Name: #{volume}" if must_exist and count != 1
+		raise "No volume found with Name: #{volume} and Status: #{status}" if must_exist and count != 1
 		return nil if count == 0
-		volume = v.first()
-		@volumes[vname] = volume
-		return volume
+		return v.first()
+	end
+
+	def list_volumes()
+		f = [
+			{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
+		]
+		f << @mgr["Filter"] if @mgr["Filter"]
+		volumes = @resource.volumes(filters: f)
+		return volumes
 	end
 
 	# NOTE: snapshots should all have fqdns of the form <timestamp>.<name>, where
 	# <name> is the fqdn of the volume snapshotted.
 	def resolve_snapshot(must_exist=true)
-		raise "Rewrite me"
-		f = [ { name: "tag:Name", values: [ @mgr.getparam("snapname") ] } ]
+		sname = @mgr.getparam("snapname")
+		f = [
+			{ name: "tag:Name", values: [ @mgr.getparam("snapname") ] },
+			{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
+		]
 		f << @mgr["Filter"] if @mgr["Filter"]
 		s = @resource.snapshots(filters: f)
 		count = s.count()
-		raise "Multiple matches for Name: #{snapshot}" if count > 1
-		raise "No snapshot found with Name: #{snapshot}" if must_exist and count != 1
+		raise "Multiple matches for Name: #{sname}" if count > 1
+		raise "No snapshot found with Name: #{sname}" if must_exist and count != 1
 		return nil if count == 0
-		return s.first().id()
+		return s.first()
+	end
+
+	def list_snapshots()
+		f = [
+			{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
+		]
+		f << @mgr["Filter"] if @mgr["Filter"]
+		snapshots = @resource.snapshots(filters: f)
+		return snapshots
 	end
 
 	def create_volume(size, wait=true)
@@ -94,7 +127,6 @@ class Ec2
 		end
 		vol = @resource.create_volume(volspec)
 		@client.wait_until(:volume_available, volume_ids: [ vol.id() ]) if wait
-		@volumes[volname] = volume
 		cfgtags = @mgr.tags()
 		cfgtags["Name"] = @mgr.getparam("name")
 		cfgtags["Domain"] = @mgr["DNSDomain"]
@@ -103,6 +135,7 @@ class Ec2
 	end
 
 	def attach_volume()
+		raise "Rewrite me"
 		instance = resolve_instance()
 		volume = resolve_volume()
 		last = "f"
@@ -123,7 +156,7 @@ class Ec2
 
 	def create_instance(template, wait=true)
 		@mgr.normalize_name_parameters()
-		name, volname, snapname, datasize, availability_zone, dryrun = @mgr.getparams("name", "volname", "snapname", "datasize", "availability_zone", "dryrun")
+		name, volname, snapname, datasize, availability_zone, dryrun, nodns = @mgr.getparams("name", "volname", "snapname", "datasize", "availability_zone", "dryrun", "nodns")
 		raise "Instance #{name} already exists" if resolve_instance(false)
 		templatefile = nil
 		if template.end_with?(".yaml")
@@ -155,7 +188,7 @@ class Ec2
 		if volume
 			vol_az = volume.availability_zone()
 			if availability_zone and availability_zone != vol_az
-				yield "Overriding provided availability zone \"#{availability_zone}\" with zone from volume \"#{volname}\": #{vol_az}"
+				yield "Overriding provided availability zone: #{availability_zone} with zone from volume: #{volname}: #{vol_az}"
 			end
 			az = vol_az[-1].upcase()
 			@mgr.setparam("az", az)
@@ -187,9 +220,14 @@ class Ec2
 					true
 				else
 					e=dev[:ebs]
-					e.delete(:snapshot_id) unless snapname
+					if snapname
+						e.delete(:encrypted)
+						snapshot = resolve_snapshot()
+						e[:snapshot_id] = snapshot.id()
+					else
+						e.delete(:snapshot_id)
+					end
 					e.delete(:iops) unless e[:volume_type] == "io1"
-					e.delete(:encrypted) if snapname
 					false
 				end
 			end
@@ -200,7 +238,7 @@ class Ec2
 		instance = nil
 		unless dry_run
 			instance = instances.first()
-			yield "Created instance \"#{name}\" (id: #{instance.id()}), waiting for it to enter state \"running\" ..."
+			yield "Created instance #{name} (id: #{instance.id()}), waiting for it to enter state running ..."
 			instance.wait_until_running()
 			@client.wait_until(:instance_running, instance_ids: [ instance.id() ])
 			yield "Running"
@@ -214,7 +252,7 @@ class Ec2
 				@client.wait_until(:volume_in_use, volume_ids: [ volume.id() ])
 			end
 
-			# Need to refresh 
+			# Need to refresh
 			instance = @resource.instance(instance.id())
 			@instances[name] = instance
 
@@ -224,63 +262,98 @@ class Ec2
 
 			instance.create_tags(tags: cfgtags.ltags())
 
+			yield "Tagging instance"
 			cfgtags["InstanceName"] = @mgr.getparam("name")
 			instance.block_device_mappings().each() do |b|
 				if b.device_name.end_with?("a") or b.device_name.end_with?("a1")
+					yield "Tagging root volume"
 					cfgtags["Name"] = "#{@mgr.getparam("name")}-root"
 				else
+					yield "Tagging data volume"
 					cfgtags["Name"] = @mgr.getparam("name")
 				end
 				@resource.volume(b.ebs.volume_id()).create_tags(tags: cfgtags.ltags())
 			end
-			unless @mgr.getparam("nodns")
-				yield "Updating DNS"
-				yield "Waiting for zones to synchronize..." if wait
-				update_dns(wait)
-				yield "Synchronized" if wait
-			end
+			update_dns(wait) { |s| yield s }
 		end
 		return instance
 	end
 
 	def start_instance(wait=true)
 		@mgr.normalize_name_parameters()
-		instance = resolve_instance(true, "stopped")
-		instance.start()
-		update_dns(wait) unless @mgr.getparam("nodns")
-		return unless wait
-		instance.wait_until_running()
+		name, nodns = @mgr.getparams("name", "nodns")
+		instance = resolve_instance(false, "stopped")
+		if instance
+			yield "Starting #{name}"
+			instance.start()
+			yield "Started instance #{name} (id: #{instance.id()}), waiting for it to enter state running ..."
+			instance.wait_until_running()
+			# Need to refresh
+			instance = @resource.instance(instance.id())
+			@instances[name] = instance
+
+			update_dns(wait) { |s| yield s }
+		else
+			yield "No stopped instance found with Name: #{name}"
+		end
 	end
 
 	def stop_instance(wait=true)
 		@mgr.normalize_name_parameters()
-		instance = resolve_instance(true, "running")
-		instance.stop()
-		remove_dns(wait)
-		return unless wait
-		instance.wait_until_stopped()
+		name = @mgr.getparam("name")
+		instance = resolve_instance(false, "running")
+		if instance
+			yield "Stopping #{name}"
+			instance.stop()
+			remove_dns(wait) { |s| yield s }
+			return unless wait
+			yield "Waiting for instance to stop..."
+			instance.wait_until_stopped()
+			yield "Stopped"
+		else
+			yield "No running instance found with Name: #{name}"
+		end
 	end
 
-	def terminate_instance(wait=true)
+	def terminate_instance(wait=true, deletevol=false)
 		@mgr.normalize_name_parameters()
-		instance = resolve_instance()
-		instance.terminate()
-		remove_dns(wait)
-		return unless wait
-		instance.wait_until_terminated()
+		name = @mgr.getparam("name")
+		instance = resolve_instance(false, "running")
+		if instance
+			yield "Terminating #{name}"
+			instance.terminate()
+			remove_dns(wait) { |s| yield s }
+			return unless wait or deletevol
+			yield "Waiting for instance to terminate..."
+			instance.wait_until_terminated()
+			yield "Terminated"
+			@mgr.setparam("volname", name)
+			delete_volume(wait) { |s| yield s } if deletevol
+		else
+			yield "No running instance found with Name: #{name}"
+		end
 	end
 
-	def delete_volume( wait=true)
-		volume = resolve_volume_id(volume)
-		v = @resource.intstance(volume)
-		v.delete()
-		return unless wait
-		@client.wait_until(:volume_deleted, volume_ids: [ v.id() ])
+	def delete_volume(wait=true)
+		@mgr.normalize_name_parameters()
+		volname = @mgr.getparam("volname")
+		volume = resolve_volume(false)
+		if volume
+			yield "Deleting volume: #{volname}"
+			volume.delete()
+			return unless wait
+			yield "Waiting for volume to finished deleting..."
+			@client.wait_until(:volume_deleted, volume_ids: [ volume.id() ])
+			yield "Deleted"
+		else
+			yield "Not deleting volume - no volume found with Name: #{volname} and Status: available"
+		end
 	end
 
 	def remove_dns(wait=false)
 		@mgr.normalize_name_parameters()
 		instance = resolve_instance()
+		name = @mgr.getparam("name")
 
 		pub_ip = instance.public_ip_address
 		priv_ip = instance.private_ip_address
@@ -290,41 +363,49 @@ class Ec2
 
 		change_ids = []
 		if pub_ip and pubzone
+			yield "Removing public DNS record #{name} -> #{pub_ip}"
 			change_ids << @mgr.route53.delete(pubzone)
 		end
 		if priv_ip and privzone
+			yield "Removing private DNS record #{name} -> #{priv_ip}"
 			change_ids << @mgr.route53.delete(privzone)
 		end
 		return unless wait
+		yield "Waiting for zones to synchronize..."
 		change_ids.each() { |id| @mgr.route53.wait_sync(id) }
+		yield "Synchronized"
 	end
 
 	def update_dns(wait=false)
 		@mgr.normalize_name_parameters()
-		instance = resolve_instance()
-		pub_ip = instance.public_ip_address
-		priv_ip = instance.private_ip_address
+		name, nodns = @mgr.getparams("name", "nodns")
+		unless nodns
+			instance = resolve_instance()
+			pub_ip = instance.public_ip_address
+			priv_ip = instance.private_ip_address
 
-		pubzone = @mgr["PublicDNSId"]
-		privzone = @mgr["PrivateDNSId"]
+			pubzone = @mgr["PublicDNSId"]
+			privzone = @mgr["PrivateDNSId"]
 
-		change_ids = []
-		if pub_ip and pubzone
-			@mgr.setparam("zone_id", pubzone)
-			@mgr.setparam("ipaddr", pub_ip)
-			change_ids << @mgr.route53.change_records("arec")
+			change_ids = []
+			if pub_ip and pubzone
+				@mgr.setparam("zone_id", pubzone)
+				@mgr.setparam("ipaddr", pub_ip)
+				yield "Adding public DNS record #{name} -> #{pub_ip}"
+				change_ids << @mgr.route53.change_records("arec")
+			end
+			if priv_ip and privzone
+				@mgr.setparam("zone_id", privzone)
+				@mgr.setparam("ipaddr", priv_ip)
+				yield "Adding private DNS record #{name} -> #{priv_ip}"
+				change_ids << @mgr.route53.change_records("arec")
+			end
+			return unless wait
+			yield "Waiting for zones to synchronize..."
+			change_ids.each() { |id| @mgr.route53.wait_sync(id) }
+			yield "Synchronized"
+		else
+			yield "Not updating DNS for #{name}"
 		end
-		if priv_ip and privzone
-			@mgr.setparam("zone_id", privzone)
-			@mgr.setparam("ipaddr", priv_ip)
-			change_ids << @mgr.route53.change_records("arec")
-		end
-		return unless wait
-		change_ids.each() { |id| @mgr.route53.wait_sync(id) }
-	end
-	
-	def wait_running()
-		instance = resolve_instance()
-		@client.wait_until(:instance_running, instance_ids: [ instance.id() ])
 	end
 end

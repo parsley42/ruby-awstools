@@ -138,22 +138,22 @@ when "list"
 	raise UsageException.new("Missing required argument") unless type
 	case type
 	when "instances"
-		format = "%-15s %-14s"
-		puts format % [ "Name", "State" ]
+		format = "%-15s %-14s %-19s"
+		puts format % [ "Name", "State", "Id" ]
 		cfg.ec2.list_instances().each() do |i|
-			puts format % [ cfg.ec2.get_tag(i, "Name"), i.state.name() ]
+			puts format % [ cfg.ec2.get_tag(i, "Name"), i.state.name(), i.id() ]
 		end
 	when "snapshots"
-		format = "%-30s %-14s"
-		puts format % [ "Name", "State" ]
+		format = "%-30s %-14s %-24s"
+		puts format % [ "Name", "State", "Id" ]
 		cfg.ec2.list_snapshots().each() do |s|
-			puts format % [ cfg.ec2.get_tag(s, "Name"), s.state() ]
+			puts format % [ cfg.ec2.get_tag(s, "Name"), s.state(), s.id() ]
 		end
 	when "volumes"
-		format = "%-21s %-14s"
-		puts format % [ "Name", "State" ]
+		format = "%-21s %-14s %-21s"
+		puts format % [ "Name", "State", "Id" ]
 		cfg.ec2.list_volumes().each() do |v|
-			puts format % [ cfg.ec2.get_tag(v, "Name"), v.state() ]
+			puts format % [ cfg.ec2.get_tag(v, "Name"), v.state(), v.id() ]
 		end
 	end
 when "create"

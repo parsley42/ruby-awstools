@@ -202,7 +202,7 @@ class Ec2
 		end
 
 		raw = @mgr.expand_strings(raw)
-		ispec = YAML::load(raw)
+		ispec = YAML::load(raw)["api_template"]
 		@mgr.resolve_vars( { "child" => ispec }, "child" )
 		@mgr.symbol_keys(ispec)
 

@@ -4,8 +4,8 @@
 class Output
 	attr_reader :output
 
-	def initialize(desc, ref)
-		@output = { "Description" => desc, "Value" => { "Ref": ref } }
+	def initialize(desc, ref, lookup="Ref")
+		@output = { "Description" => desc, "Value" => { "#{lookup}": ref } }
 	end
 end
 
@@ -93,6 +93,8 @@ class CFTemplate
 			# Just tag these
 			when "AWS::EC2::InternetGateway", "AWS::EC2::RouteTable", "AWS::EC2::NetworkAcl", "AWS::EC2::Instance", "AWS::EC2::Volume", "AWS::EC2::VPC", "AWS::S3::Bucket"
 				update_tags(@res[reskey], reskey)
+			when "AWS::IAM::InstanceProfile"
+				@outputs["#{reskey}"] = Output.new("ARN for Instance Profile #{reskey}", [ reskey, "Arn" ], "Fn::GetAtt").output
 			when "AWS::Route53::HostedZone"
 				update_tags(@res[reskey],nil,"HostedZoneTags")
 				@outputs["#{reskey}Id"] = Output.new("Hosted Zone Id for #{reskey}", reskey).output

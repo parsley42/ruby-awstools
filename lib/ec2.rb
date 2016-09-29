@@ -202,9 +202,10 @@ class Ec2
 		end
 
 		raw = @mgr.expand_strings(raw)
-		ispec = YAML::load(raw)["api_template"]
-		@mgr.resolve_vars( { "child" => ispec }, "child" )
-		@mgr.symbol_keys(ispec)
+		template = YAML::load(raw)
+		@mgr.resolve_vars( { "child" => template }, "child" )
+		@mgr.symbol_keys(template)
+		ispec = template[:api_template]
 
 		if ispec[:user_data]
 			ispec[:user_data] = Base64::encode64(ispec[:user_data])
@@ -259,6 +260,7 @@ class Ec2
 			cfgtags = @mgr.tags()
 			cfgtags["Name"] = @mgr.getparam("name")
 			cfgtags["Domain"] = @mgr["DNSDomain"]
+			cfgtags.add(template[:tags]) if template[:tags]
 
 			instance.create_tags(tags: cfgtags.ltags())
 

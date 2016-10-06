@@ -7,7 +7,7 @@ module RAWSTools
 
 	# Classes for loading and processing the configuration file
 	Valid_Classes = [ "String", "Fixnum", "TrueClass", "FalseClass" ]
-	Expand_Regex = /\${([@=%&][:.\/\w]+)}/
+	Expand_Regex = /\${([@=%&][|.\/\w]+)}/
 
 	class SubnetDefinition
 		attr_reader :cidr, :subnets
@@ -64,7 +64,13 @@ module RAWSTools
 			@subdom = nil
 			@cfgsubdom = nil
 
-			@config = YAML::load(File::read(filename))
+			raw = File::read(filename)
+			# A number of config items need to be defined before using expand_strings
+			@config = YAML::load(raw)
+			raw = expand_strings(raw)
+			# Now replace config with expanded version
+			@config = YAML::load(raw)
+
 			[ "Bucket", "Region", "VPCCIDR", "AvailabilityZones", "SubnetTypes" ].each do |c|
 				if ! @config[c]
 					raise "Missing required top-level configuration item in #{@filename}: #{c}"
@@ -200,42 +206,42 @@ module RAWSTools
 			var = $1 if var.match(Expand_Regex)
 			case var[0]
 			when "@"
-				param, default = var.split(':')
+				param, default = var.split('|')
 				param = param[1..-1]
 				value = getparam(param)
 				if value
-					value
+					return value
 				elsif default
-					if default[0] == "$"
-						cfgvar = default[1..-1]
-						if @config[cfgvar] == nil
-							raise "Invalid default for \"#{var}\": \"#{cfgvar}\" not defined in #{@filename}"
-						end
-						varclass = @config[cfgvar].class().to_s()
-						unless Valid_Classes.include?(varclass)
-							raise "Bad default value for \"#{var}\" during string expansion: \"$#{cfgvar}\" expands to non-scalar class #{varclass}"
-						end
-						return @config[cfgvar]
-					else
-						return default
-					end
+					return default
 				else
 					raise "Reference to undefined parameter: \"#{param}\""
 				end
 			when "="
-				output = var[1..-1]
+				lookup, default = var.split('|')
+				output = lookup[1..-1]
 				value = @cfn.getoutput(output)
-				raise "Output not found while expanding \"#{var}\"" unless value
-				return value
+				if value
+					return value
+				elsif default
+					return default
+				else
+					raise "Output not found while expanding \"#{var}\"" unless value
+				end
 			when "%"
-				record = "#{var[1..-1]}.#{@config["ConfigDomain"]}."
+				lookup, default = var.split('|')
+				record = "#{lookup[1..-1]}.#{@config["ConfigDomain"]}."
 				values = @route53.lookup(@config["PrivateDNSId"], record)
-				raise "Failed to receive single-value record looking up \"#{record}\" in #{@config["ConfigDomain"]}" unless values.length == 1
-				value = values[0]
-				trim = '"'
-				value = value[1..-1] if value.start_with?(trim)
-				value = value[0..-2] if value.end_with?(trim)
-				return value
+				if values.length == 1
+					value = values[0]
+					trim = '"'
+					value = value[1..-1] if value.start_with?(trim)
+					value = value[0..-2] if value.end_with?(trim)
+					return value
+				elsif default
+					return default
+				else
+					raise "Failed to receive single-value record looking up \"#{record}\" in #{@config["ConfigDomain"]}" unless values.length == 1
+				end
 			when "&"
 				cfgvar = var[1..-1]
 				if @config[cfgvar] == nil

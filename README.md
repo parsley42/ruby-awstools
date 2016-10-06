@@ -126,14 +126,14 @@ form ${...}.
 * ${&var} - retrieve a string from the cloud config file, may optionally be
   indexed with \[key\]([subkey])...; throws an exception if the reference value
   isn't a string.
-* ${@param(:<default>)} - use the value of a parameter obtained from the command line
+* ${@param(|<default>)} - use the value of a parameter obtained from the command line
   or interactively, or use the default value if the parameter is undefined.
   If <default> is of the form `$var`, the value is taken from the cloud config
   similarly to ${var} above.
-* ${=Template(:child):Output} - retrieve an output from a previously-created
-  cloudformation template.
-* ${%Record} - Look up a DNS TXT record from the ConfigSubDom defined in
-  the cloud config file.
+* ${=Template(:child):Output(|default)} - retrieve an output from a previously-created
+  cloudformation template, or use the default value if the lookup fails.
+* ${%Record(|default)} - Look up a DNS TXT record from the ConfigSubDom defined in
+  the cloud config file, or use the default value if the lookup fails.
 
 ### Data Element Expansion
 

@@ -123,7 +123,7 @@ which get processed and used in AWS method calls. After reading in a template,
 but before parsing the YAML, string replacement is done on variables of the
 form ${...}.
 
-* ${var} - retrieve a string from the cloud config file, may optionally be
+* ${&var} - retrieve a string from the cloud config file, may optionally be
   indexed with \[key\]([subkey])...; throws an exception if the reference value
   isn't a string.
 * ${@param(:<default>)} - use the value of a parameter obtained from the command line

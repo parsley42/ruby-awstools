@@ -7,6 +7,7 @@ module RAWSTools
 
 	# Classes for loading and processing the configuration file
 	Valid_Classes = [ "String", "Fixnum", "TrueClass", "FalseClass" ]
+	Expand_Regex = /\${([@=%&][:.\/\w]+)}/
 
 	class SubnetDefinition
 		attr_reader :cidr, :subnets
@@ -196,7 +197,7 @@ module RAWSTools
 		end
 
 		def expand_string(var)
-			var = $1 if var.match(/\${([@=:%$.\/\w]+)}/)
+			var = $1 if var.match(Expand_Regex)
 			case var[0]
 			when "@"
 				param, default = var.split(':')
@@ -235,21 +236,22 @@ module RAWSTools
 				value = value[1..-1] if value.start_with?(trim)
 				value = value[0..-2] if value.end_with?(trim)
 				return value
-			else
-				if @config[var] == nil
-					raise "Bad variable reference: \"#{var}\" not defined in #{@filename}"
+			when "&"
+				cfgvar = var[1..-1]
+				if @config[cfgvar] == nil
+					raise "Bad variable reference: \"#{cfgvar}\" not defined in #{@filename}"
 				end
-				varclass = @config[var].class().to_s()
+				varclass = @config[cfgvar].class().to_s()
 				unless Valid_Classes.include?(varclass)
-					raise "Bad variable reference during string expansion: \"$#{var}\" expands to non-scalar class #{varclass}"
+					raise "Bad variable reference during string expansion: \"$#{cfgvar}\" expands to non-scalar class #{varclass}"
 				end
-				return @config[var]
+				return @config[cfgvar]
 			end
 		end
 
 		def expand_strings(data)
-			while data.match(/\${[@=:%$.\/\w]+}/)
-				data = data.gsub(/\${([@=:%$.\/\w]+)}/) do
+			while data.match(Expand_Regex)
+				data = data.gsub(Expand_Regex) do
 					expand_string($1)
 				end
 			end
@@ -269,7 +271,7 @@ module RAWSTools
 				end # Hash each
 			when "String"
 				var = parent[item]
-				if var[0] == '$' && var[1] != '$'
+				if var[0] == '$' and var[1] != '$' and var[1] != '{'
 					cfgvar = var[1..-1]
 					case cfgvar[0]
 					when "@"

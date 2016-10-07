@@ -25,6 +25,7 @@ Usage: ec2 <command> (options) (args) - manage a CloudFormation stack
   genkeypair <keyname> (outputdir) - generate a keypair and store it in <keyname>.pem
   start <name> - start a stopped instance
   stop <name> - stop a running instance
+  snapshot <name> - take a snapshot of the data volume with name <name>
   terminate <name> - terminate an instance
   list <instances|snapshots|volumes> - list instances/snapshots/volumes for the current project
  Options are:
@@ -41,7 +42,7 @@ end
 
 begin
 
-commands = [ "create", "updatedns", "deletekeypair", "genkeypair", "list", "start", "stop", "terminate" ]
+commands = [ "create", "updatedns", "deletekeypair", "genkeypair", "list", "start", "stop", "snapshot", "terminate" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
@@ -106,7 +107,7 @@ when "create"
 		value = keyval[(e+1)..-1]
 		params[key] = value
 	end
-when "updatedns", "stop", "start", "terminate"
+when "updatedns", "stop", "start", "terminate", "snapshot"
 	opts.on("-w", "--wait", "Wait for DNS records to sync") do
 		wait = true
 	end
@@ -183,6 +184,11 @@ when "stop"
 	raise UsageException.new("Missing <name> argument") unless name
 	cfg.setparam("name", name)
 	cfg.ec2.stop_instance(wait) { |status| puts status }
+when "snapshot"
+	name = ARGV.shift()
+	raise UsageException.new("Missing <name> argument") unless name
+	cfg.setparam("volname", name)
+	cfg.ec2.create_snapshot(wait) { |status| puts status }
 when "terminate"
 	name = ARGV.shift()
 	raise UsageException.new("Missing <name> argument") unless name

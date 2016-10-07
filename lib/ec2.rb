@@ -52,12 +52,12 @@ class Ec2
 		end
 	end
 
-	def resolve_volume(must_exist=true, status="available")
+	def resolve_volume(must_exist=true, status=[ "available" ] )
 		vname = @mgr.getparam("volname")
 		f = [
 			{ name: "tag:Name", values: [ vname ] },
 			{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
-			{ name: "status", values: [ status ] },
+			{ name: "status", values: status },
 		]
 		f << @mgr["Filter"] if @mgr["Filter"]
 		v = @resource.volumes(filters: f)
@@ -101,6 +101,32 @@ class Ec2
 		f << @mgr["Filter"] if @mgr["Filter"]
 		snapshots = @resource.snapshots(filters: f)
 		return snapshots
+	end
+
+	def create_snapshot(wait=false)
+		@mgr.normalize_name_parameters()
+		volname = @mgr.getparam("volname")
+		vol = resolve_volume(true, [ "available", "in-use" ])
+		now = Time.new()
+		timestamp = now.strftime("%Y%m%d%H%M")
+		snapname = "#{volname}.#{timestamp}"
+		yield "Creating snapshot #{snapname}"
+		snap = vol.create_snapshot()
+		tags = vol.tags
+		snaptags = []
+		tags.each() do |tag|
+			if tag.key == "Name"
+				snaptags << { "key" => tag.key, "value" => snapname }
+			else
+				snaptags << { "key" => tag.key, "value" => tag.value }
+			end
+		end
+		yield "Tagging snapshot"
+		snap.create_tags(tags: snaptags)
+		return unless wait
+		yield "Waiting for snapshot to complete"
+		snap.wait_until_completed()
+		yield "Completed"
 	end
 
 	def create_volume(size, wait=true)

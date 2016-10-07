@@ -1,5 +1,5 @@
 ---
-hosted_zone_id: ${@zone_id:$PublicDNSId}
+hosted_zone_id: ${@zone_id|${&PublicDNSId}}
 change_batch:
   changes:
   - action: UPSERT
@@ -7,6 +7,6 @@ change_batch:
       name: ${@fqdn}
       type: A
       # Use the supplied ttl parameter, or default to configured ARecTTL
-      ttl: ${@ttl:$ARecTTL}
+      ttl: ${@ttl|${&ARecTTL}}
       resource_records:
       - value: ${@ipaddr}

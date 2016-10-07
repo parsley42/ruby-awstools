@@ -201,7 +201,7 @@ when "genkeypair"
 	end
 	raise UsageException.new("File already exists: #{keyfilename}") if File::exist?(keyfilename)
 	puts "Creating keypair #{keyname} and storing in #{keyfilename}"
-	key = cfg.ec2.create_key_pair({key_name: keyname})
+	key = cfg.ec2.client.create_key_pair({key_name: keyname})
 	keyfile = File.open(keyfilename, "w")
 	keyfile.write(key.key_material())
 	keyfile.close()

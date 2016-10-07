@@ -7,6 +7,7 @@ class Route53
 	end
 
 	def lookup(zone, fqdn = nil)
+		@mgr.normalize_name_parameters()
 		fqdn = @mgr.getparam("fqdn") unless fqdn
 		raise "No fqdn parameter or function argument; missing a call to normalize_name_parameters?" unless fqdn
 		lookup = {
@@ -25,6 +26,7 @@ class Route53
 	end
 
 	def delete(zone, fqdn = nil)
+		@mgr.normalize_name_parameters()
 		fqdn = @mgr.getparam("fqdn") unless fqdn
 		raise "fqdn parameter not set; missing a call to normalize_name_parameters?" unless fqdn
 		lookup = {
@@ -57,6 +59,7 @@ class Route53
 	end
 
 	def change_records(template)
+		@mgr.normalize_name_parameters()
 		templatefile = nil
 		if File::exist?("route53/#{template}.json")
 			templatefile = "route53/#{template}.json"

@@ -7,7 +7,7 @@ module RAWSTools
 
 	# Classes for loading and processing the configuration file
 	Valid_Classes = [ "String", "Fixnum", "TrueClass", "FalseClass" ]
-	Expand_Regex = /\${([@=%&][|.\/\w]+)}/
+	Expand_Regex = /\${([@=%&][:|.\/\w]+)}/
 
 	class SubnetDefinition
 		attr_reader :cidr, :subnets
@@ -67,6 +67,11 @@ module RAWSTools
 			raw = File::read(filename)
 			# A number of config items need to be defined before using expand_strings
 			@config = YAML::load(raw)
+			@ec2 = Ec2.new(self)
+			@cfn = CloudFormation.new(self)
+			@s3 = Aws::S3::Client.new( region: @config["Region"] )
+			@s3res = Aws::S3::Resource.new( client: @s3 )
+			@route53 = Route53.new(self)
 			raw = expand_strings(raw)
 			# Now replace config with expanded version
 			@config = YAML::load(raw)
@@ -105,11 +110,6 @@ module RAWSTools
 			end
 			@config["SubnetTypes"] = subnet_types
 
-			@ec2 = Ec2.new(self)
-			@cfn = CloudFormation.new(self)
-			@s3 = Aws::S3::Client.new( region: @config["Region"] )
-			@s3res = Aws::S3::Resource.new( client: @s3 )
-			@route53 = Route53.new(self)
 		end
 
 		def normalize_name_parameters()

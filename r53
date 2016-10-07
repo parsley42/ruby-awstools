@@ -68,12 +68,13 @@ case command
 when "lookup"
 	where, name = ARGV.shift(2)
 	raise UsageException.new("Missing required argument") unless name
+	cfg.setparam("name", name)
 	if where == "public"
 		zone = cfg["PublicDNSId"]
 	else
 		zone = cfg["PrivateDNSId"]
 	end
-	values = cfg.route53.lookup(name, zone)
+	values = cfg.route53.lookup(zone)
 	if values.length() > 0
 		values.each() { |value| puts value }
 	else

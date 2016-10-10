@@ -5,17 +5,19 @@ class Ec2
 		@mgr = cloudmgr
 		@client = Aws::EC2::Client.new( region: @mgr["Region"] )
 		@resource = Aws::EC2::Resource.new(client: @client)
-		@instances = {}
 	end
 
-	def resolve_instance(must_exist=true, state=nil)
-		iname = @mgr.getparam("name")
+	def resolve_instance(must_exist=true, name=nil, state=nil)
+		if name
+			iname = name
+		else
+			iname = @mgr.getparam("name")
+		end
 		if state
 			states = [ state ]
 		else
 			states = [ "pending", "running", "shutting-down", "stopping", "stopped" ]
 		end
-		return @instances[iname] if @instances[iname]
 		f = [
 			{ name: "tag:Name", values: [ iname ] },
 			{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
@@ -31,7 +33,6 @@ class Ec2
 		raise "No instance found with Name: #{iname}" if must_exist and count != 1
 		return nil if count == 0
 		instance = instances.first()
-		@instances[iname] = instance
 		return instance
 	end
 
@@ -279,38 +280,67 @@ class Ec2
 				@client.wait_until(:volume_in_use, volume_ids: [ volume.id() ])
 			end
 
-			# Need to refresh
+			# Need to refresh to get attached volumes
 			instance = @resource.instance(instance.id())
-			@instances[name] = instance
-
-			cfgtags = @mgr.tags()
-			cfgtags["Name"] = @mgr.getparam("name")
-			cfgtags["Domain"] = @mgr["DNSDomain"]
-			cfgtags.add(template[:tags]) if template[:tags]
-
-			instance.create_tags(tags: cfgtags.ltags())
-
-			yield "Tagging instance"
-			cfgtags["InstanceName"] = @mgr.getparam("name")
-			instance.block_device_mappings().each() do |b|
-				if b.device_name.end_with?("a") or b.device_name.end_with?("a1")
-					yield "Tagging root volume"
-					cfgtags["Name"] = "#{@mgr.getparam("name")}-root"
-				else
-					yield "Tagging data volume"
-					cfgtags["Name"] = @mgr.getparam("name")
-				end
-				@resource.volume(b.ebs.volume_id()).create_tags(tags: cfgtags.ltags())
-			end
-			update_dns(wait) { |s| yield s }
+			# Need to refresh to get applied tags
+			tag_instance(instance, template[:tags]) { |s| yield s }
+			instance = @resource.instance(instance.id())
+			update_dns(instance, wait) { |s| yield s }
 		end
 		return instance
+	end
+
+	def tag_instance(instance, tags=nil)
+		@mgr.normalize_name_parameters()
+		cfgtags = @mgr.tags()
+		name = @mgr.getparam("name")
+		cfgtags["Name"] = name
+		cfgtags["Domain"] = @mgr["DNSDomain"]
+		cfgtags.add(tags) if tags
+
+		yield "Tagging instance #{name}"
+		instance.create_tags(tags: cfgtags.ltags())
+
+		cfgtags["InstanceName"] = @mgr.getparam("name")
+		instance.block_device_mappings().each() do |b|
+			if b.device_name.end_with?("a") or b.device_name.end_with?("a1")
+				yield "Tagging root volume"
+				cfgtags["Name"] = "#{name}-root"
+			else
+				yield "Tagging data volume"
+				cfgtags["Name"] = name
+			end
+			@resource.volume(b.ebs.volume_id()).create_tags(tags: cfgtags.ltags())
+		end
+	end
+
+	def rename_instance(wait=false)
+		@mgr.normalize_name_parameters()
+		newname = @mgr.getparam("newname")
+		src = resolve_instance()
+		dest = resolve_instance(false, newname)
+		if dest
+			raise "Destination already exists and 'swap' parameter not set" unless @mgr.getparam("swap")
+			tag_instance(dest) { |s| yield s } # tag dest with name (oldname)
+			# Refresh dest with new tags
+			dest = @resource.instance(dest.id())
+		else
+			remove_dns(src, wait) { |s| yield s }
+		end
+		@mgr.setparam("name", newname)
+		tag_instance(src) { |s| yield s }
+		# Refresh src with new tags
+		src = @resource.instance(src.id())
+		update_dns(src, wait) { |s| yield s }
+		if dest
+			update_dns(dest, wait) { |s| yield s }
+		end
 	end
 
 	def start_instance(wait=true)
 		@mgr.normalize_name_parameters()
 		name, nodns = @mgr.getparams("name", "nodns")
-		instance = resolve_instance(false, "stopped")
+		instance = resolve_instance(false, name, "stopped")
 		if instance
 			yield "Starting #{name}"
 			instance.start()
@@ -318,9 +348,8 @@ class Ec2
 			instance.wait_until_running()
 			# Need to refresh
 			instance = @resource.instance(instance.id())
-			@instances[name] = instance
 
-			update_dns(wait) { |s| yield s }
+			update_dns(instance, wait) { |s| yield s }
 		else
 			yield "No stopped instance found with Name: #{name}"
 		end
@@ -329,11 +358,11 @@ class Ec2
 	def stop_instance(wait=true)
 		@mgr.normalize_name_parameters()
 		name = @mgr.getparam("name")
-		instance = resolve_instance(false, "running")
+		instance = resolve_instance(false, name, "running")
 		if instance
 			yield "Stopping #{name}"
 			instance.stop()
-			remove_dns(wait) { |s| yield s }
+			remove_dns(instance, wait) { |s| yield s }
 			return unless wait
 			yield "Waiting for instance to stop..."
 			instance.wait_until_stopped()
@@ -346,11 +375,11 @@ class Ec2
 	def terminate_instance(wait=true, deletevol=false)
 		@mgr.normalize_name_parameters()
 		name = @mgr.getparam("name")
-		instance = resolve_instance(false, "running")
+		instance = resolve_instance(false, name, "running")
 		if instance
 			yield "Terminating #{name}"
 			instance.terminate()
-			remove_dns(wait) { |s| yield s }
+			remove_dns(instance, wait) { |s| yield s }
 			return unless wait or deletevol
 			yield "Waiting for instance to terminate..."
 			instance.wait_until_terminated()
@@ -378,10 +407,9 @@ class Ec2
 		end
 	end
 
-	def remove_dns(wait=false)
-		@mgr.normalize_name_parameters()
-		instance = resolve_instance()
-		name = @mgr.getparam("name")
+	def remove_dns(instance, wait=false)
+		name = get_tag(instance, "Name")
+		@mgr.setparam("name", name)
 
 		pub_ip = instance.public_ip_address
 		priv_ip = instance.private_ip_address
@@ -404,11 +432,13 @@ class Ec2
 		yield "Synchronized"
 	end
 
-	def update_dns(wait=false)
+	def update_dns(instance, wait=false)
 		@mgr.normalize_name_parameters()
-		name, nodns = @mgr.getparams("name", "nodns")
+		name = get_tag(instance, "Name")
+		@mgr.setparam("name", name)
+
+		nodns = @mgr.getparam("nodns")
 		unless nodns
-			instance = resolve_instance()
 			pub_ip = instance.public_ip_address
 			priv_ip = instance.private_ip_address
 

@@ -118,7 +118,7 @@ module RAWSTools
 			base = @config["DNSBase"]
 			# NOTE: skipping 'snapname' for now, since they will likely
 			# be of the form <name>-<timestamp>
-			["name", "cname", "volname"].each() do |name|
+			["name", "newname", "cname", "volname"].each() do |name|
 				norm = getparam(name)
 				next unless norm
 				norm = norm[0..-2] if norm.end_with?(".")

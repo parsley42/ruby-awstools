@@ -134,7 +134,7 @@ class Ec2
 		snapshot = @mgr.getparam("snapname")
 		volname = @mgr.getparam("volname")
 		raise "No size or snapshot specified calling create_volume" unless size or snapshot
-		voltype = @mgr.expand_strings("${@volume_type:${DefaultVolumeType}}")
+		voltype = @mgr.expand_strings("${@volume_type|${DefaultVolumeType}}")
 		az = @mgr.expand_strings("${Region}${@az}").downcase()
 		volspec = {
 			availability_zone: az,

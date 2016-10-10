@@ -61,7 +61,7 @@ CloudFormation template outputs, DNS, and provided parameters.
 take parameters for various options. Since different templates may have different
 parameters, these parameters aren't passed as method arguments but rather stored
 as a ConfigManager parameter, and expanded in the template through the
-${@param(:default)} construct.
+${@param(|default)} construct.
 
 #### DNS Zones, Naming, and DNS Parameters
 

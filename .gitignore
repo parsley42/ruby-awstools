@@ -1,3 +1,4 @@
 **.swp
-vendor/ruby
+lib/rawstools/vendor/ruby
 sample/*/output
+rawstools*gem

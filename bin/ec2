@@ -1,16 +1,7 @@
 #!/usr/bin/ruby
 
-require 'pathname'
-script_dir = File.dirname(Pathname.new(__FILE__).realpath)
-
+require 'rawstools'
 require 'optparse'
-require 'yaml'
-require 'rubygems'
-Dir::chdir(script_dir) do
-	require 'bundler/setup'
-	require 'aws-sdk'
-	require_relative 'lib/cloud'
-end
 
 cfgfile = ENV["RAWS_CLOUDCFG"]
 
@@ -136,7 +127,7 @@ cfgfile = "cloudconfig.yaml" unless cfgfile
 raise UsageException.new("Missing configuration file: #{cfgfile}") unless File::exist?(cfgfile)
 raise UsageException.new("Not a regular file: #{cfgfile}") unless File::stat(cfgfile).file?
 
-cfg = RAWSTools::CloudManager.new(cfgfile, script_dir)
+cfg = RAWSTools::CloudManager.new(cfgfile)
 cfg.setparams(params)
 
 case command

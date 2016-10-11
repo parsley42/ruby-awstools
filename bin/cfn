@@ -1,17 +1,7 @@
 #!/usr/bin/ruby
 
-require 'pathname'
-script_dir = File.dirname(Pathname.new(__FILE__).realpath)
-
+require 'rawstools'
 require 'optparse'
-require 'yaml'
-require 'rubygems'
-Dir::chdir(script_dir) do
-	require 'bundler/setup'
-	require 'aws-sdk'
-	require_relative 'lib/templatelib'
-	require_relative 'lib/cloud'
-end
 
 outputdir = "output"
 upload = true
@@ -64,7 +54,7 @@ cfgfile = "cloudconfig.yaml" unless cfgfile
 raise UsageException.new("Missing configuration file: #{cfgfile}") unless File::exist?(cfgfile)
 raise UsageException.new("Not a regular file: #{cfgfile}") unless File::stat(cfgfile).file?
 
-cfg = RAWSTools::CloudManager.new(cfgfile, script_dir)
+cfg = RAWSTools::CloudManager.new(cfgfile)
 
 case command
 when "list"
@@ -129,7 +119,7 @@ else
 end
 
 # Generate the hub template that owns other templates
-maincfg = MainTemplate.new(templatedir, templatename, cfg)
+maincfg = RAWSTools::MainTemplate.new(templatedir, templatename, cfg)
 maincfg.process()
 puts # blank line after 'Loading ...'
 

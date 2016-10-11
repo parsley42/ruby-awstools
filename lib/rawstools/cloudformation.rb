@@ -1,4 +1,4 @@
-
+module RAWSTools
 	class CloudFormation
 		attr_reader :client, :resource
 
@@ -77,4 +77,4 @@
 			return outputs[output]
 		end
 	end
-
+end

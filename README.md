@@ -14,19 +14,18 @@ only limited funcationality:
 * You will have (or create) AWS-integrated DNS hosted zones, preferably
   public and private zones for the same domain
 
+** NOTE: the contents of the sample/ directory are currently outdated **
+
 # Installation
 1. Clone the repository
-2. Make sure you have the ruby gem 'bundler' installed:
+2. Build the gem:
 ```
-# gem install bundler
+$ gem build rawstools.gemspec
 ```
-`bundler` is the tool used for vendoring the aws-sdk ruby gem and any dependent gems
-3. 2. Then, in the top-level directory:
+3. Install the gem:
 ```
-$ bundle install
+$ gem install rawstools-*.gem
 ```
-This tells bundler to install the gems from vendor/cache to vendor/ruby
-4. Create symlinks to scripts in the `bin/` directory of your choice; `/usr/local/bin` or `$HOME/bin` are both good choices.
 
 # Common Configuration and Conventions
 

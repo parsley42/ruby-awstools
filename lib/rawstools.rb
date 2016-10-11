@@ -1,10 +1,13 @@
 require 'base64'
+require 'yaml'
+require 'pathname'
+require 'aws-sdk'
+require 'rawstools/cloudformation'
+require 'rawstools/ec2'
+require 'rawstools/route53'
+require 'rawstools/templatelib'
 
 module RAWSTools
-	load "lib/ec2.rb"
-	load "lib/route53.rb"
-	load "lib/cloudformation.rb"
-
 	# Classes for loading and processing the configuration file
 	Valid_Classes = [ "String", "Fixnum", "TrueClass", "FalseClass" ]
 	Expand_Regex = /\${([@=%&][:|.\/\w]+)}/
@@ -57,9 +60,9 @@ module RAWSTools
 	class CloudManager
 		attr_reader :installdir, :subdom, :cfgsubdom, :cfn, :s3, :s3res, :ec2, :route53
 
-		def initialize(filename, installdir)
+		def initialize(filename)
 			@filename = filename
-			@installdir = installdir
+			@installdir = File.dirname(Pathname.new(__FILE__).realpath) + "/rawstools"
 			@params = {}
 			@subdom = nil
 			@cfgsubdom = nil

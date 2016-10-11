@@ -193,7 +193,7 @@ class Ec2
 		end
 		raw = File::read(templatefile)
 
-		raise "Invalid parameters: volume provided with snapshot and/or data size" if volname and snapname or datasize
+		raise "Invalid parameters: volume provided with snapshot and/or data size" if volname and ( snapname or datasize )
 		if dryrun == "true" or dryrun == true
 			dry_run = true
 		else

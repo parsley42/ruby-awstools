@@ -58,7 +58,7 @@ deletevol = false
 case command
 when "create"
 	opts.on("-d", "--data-vol SIZE", "Create with a new data volume of size SIZE") do |dsize|
-		datasize = dsize
+		params["datasize"] = dsize
 	end
 	opts.on("-D", "--dry-run", "Don't actually create anything, just verify parameters") do
 		params["dryrun"] = true
@@ -166,7 +166,7 @@ when "list"
 when "create"
 	name, key, template = ARGV.shift(3)
 	raise UsageException.new("Missing required argument") unless template
-	raise UsageException.new("Error: both snapshot and volume specified") if params["volname"] and params["snapname"] or params["datasize"]
+	raise UsageException.new("Error: both snapshot and volume specified") if params["volname"] and ( params["snapname"] or params["datasize"] )
 	cfg.setparam("name", name)
 	cfg.setparam("key", key)
 	# one-liner to validate the key

@@ -19,6 +19,7 @@ module RAWSTools
 			#puts "Looking up: #{lookup}"
 			records = @client.list_resource_record_sets(lookup)
 			values = []
+			return values unless records.resource_record_sets.size() == 1
 			return values unless records.resource_record_sets[0].name == fqdn
 			records.resource_record_sets[0].resource_records.each do |record|
 				values << record.value

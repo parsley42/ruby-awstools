@@ -45,8 +45,10 @@ module RAWSTools
 				stack = @resource.stack(parent)
 				outputs = {}
 				@outputs[parent] = outputs
-				stack.outputs().each() do |output|
-					outputs[output.output_key] = output.output_value
+				if stack.exists?()
+					stack.outputs().each() do |output|
+						outputs[output.output_key] = output.output_value
+					end
 				end
 			end
 			if child

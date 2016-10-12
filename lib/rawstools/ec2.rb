@@ -376,7 +376,7 @@ module RAWSTools
 		def terminate_instance(wait=true, deletevol=false)
 			@mgr.normalize_name_parameters()
 			name = @mgr.getparam("name")
-			instance = resolve_instance(false, name, "running")
+			instance = resolve_instance(false, name)
 			if instance
 				yield "Terminating #{name}"
 				instance.terminate()

@@ -14,7 +14,7 @@ only limited funcationality:
 * You will have (or create) AWS-integrated DNS hosted zones, preferably
   public and private zones for the same domain
 
-** NOTE: the contents of the sample/ directory are currently outdated **
+<b>** NOTE: the contents of the sample/ directory are currently outdated **</b>
 
 # Installation
 1. Clone the repository

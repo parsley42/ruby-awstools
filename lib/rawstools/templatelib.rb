@@ -6,7 +6,7 @@ module RAWSTools
 		attr_reader :output
 
 		def initialize(desc, ref, lookup="Ref")
-			@output = { "Description" => desc, "Value" => { "#{lookup}": ref } }
+			@output = { "Description" => desc, "Value" => { "#{lookup}" => ref } }
 		end
 	end
 

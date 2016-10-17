@@ -10,7 +10,7 @@ require 'rawstools/templatelib'
 module RAWSTools
 	# Classes for loading and processing the configuration file
 	Valid_Classes = [ "String", "Fixnum", "TrueClass", "FalseClass" ]
-	Expand_Regex = /\${([@=%&][:|.\/\w]+)}/
+	Expand_Regex = /\${([@=%&][:|.\-\/\w]+)}/
 
 	class SubnetDefinition
 		attr_reader :cidr, :subnets

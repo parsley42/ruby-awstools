@@ -436,6 +436,10 @@ module RAWSTools
 		def update_dns(instance, wait=false)
 			@mgr.normalize_name_parameters()
 			name = get_tag(instance, "Name")
+			if instance.state.name != "running"
+				yield "Not updating DNS for non-running instance: #{name}, state: #{instance.state}"
+				return
+			end
 			@mgr.setparam("name", name)
 
 			nodns = @mgr.getparam("nodns")

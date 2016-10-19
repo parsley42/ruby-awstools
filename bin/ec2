@@ -170,10 +170,9 @@ when "updatedns"
 	name = ARGV.shift()
 	raise UsageException.new("Missing required argument") unless name
 	cfg.setparam("name", name)
-	puts "Updating DNS"
-	puts "Waiting for zones to synchronize..." if wait
-	cfg.ec2.update_dns(wait)
-	puts "Synchronized" if wait
+	cfg.normalize_name_parameters()
+	instance = cfg.ec2.resolve_instance()
+	cfg.ec2.update_dns(instance, wait) { |status| puts status }
 when "start"
 	name = ARGV.shift()
 	raise UsageException.new("Missing <name> argument") unless name

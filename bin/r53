@@ -113,7 +113,7 @@ if where == "public" or where == "both"
 	puts "Updating public zone"
 	cfg.setparam("zone_id", cfg["PublicDNSId"])
 	if command == "delete"
-		change_ids << cfg.route53.delete(rec, cfg["PublicDNSId"])
+		change_ids << cfg.route53.delete(cfg["PublicDNSId"])
 	else
 		change_ids << cfg.route53.change_records(template)
 	end
@@ -122,7 +122,7 @@ if where == "private" or where == "both"
 	puts "Updating private zone"
 	cfg.setparam("zone_id", cfg["PrivateDNSId"])
 	if command == "delete"
-		change_ids << cfg.route53.delete(rec, cfg["PrivateDNSId"])
+		change_ids << cfg.route53.delete(cfg["PrivateDNSId"])
 	else
 		change_ids << cfg.route53.change_records(template)
 	end

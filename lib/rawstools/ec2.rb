@@ -437,7 +437,7 @@ module RAWSTools
 			@mgr.normalize_name_parameters()
 			name = get_tag(instance, "Name")
 			if instance.state.name != "running"
-				yield "Not updating DNS for non-running instance: #{name}, state: #{instance.state}"
+				yield "Not updating DNS for non-running instance: #{name}, state: #{instance.state.name}"
 				return
 			end
 			@mgr.setparam("name", name)

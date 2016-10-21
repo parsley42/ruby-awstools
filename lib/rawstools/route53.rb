@@ -55,7 +55,6 @@ module RAWSTools
 					]
 				}
 			}
-			puts "Sending: #{dset}"
 			resp = @client.change_resource_record_sets(dset)
 			return resp
 		end

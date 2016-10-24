@@ -64,8 +64,8 @@ module RAWSTools
 			f << @mgr["Filter"] if @mgr["Filter"]
 			v = @resource.volumes(filters: f)
 			count = v.count()
-			raise "Multiple matches for Name: #{volume}" if count > 1
-			raise "No volume found with Name: #{volume} and Status: #{status}" if must_exist and count != 1
+			raise "Multiple matches for Name: #{vname}" if count > 1
+			raise "No volume found with Name: #{vname} and Status: #{status}" if must_exist and count != 1
 			return nil if count == 0
 			return v.first()
 		end
@@ -119,7 +119,7 @@ module RAWSTools
 			tags.each() do |tag|
 				if tag.key == "Name"
 					snaptags << { "key" => tag.key, "value" => snapname }
-				else
+				elsif not tag.key.start_with?("aws:")
 					snaptags << { "key" => tag.key, "value" => tag.value }
 				end
 			end
@@ -335,6 +335,18 @@ module RAWSTools
 			update_dns(src, wait) { |s| yield s }
 			if dest
 				update_dns(dest, wait) { |s| yield s }
+			end
+		end
+
+		def reboot_instance(wait=true)
+			@mgr.normalize_name_parameters()
+			name = @mgr.getparam("name")
+			instance = resolve_instance(false, name, "running")
+			if instance
+				yield "Rebooting #{name}"
+				instance.reboot()
+			else
+				yield "No running instance found with Name: #{name}"
 			end
 		end
 

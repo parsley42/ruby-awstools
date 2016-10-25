@@ -210,6 +210,9 @@ module RAWSTools
 			case var[0]
 			when "@"
 				param, default = var.split('|')
+				if not default and var.end_with?('|')
+					default=""
+				end
 				param = param[1..-1]
 				value = getparam(param)
 				if value
@@ -221,6 +224,9 @@ module RAWSTools
 				end
 			when "="
 				lookup, default = var.split('|')
+				if not default and var.end_with?('|')
+					default=""
+				end
 				output = lookup[1..-1]
 				value = @cfn.getoutput(output)
 				if value
@@ -232,6 +238,9 @@ module RAWSTools
 				end
 			when "%"
 				lookup, default = var.split('|')
+				if not default and var.end_with?('|')
+					default=""
+				end
 				record = "#{lookup[1..-1]}.#{@config["ConfigDomain"]}."
 				values = @route53.lookup(@config["PrivateDNSId"], record)
 				if values.length == 1

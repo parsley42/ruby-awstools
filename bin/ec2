@@ -19,6 +19,7 @@ Usage: ec2 <command> (options) (args) - manage a CloudFormation stack
   stop <name> - stop a running instance
   rename <oldname> <newname> - rename an instance and update dns
   snapshot <name> - take a snapshot of the data volume with name <name>
+  template - dump the default template for creating instances
   terminate <name> - terminate an instance
   list <instances|snapshots|volumes> - list instances/snapshots/volumes for the current project
  Options are:
@@ -35,7 +36,7 @@ end
 
 begin
 
-commands = [ "create", "updatedns", "deletekeypair", "genkeypair", "list", "reboot", "rename", "start", "stop", "snapshot", "terminate" ]
+commands = [ "create", "updatedns", "deletekeypair", "genkeypair", "list", "reboot", "rename", "start", "stop", "snapshot", "terminate", "template" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
@@ -189,6 +190,8 @@ when "stop"
 	raise UsageException.new("Missing <name> argument") unless name
 	cfg.setparam("name", name)
 	cfg.ec2.stop_instance(wait) { |status| puts status }
+when "template"
+	cfg.ec2.dump_template()
 when "rename"
 	name, newname = ARGV.shift(2)
 	raise UsageException.new("Missing <name> argument") unless newname

@@ -5,6 +5,7 @@ require 'aws-sdk'
 require 'rawstools/cloudformation'
 require 'rawstools/ec2'
 require 'rawstools/route53'
+require 'rawstools/simpledb'
 require 'rawstools/templatelib'
 
 module RAWSTools
@@ -58,7 +59,7 @@ module RAWSTools
 	# For reading in the configuration file and initializing service clients
 	# and resources
 	class CloudManager
-		attr_reader :installdir, :subdom, :cfgsubdom, :cfn, :s3, :s3res, :ec2, :route53
+		attr_reader :installdir, :subdom, :cfgsubdom, :cfn, :sdb, :s3, :s3res, :ec2, :route53
 
 		def initialize(filename)
 			@filename = filename
@@ -72,11 +73,13 @@ module RAWSTools
 			@config = YAML::load(raw)
 			@ec2 = Ec2.new(self)
 			@cfn = CloudFormation.new(self)
+			@sdb = SimpleDB.new(self)
 			@s3 = Aws::S3::Client.new( region: @config["Region"] )
 			@s3res = Aws::S3::Resource.new( client: @s3 )
 			@route53 = Route53.new(self)
 			raw = expand_strings(raw)
 			# Now replace config with expanded version
+			#puts "Expanded:\n#{raw}"
 			@config = YAML::load(raw)
 
 			[ "Bucket", "Region", "VPCCIDR", "AvailabilityZones", "SubnetTypes" ].each do |c|
@@ -234,25 +237,24 @@ module RAWSTools
 				elsif default
 					return default
 				else
-					raise "Output not found while expanding \"#{var}\"" unless value
+					raise "Output not found while expanding \"#{var}\""
 				end
 			when "%"
 				lookup, default = var.split('|')
 				if not default and var.end_with?('|')
 					default=""
 				end
-				record = "#{lookup[1..-1]}.#{@config["ConfigDomain"]}."
-				values = @route53.lookup(@config["PrivateDNSId"], record)
+				lookup = lookup[1..-1]
+				item, key = lookup.split(":")
+				raise "Invalid SimpleDB lookup: #{lookup}" unless key
+				values = @sdb.retrieve(item, key)
 				if values.length == 1
 					value = values[0]
-					trim = '"'
-					value = value[1..-1] if value.start_with?(trim)
-					value = value[0..-2] if value.end_with?(trim)
 					return value
-				elsif default
+				elsif values.length == 0 and default
 					return default
 				else
-					raise "Failed to receive single-value record looking up \"#{record}\" in #{@config["ConfigDomain"]}" unless values.length == 1
+					raise "Failed to receive single-value retrieving attribute \"#{key}\" from item #{item} in SimpleDB domain #{@sdb.getdomain()}, got: #{values}"
 				end
 			when "&"
 				cfgvar = var[1..-1]
@@ -268,6 +270,19 @@ module RAWSTools
 		end
 
 		def expand_strings(data)
+			# remove comments so we don't get errors expanding commented stuff
+			data = data.gsub(/(#.*$)/) do
+				fullcomment = $1
+				comment = fullcomment
+				while comment.match(/"[^"]*"/)
+					comment = comment.gsub(/("[^"]*")/, '')
+				end
+				if comment.include?('"')
+					fullcomment
+				else
+					''
+				end
+			end
 			while data.match(Expand_Regex)
 				data = data.gsub(Expand_Regex) do
 					expand_string($1)

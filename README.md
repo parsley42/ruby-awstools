@@ -131,8 +131,9 @@ form ${...}.
   similarly to ${var} above.
 * ${=Template(:child):Output(|default)} - retrieve an output from a previously-created
   cloudformation template, or use the default value if the lookup fails.
-* ${%Record(|default)} - Look up a DNS TXT record from the ConfigSubDom defined in
-  the cloud config file, or use the default value if the lookup fails.
+* ${%item:key|default} - Look up the attribute <key> for <item> in the configured
+  ConfigDB (AWS SimpleDB) from the cloud config. Mostly useful for retrieving
+  AMI ids stored with the `sdb` tool.
 
 ### Data Element Expansion
 

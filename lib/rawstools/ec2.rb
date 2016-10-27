@@ -1,4 +1,41 @@
 module RAWSTools
+	EC2_Default_Template = <<EOF
+  dry_run: ${@dryrun|false}
+  image_id: ${@ami|none} # or e.g. ${@ami|${%ami:somedefault}}
+  min_count: 1
+  max_count: 1
+  key_name: ${@key|none}
+  security_group_ids:
+  - (requires override)
+  user_data: (override or omit)
+  instance_type: ${@type|none} # or ${@type|default}
+  # NOTE: block_device_mappings are all or nothing; if not
+  # present in your template, you get what's below. If specified,
+  # you should include the root device section to modify
+  # it's delete on termination flag, incorrectly set to 'false'
+  # in the stock CentOS AMIs
+  block_device_mappings:
+  - device_name: /dev/sda1
+    ebs:
+      delete_on_termination: true
+  # Uncomment to create data volume for a given template
+  #- device_name: /dev/sdf
+  #  ebs:
+  #    delete_on_termination: false
+  #    snapshot_id: ${@snapshot_id|none} # create_instance deletes this if there's no snapshot
+  #    volume_size: ${@datasize|5}
+  #    volume_type: ${@volume_type|standard} # accepts standard, io1, gp2, sc1, st1
+  #    iops: ${@iops|1} # deleted when volume_type != io1
+  #    encrypted: ${@encrypted|true}
+  monitoring:
+    enabled: ${@monitor|false}
+  subnet_id: (requires override)
+  instance_initiated_shutdown_behavior: stop
+  # Uncomment to use an instance profile with this template
+  #iam_instance_profile:
+  #  arn: "String"
+  ebs_optimized: ${@ebsoptimized|false}
+EOF
 	class Ec2
 		attr_reader :client, :resource
 
@@ -6,6 +43,16 @@ module RAWSTools
 			@mgr = cloudmgr
 			@client = Aws::EC2::Client.new( region: @mgr["Region"] )
 			@resource = Aws::EC2::Resource.new(client: @client)
+		end
+
+		def dump_template()
+			puts <<EOF
+---
+tags:
+  Foo: Bar # Modify or remove tags entirely
+api_template:
+#{EC2_Default_Template}
+EOF
 		end
 
 		def resolve_instance(must_exist=true, name=nil, state=nil)
@@ -233,7 +280,13 @@ module RAWSTools
 			template = YAML::load(raw)
 			@mgr.resolve_vars( { "child" => template }, "child" )
 			@mgr.symbol_keys(template)
-			ispec = template[:api_template]
+
+			# Load the default template
+			apibase = @mgr.expand_strings(EC2_Default_Template)
+			ispec = YAML::load(apibase)
+			@mgr.resolve_vars( { "child" => ispec }, "child" )
+			@mgr.symbol_keys(ispec)
+			ispec = ispec.merge(template[:api_template])
 
 			if ispec[:user_data]
 				ispec[:user_data] = Base64::encode64(ispec[:user_data])

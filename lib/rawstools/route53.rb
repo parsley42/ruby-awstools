@@ -16,7 +16,7 @@ module RAWSTools
 				start_record_name: fqdn,
 				max_items: 1,
 			}
-			#puts "Looking up: #{lookup}"
+			puts "Looking up: #{lookup}"
 			records = @client.list_resource_record_sets(lookup)
 			values = []
 			return values unless records.resource_record_sets.size() == 1

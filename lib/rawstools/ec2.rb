@@ -9,11 +9,12 @@ module RAWSTools
   - (requires override)
   user_data: (override or omit)
   instance_type: ${@type|none} # or ${@type|default}
-  # NOTE: block_device_mappings are all or nothing; if not
-  # present in your template, you get what's below. If specified,
-  # you should include the root device section to modify
-  # it's delete on termination flag, incorrectly set to 'false'
-  # in the stock CentOS AMIs
+  # NOTE: block_device_mappings are intelligently overwritten;
+  # if /dev/sda1 is present in the template, it overwrites the
+  # one in the template. Otherwise, any additional devs are added
+  # to the default definition for /dev/sda1.
+  # The default definition of /dev/sda1 corrects for AMIs built
+  # that incorrectly have delete_on_termination: false
   block_device_mappings:
   - device_name: /dev/sda1
     ebs:
@@ -286,7 +287,16 @@ EOF
 			ispec = YAML::load(apibase)
 			@mgr.resolve_vars( { "child" => ispec }, "child" )
 			@mgr.symbol_keys(ispec)
+
+			base_block_devs = ispec[:block_device_mappings]
+			template_block_devs = template[:api_template][:block_device_mappings]
 			ispec = ispec.merge(template[:api_template])
+			ispec[:block_device_mappings] = base_block_devs
+			template_block_devs.each() do |bdev|
+				dev = bdev[:device_name]
+				base_block_devs.delete_if() { |bbdev| bbdev[:device_name] == dev }
+				base_block_devs << bdev
+			end
 
 			if ispec[:user_data]
 				ispec[:user_data] = Base64::encode64(ispec[:user_data])
@@ -408,10 +418,26 @@ EOF
 			name, nodns = @mgr.getparams("name", "nodns")
 			instance = resolve_instance(false, name, "stopped")
 			if instance
+				@mgr.setparam("volname", name)
+				volume = resolve_volume(false)
+				if volume
+					if volume.availability_zone() != @resource.subnet(instance.subnet_id()).availability_zone()
+						yield "Found existing volume in wrong availability zone, ignoring"
+						volume = nil
+					else
+						yield "Attaching existing data volume: #{name}"
+						instance.attach_volume({
+							volume_id: volume.id(),
+							device: "/dev/sdf",
+						})
+						@client.wait_until(:volume_in_use, volume_ids: [ volume.id() ])
+					end
+				end
 				yield "Starting #{name}"
 				instance.start()
 				yield "Started instance #{name} (id: #{instance.id()}), waiting for it to enter state running ..."
 				instance.wait_until_running()
+				yield "Running"
 				# Need to refresh
 				instance = @resource.instance(instance.id())
 
@@ -424,18 +450,41 @@ EOF
 		def stop_instance(wait=true)
 			@mgr.normalize_name_parameters()
 			name = @mgr.getparam("name")
+			detach = @mgr.getparam("detach")
 			instance = resolve_instance(false, name, "running")
 			if instance
 				yield "Stopping #{name}"
 				instance.stop()
 				remove_dns(instance, wait) { |s| yield s }
-				return unless wait
+				return unless wait or detach
 				yield "Waiting for instance to stop..."
 				instance.wait_until_stopped()
 				yield "Stopped"
+				if detach
+					detach_volume() { |s| yield s }
+				end
 			else
 				yield "No running instance found with Name: #{name}"
 			end
+		end
+
+		def detach_volume()
+			@mgr.setparam("volname", @mgr.getparam("name")) unless @mgr.getparam("volname")
+			volume = resolve_volume(false, [ "in-use" ])
+			return unless volume
+			instance = resolve_instance(true)
+			device = nil
+			volume.attachments().each() do |att|
+				if att.instance_id == instance.id
+					device = att.device
+				end
+			end
+			return unless device
+			yield "Detaching volume #{volume.id} from instance #{instance.id}"
+			volume.detach_from_instance({
+				instance_id: instance.id,
+				device: device,
+			})
 		end
 
 		def terminate_instance(wait=true, deletevol=false)

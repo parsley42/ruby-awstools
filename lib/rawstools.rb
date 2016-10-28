@@ -59,14 +59,13 @@ module RAWSTools
 	# For reading in the configuration file and initializing service clients
 	# and resources
 	class CloudManager
-		attr_reader :installdir, :subdom, :cfgsubdom, :cfn, :sdb, :s3, :s3res, :ec2, :route53
+		attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :route53
 
 		def initialize(filename)
 			@filename = filename
 			@installdir = File.dirname(Pathname.new(__FILE__).realpath) + "/rawstools"
 			@params = {}
 			@subdom = nil
-			@cfgsubdom = nil
 
 			raw = File::read(filename)
 			# A number of config items need to be defined before using expand_strings
@@ -88,7 +87,7 @@ module RAWSTools
 				end
 			end
 
-			[ "DNSBase", "DNSDomain", "ConfigDomain" ].each do |dnsdom|
+			[ "DNSBase", "DNSDomain" ].each do |dnsdom|
 				name = @config[dnsdom]
 				if name.end_with?(".")
 					STDERR.puts("Warning: removing trailing dot from #{dnsdom}")
@@ -99,15 +98,10 @@ module RAWSTools
 					@config[dnsdom] = name[1..-1]
 				end
 			end
-			raise "Invalid configuration, ConfigDomain not a subdomain of DNSBase" unless @config["ConfigDomain"].end_with?(@config["DNSBase"])
 			raise "Invalid configuration, DNSDomain same as or subdomain of DNSBase" unless @config["DNSDomain"].end_with?(@config["DNSBase"])
 			if @config["DNSDomain"] != @config["DNSBase"]
 				i = @config["DNSDomain"].index(@config["DNSBase"])
 				@subdom = @config["DNSDomain"][0..(i-2)]
-			end
-			if @config["ConfigDomain"] != @config["DNSBase"]
-				i = @config["ConfigDomain"].index(@config["DNSBase"])
-				@cfgsubdom = @config["ConfigDomain"][0..(i-2)]
 			end
 
 			subnet_types = {}
@@ -120,7 +114,6 @@ module RAWSTools
 
 		def normalize_name_parameters()
 			domain = @config["DNSDomain"]
-			cfgdom = @config["ConfigDomain"]
 			base = @config["DNSBase"]
 			# NOTE: skipping 'snapname' for now, since they will likely
 			# be of the form <name>-<timestamp>
@@ -132,12 +125,6 @@ module RAWSTools
 					fqdn = norm + "."
 					i = norm.index(base)
 					norm = norm[0..(i-2)]
-				elsif norm.end_with?(cfgdom)
-					fqdn = norm + "."
-					i = norm.index(cfgdom)
-					norm = norm[0..(i-2)]
-				elsif @cfgsubdom and norm.end_with?(@cfgsubdom)
-					fqdn = norm + "." + base + "."
 				elsif @subdom and norm.end_with?(@subdom)
 					fqdn = norm + "." + base + "."
 				elsif @subdom
@@ -313,10 +300,11 @@ module RAWSTools
 						raise "Reference to undefined parameter \"#{param}\" during data element expansion of \"#{var}\"" unless value
 						parent[item] = value
 					when "%"
-						record = cfgvar[1..-1]
-						record = record + cfgdom unless record.end_with?(cfgdom)
-						values = @route53.lookup(record, :private)
-						raise "No values returned from lookup of #{record}" unless values.length > 0
+						lookup = cfgvar[1..-1]
+						item, key = lookup.split(":")
+						raise "Invalid SimpleDB lookup: #{lookup}" unless key
+						values = @sdb.retrieve(item, key)
+						raise "No values returned from lookup of #{key} in item #{item} from #{@sdb.getdomain()}" unless values.length > 0
 						parent[item] = values
 					else
 						if @config[cfgvar] == nil

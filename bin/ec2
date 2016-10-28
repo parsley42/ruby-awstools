@@ -113,6 +113,11 @@ when "updatedns", "stop", "start", "terminate", "snapshot", "rename"
 			params["swap"] = true
 		end
 	end
+	if command == "stop"
+		opts.on("-d", "--detach", "Detach the data volume after stopping") do
+			params["detach"] = true
+		end
+	end
 	if command == "start"
 		opts.on("-N", "--no-dns", "Don't create DNS records for <name>.${DNSDomain}") do
 			params["nodns"] = true

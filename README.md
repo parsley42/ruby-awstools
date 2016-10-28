@@ -6,6 +6,8 @@ Ruby aws-sdk, intended to:
 * Manage sets of CloudFormation stacks
 * Centralize configuration data with an aim towards "configuration as code"
 
+## A 'biased' tool
+
 To greatly simplify matters, the library and tools have a number of assumptions
 built-in; if any of these don't hold true for your intended use, you may get
 only limited funcationality:
@@ -13,6 +15,13 @@ only limited funcationality:
   created with CloudFormation templates (with samples provided)
 * You will have (or create) AWS-integrated DNS hosted zones, preferably
   public and private zones for the same domain
+* Most ec2 instances have a single data volume attached to no more than
+  a single instance
+* When ec2 instances are started, stopped, created or terminated, DNS will
+  be updated at the same time to reflect the current state of the instance
+* Most ec2 instances and volumes will be created dynamically with the `ec2`
+  CLI tool or via the library; while a CloudFormation-based workflow is
+  well supported, most of the work has gone into `ec2` and related classes.
 
 <b>** NOTE: the contents of the sample/ directory are currently outdated **</b>
 
@@ -80,26 +89,20 @@ leading or trailing dot:
   projects, e.g. `mycompany.com`.
 * DNSDomain: The DNS domain for all resources in a particular project, e.g.
   `dev.mycompany.com`.
-* ConfigDomain: The DNS domain where configuration variables are stored in
-  TXT records. This may be the same for multiple projects. (Note that a common
-  use of such config variables us to map human-readable names of AMI
-  images to their ami-xxx identifiers.)
 
 Thus, whenever a name is provided, it will canonicalized and a FQDN generated
 based on the configured domains. Some examples should make this clear:
 
-When DNSDomain is `foo.com`, DNSBase is `foo.com`, and ConfigDomain is
-`cfg.foo.com`, the name is translated to a canonical name and fqdn as
+When DNSDomain is `foo.com` and DNSBase is `foo.com`, 
+the name is translated to a canonical name and fqdn as
 follows:
 * `bar` -> `bar`, `bar.foo.com`
 * `bar.baz` -> `bar.baz`, `bar.baz.foo.com`
 * `bar.foo.com` -> `bar`, `bar.foo.com`
-* `baz.cfg` -> `baz.cfg`, `baz.cfg.foo.com`
 
 When DNSDomain is `dev.foo.com`:
 * `bar` -> `bar.dev`, `bar.dev.foo.com`
 * `bar.dev` -> `bar.dev`, `bar.dev.foo.com`
-* `baz.cfg` -> `baz.cfg.foo.com`
 
 #### Standard Parameters and Normalization
 
@@ -148,9 +151,8 @@ can be used to index into a structure.
 * $@param - look up complex parameter; this must be created and set by the
   tool and is only for special cases such as TXT records, where the string
   value must be split into an array of 255-char substrings.
-* $%record - look up value(s) from the private DNS hosted zone, appending
-  the value of ConfigDomain from the cloud config file; e.g. $%c7image would
-  return an array of values from a lookup of c7image.<ConfigDomain>.
+* $%item:key - look up value(s) from a SimpleDB domain, defaulting to the
+  value of ConfigDB in the cloud config file.
 
 ### Context Specific Expansion
 

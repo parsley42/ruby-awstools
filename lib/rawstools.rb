@@ -81,7 +81,7 @@ module RAWSTools
 			#puts "Expanded:\n#{raw}"
 			@config = YAML::load(raw)
 
-			[ "Bucket", "Region", "VPCCIDR", "AvailabilityZones", "SubnetTypes" ].each do |c|
+			[ "Region", "AvailabilityZones" ].each do |c|
 				if ! @config[c]
 					raise "Missing required top-level configuration item in #{@filename}: #{c}"
 				end
@@ -105,8 +105,10 @@ module RAWSTools
 			end
 
 			subnet_types = {}
-			@config["SubnetTypes"].each_key do |st|
-				subnet_types[st] = SubnetDefinition.new(@config["SubnetTypes"][st]["CIDR"], @config["SubnetTypes"][st]["Subnets"])
+			if @config["SubnetTypes"]
+				@config["SubnetTypes"].each_key do |st|
+					subnet_types[st] = SubnetDefinition.new(@config["SubnetTypes"][st]["CIDR"], @config["SubnetTypes"][st]["Subnets"])
+				end
 			end
 			@config["SubnetTypes"] = subnet_types
 

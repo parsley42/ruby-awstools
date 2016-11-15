@@ -122,18 +122,21 @@ module RAWSTools
 			["name", "newname", "cname", "volname"].each() do |name|
 				norm = getparam(name)
 				next unless norm
-				norm = norm[0..-2] if norm.end_with?(".")
-				if norm.end_with?(domain)
-					fqdn = norm + "."
-					i = norm.index(base)
-					norm = norm[0..(i-2)]
-				elsif @subdom and norm.end_with?(@subdom)
-					fqdn = norm + "." + base + "."
-				elsif @subdom
-					fqdn = norm + "." + domain
-					norm = norm + "." + @subdom
+				if norm.end_with?(".")
+					fqdn = norm
 				else
-					fqdn = norm + "." + domain
+					if norm.end_with?(domain)
+						fqdn = norm + "."
+						i = norm.index(base)
+						norm = norm[0..(i-2)]
+					elsif @subdom and norm.end_with?(@subdom)
+						fqdn = norm + "." + base + "."
+					elsif @subdom
+						fqdn = norm + "." + domain
+						norm = norm + "." + @subdom
+					else
+						fqdn = norm + "." + domain
+					end
 				end
 				setparam(name, norm)
 				case name

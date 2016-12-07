@@ -246,6 +246,24 @@ VPC from the sample project.
 ## Resource Processing and $$Variable Expansion
 This section details the special handling of each of the CF resource types.
 
+### AWS::RDS::DBInstance
+
+Automatic Outputs will be generated for the Instance Identifier, Enpoint Address,
+and TCP Port.
+
+### AWS::RDS::DBSubnetGroup
+If you specify:
+```
+SubnetIds: $$<SubnetName>
+```
+... where <SubnetName> is e.g. `PrivateSubnet`, cfn will automatically
+expand to a list of references to the subnets in all availability zones.
+
+An automatic Output will also be added for the name of the DBSubnetGroup.
+
+### AWS::IAM::Role, AWS::IAM::InstanceProfile
+
+An automatic Output will be added for the ARN.
 
 ## Network Structure from the sample project
 One of the templates created by CG is the network template,

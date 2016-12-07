@@ -96,15 +96,37 @@ module RAWSTools
 					update_tags(@res[reskey], reskey)
 				when "AWS::IAM::InstanceProfile"
 					@outputs["#{reskey}"] = Output.new("ARN for Instance Profile #{reskey}", [ reskey, "Arn" ], "Fn::GetAtt").output
+				when "AWS::IAM::Role"
+					@outputs["#{reskey}"] = Output.new("ARN for Role #{reskey}", [ reskey, "Arn" ], "Fn::GetAtt").output
 				when "AWS::Route53::HostedZone"
 					update_tags(@res[reskey],nil,"HostedZoneTags")
 					@outputs["#{reskey}Id"] = Output.new("Hosted Zone Id for #{reskey}", reskey).output
+				when "AWS::RDS::DBInstance"
+					update_tags(@res[reskey], reskey)
+					@outputs["#{reskey}"] = Output.new("Instance Identifier for #{reskey}", reskey).output
+					@outputs["#{reskey}Addr"] = Output.new("Endpoint address for #{reskey}", [ reskey, "Endpoint.Address" ], "Fn::GetAtt").output
+					@outputs["#{reskey}Port"] = Output.new("TCP port for #{reskey}", [ reskey, "Endpoint.Port" ], "Fn::GetAtt").output
+				when "AWS::RDS::DBSubnetGroup"
+					update_tags(@res[reskey], reskey)
+					ref = @res[reskey]["Properties"]["SubnetIds"]
+					if ref && ref[0] == '$'
+						cfgref = ref[2..-1]
+						if @st[cfgref] == nil
+							raise "No configured subnet type for \"#{cfgref}\""
+						end
+						subrefs = []
+						@res[reskey]["Properties"]["SubnetIds"] = subrefs
+						@az.each_index do |i|
+							subrefs << { "Ref" => cfgref + @az[i].upcase() }
+						end
+					end
+					@outputs[reskey] = Output.new("#{reskey} database subnet group", reskey).output
 				when "AWS::EC2::Subnet"
 					ref = @res[reskey]["Properties"]["CidrBlock"]
 					if ref && ref[0] == '$'
 						cfgref = ref[2..-1]
 						if @st[cfgref] == nil
-							raise "No configured subnet type for \"#{cfgref}\" defined in network template"
+							raise "No configured subnet type for \"#{cfgref}\""
 						end
 						STDERR.puts "WARNING: Resource identifier (#{reskey}) didn't match referenced subnet, using #{cfgref}" if reskey != cfgref
 						raw_sn = Marshal.dump(@res[reskey])

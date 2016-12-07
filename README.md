@@ -246,6 +246,22 @@ VPC from the sample project.
 ## Resource Processing and $$Variable Expansion
 This section details the special handling of each of the CF resource types.
 
+### AWS::CloudFormation::Stack
+
+If you specify e.g.:
+```
+Parameters:
+	Includes: [ SecurityGroups, VPC ]
+```
+... cfn will automatically pass all the outputs from the given stack(s) as
+parameters to the stack.
+
+An automatic Output will be created for the stack ID.
+
+### AWS::EC2::RouteTable
+
+An automatic Output will be created for the Route Table ID.
+
 ### AWS::RDS::DBInstance
 
 Automatic Outputs will be generated for the Instance Identifier, Enpoint Address,

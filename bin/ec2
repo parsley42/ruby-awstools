@@ -50,7 +50,7 @@ deletevol = false
 
 case command
 when "create"
-	opts.on("-a", "--ami AMIID", "Create with a new data volume of size SIZE") do |ami|
+	opts.on("-a", "--ami AMIID", "Create with a specific AMI") do |ami|
 		params["ami"] = ami
 	end
 	opts.on("-d", "--data-vol SIZE", "Create with a new data volume of size SIZE") do |dsize|

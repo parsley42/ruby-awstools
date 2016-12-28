@@ -87,8 +87,11 @@ module RAWSTools
 				@param_includes.each() do |childname|
 					other = @parent.find_child(childname)
 					other.outputs().each_key() do |output|
-						raise "Duplicate parameter (resource name) while processing #{@name}: #{output}" if params[output]
-						params[output] = {"Type" => "String"}
+						if params[output]
+							STDERR.puts "WARNING: Duplicate input parameter (resource name) while processing includes for #{@name}: #{output}" if params[output]
+						else
+							params[output] = {"Type" => "String"}
+						end
 					end
 				end
 			end

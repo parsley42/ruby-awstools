@@ -17,8 +17,12 @@ module RAWSTools
 			@name = name
 			@cloudcfg = cloudcfg
 			@param_includes = param_includes
-			@parent = parent
-			@st = @cloudcfg["SubnetTypes"]
+			if parent
+				@parent = parent
+			else
+				@parent = self
+			end
+			@st = @cloudcfg["SubnetTypes"][@parent.templatename]
 			@az = @cloudcfg["AvailabilityZones"]
 			raw = File::read(directory + "/" + @name.downcase() + ".yaml")
 			raw = @cloudcfg.expand_strings(raw)
@@ -62,8 +66,8 @@ module RAWSTools
 		# Returns an Array of string CIDRs, even if it's only 1 long
 		def resolve_cidr(ref)
 			clists = @cloudcfg["CIDRLists"]
-			if @cloudcfg["SubnetTypes"][ref] != nil
-				return [ @cloudcfg["SubnetTypes"][ref].cidr ]
+			if @cloudcfg["SubnetTypes"][@parent.templatename][ref] != nil
+				return [ @cloudcfg["SubnetTypes"][@parent.templatename][ref].cidr ]
 			elsif clists[ref] != nil
 				if clists[ref].class == Array
 					return clists[ref]
@@ -75,6 +79,7 @@ module RAWSTools
 			end
 		end
 
+    # Only called by a parent
 		def process()
 			if @param_includes
 				@cfg["Parameters"] ||= {}
@@ -226,7 +231,7 @@ module RAWSTools
 	end
 
 	class MainTemplate < CFTemplate
-		attr_reader :children
+		attr_reader :children, :templatename
 
 		def initialize(directory, templatename, cloudcfg)
 			@templatename = templatename

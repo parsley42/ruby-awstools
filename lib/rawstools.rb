@@ -38,7 +38,7 @@ module RAWSTools
 			return tags
 		end
 
-		# Bucket tags have lowercase 
+		# Bucket tags have lowercase
 		def ltags()
 			tags = []
 			@tags.each_key do |k|
@@ -106,8 +106,11 @@ module RAWSTools
 
 			subnet_types = {}
 			if @config["SubnetTypes"]
-				@config["SubnetTypes"].each_key do |st|
-					subnet_types[st] = SubnetDefinition.new(@config["SubnetTypes"][st]["CIDR"], @config["SubnetTypes"][st]["Subnets"])
+				@config["SubnetTypes"].each_key do |stack|
+					subnet_types[stack] = {}
+					@config["SubnetTypes"][stack].each_key do |st|
+						subnet_types[stack][st] = SubnetDefinition.new(@config["SubnetTypes"][stack][st]["CIDR"], @config["SubnetTypes"][stack][st]["Subnets"])
+					end
 				end
 			end
 			@config["SubnetTypes"] = subnet_types

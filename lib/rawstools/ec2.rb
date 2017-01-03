@@ -1,14 +1,14 @@
 module RAWSTools
 	EC2_Default_Template = <<EOF
   dry_run: ${@dryrun|false}
-  image_id: ${@ami|none} # or e.g. ${@ami|${%ami:somedefault}}
+  image_id: ${@ami|none} # or e.g. $ {@ami|$ {%ami:somedefault}}
   min_count: 1
   max_count: 1
   key_name: ${@key|none}
   security_group_ids:
   - (requires override)
   user_data: (override or omit)
-  instance_type: ${@type|none} # or ${@type|default}
+  instance_type: ${@type|none} # or $ {@type|default}
   # NOTE: block_device_mappings are intelligently overwritten;
   # if /dev/sda1 is present in the template, it overwrites the
   # one in the template. Otherwise, any additional devs are added

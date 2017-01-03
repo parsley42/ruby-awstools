@@ -265,19 +265,8 @@ module RAWSTools
 		end
 
 		def expand_strings(data)
-			# remove comments so we don't get errors expanding commented stuff
-			data = data.gsub(/(#.*$)/) do
-				fullcomment = $1
-				comment = fullcomment
-				while comment.match(/"[^"]*"/)
-					comment = comment.gsub(/("[^"]*")/, '')
-				end
-				if comment.include?('"')
-					fullcomment
-				else
-					''
-				end
-			end
+			# NOTE: previous code to remove comments has been removed; it was removing
+			# the comment at the top of user_data, which broke user data.
 			while data.match(Expand_Regex)
 				data = data.gsub(Expand_Regex) do
 					expand_string($1)

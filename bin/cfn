@@ -143,6 +143,7 @@ when "create", "update", "validate"
 			puts "Validating #{tfile}"
 			cfg.cfn.validate(json)
 		when "create", "update"
+      puts "Validating #{tfile}"
 			required_capabilities = cfg.cfn.validate(json, false)
 			if ! upload
 				json = File::read(outputdir + "/" + tfile + ".json")

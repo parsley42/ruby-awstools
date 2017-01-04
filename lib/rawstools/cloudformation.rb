@@ -53,11 +53,15 @@ module RAWSTools
 			end
 			if child
 				child = child + "Stack" unless child.end_with?("Stack")
-				childstack = outputs[child].split('/')[1]
-				if @outputs[childstack]
-					outputs = @outputs[childstack]
+				if outputs[child]
+					childstack = outputs[child].split('/')[1]
+					if @outputs[childstack]
+						outputs = @outputs[childstack]
+					else
+						outputs = getoutputs(childstack)
+					end
 				else
-					outputs = getoutputs(childstack)
+					{}
 				end
 			end
 			outputs

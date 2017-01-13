@@ -38,7 +38,7 @@ module RAWSTools
 			}
 			records = @client.list_resource_record_sets(lookup)
 			record = records.resource_record_sets[0]
-			return unless record.name == fqdn
+			return unless record and record.name == fqdn
 			dset = {
 				hosted_zone_id: zone,
 				change_batch: {

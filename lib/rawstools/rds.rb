@@ -1,41 +1,22 @@
 module RAWSTools
 	RDS_Default_Template = <<EOF
-  dry_run: ${@dryrun|false}
-  image_id: ${@ami|none} # or e.g. $ {@ami|$ {%ami:somedefault}}
-  min_count: 1
-  max_count: 1
-  key_name: ${@key|none}
-  security_group_ids:
+	# db_name: "String" # We don't create a default database
+	db_instance_identifier: ${dbname} # required
+  allocated_storage: ${@datasize|10}
+  db_instance_class: ${@type|db.t2.micro} # available types vary by engine, probably needs override
+	engine: (requires override)
+  master_username: "root"
+	master_user_password: ${@rootpassword}
+  vpc_security_group_ids:
   - (requires override)
-  user_data: (override or omit)
-  instance_type: ${@type|none} # or $ {@type|default}
-  # NOTE: block_device_mappings are intelligently overwritten;
-  # if /dev/sda1 is present in the template, it overwrites the
-  # one in the template. Otherwise, any additional devs are added
-  # to the default definition for /dev/sda1.
-  # The default definition of /dev/sda1 corrects for AMIs built
-  # that incorrectly have delete_on_termination: false
-  block_device_mappings:
-  - device_name: /dev/sda1
-    ebs:
-      delete_on_termination: true
-  # Uncomment to create data volume for a given template
-  #- device_name: /dev/sdf
-  #  ebs:
-  #    delete_on_termination: false
-  #    snapshot_id: ${@snapshot_id|none} # create_instance deletes this if there's no snapshot
-  #    volume_size: ${@datasize|5}
-  #    volume_type: ${@volume_type|standard} # accepts standard, io1, gp2, sc1, st1
-  #    iops: ${@iops|1} # deleted when volume_type != io1
-  #    encrypted: ${@encrypted|true}
-  monitoring:
-    enabled: ${@monitor|false}
-  subnet_id: (requires override)
-  instance_initiated_shutdown_behavior: stop
-  # Uncomment to use an instance profile with this template
-  #iam_instance_profile:
-  #  arn: "String"
-  ebs_optimized: ${@ebsoptimized|false}
+	db_subnet_group_name: (requires override)
+  backup_retention_period: 2
+  auto_minor_version_upgrade: true
+  publicly_accessible: false
+  storage_type: ${storage_type|gp2}
+  copy_tags_to_snapshot: true
+  # monitoring_interval: 1
+  # monitoring_role_arn: (requires override)
 EOF
 	class RDS
 		attr_reader :client, :resource
@@ -45,6 +26,15 @@ EOF
 			@client = Aws::RDS::Client.new(region: @mgr["Region"])
 			@resource = Aws::RDS::Resource.new(client: @client)
 		end
+
+		def dump_template()
+			puts <<EOF
+---
+api_template:
+#{RDS_Default_Template}
+EOF
+		end
+
 
 		def resolve_instance(must_exist=true, name=nil, state=nil)
 			if name

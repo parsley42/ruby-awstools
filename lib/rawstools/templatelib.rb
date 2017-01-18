@@ -105,6 +105,8 @@ module RAWSTools
 				when "AWS::EC2::RouteTable"
 					update_tags(@res[reskey], reskey)
 					@outputs["#{reskey}"] = Output.new("Route Table Id for #{reskey}", reskey).output
+				when "AWS::SDB::Domain"
+					@outputs["#{reskey}Domain"] = Output.new("SDB Domain Name for #{reskey}", reskey).output
 				when "AWS::IAM::InstanceProfile"
 					@outputs["#{reskey}"] = Output.new("ARN for Instance Profile #{reskey}", [ reskey, "Arn" ], "Fn::GetAtt").output
 				when "AWS::IAM::Role"

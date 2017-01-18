@@ -4,6 +4,7 @@ require 'pathname'
 require 'aws-sdk'
 require 'rawstools/cloudformation'
 require 'rawstools/ec2'
+require 'rawstools/rds'
 require 'rawstools/route53'
 require 'rawstools/simpledb'
 require 'rawstools/templatelib'
@@ -59,7 +60,7 @@ module RAWSTools
 	# For reading in the configuration file and initializing service clients
 	# and resources
 	class CloudManager
-		attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :route53
+		attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :rds, :route53
 
 		def initialize(filename)
 			@filename = filename
@@ -75,6 +76,7 @@ module RAWSTools
 			@sdb = SimpleDB.new(self)
 			@s3 = Aws::S3::Client.new( region: @config["Region"] )
 			@s3res = Aws::S3::Resource.new( client: @s3 )
+			@rds = RDS.new(self)
 			@route53 = Route53.new(self)
 			raw = expand_strings(raw)
 			# Now replace config with expanded version

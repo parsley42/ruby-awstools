@@ -56,19 +56,12 @@ api_template:
 EOF
 		end
 
-		def resolve_instance(must_exist=true, name=nil, state=nil)
-			if name
-				iname = name
-			else
-				iname = @mgr.getparam("name")
-			end
-			if state
-				states = [ state ]
-			else
-				states = [ "pending", "running", "shutting-down", "stopping", "stopped" ]
-			end
+		def resolve_instance(must_exist=true, states=nil)
+			@mgr.normalize_name_parameters()
+			name = @mgr.getparam("name")
+			states = [ "pending", "running", "shutting-down", "stopping", "stopped" ] unless states
 			f = [
-				{ name: "tag:Name", values: [ iname ] },
+				{ name: "tag:Name", values: [ name ] },
 				{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
 				{
 					name: "instance-state-name",
@@ -79,7 +72,7 @@ EOF
 			instances = @resource.instances(filters: f)
 			count = instances.count()
 			raise "Multiple matches for Name: #{instance}" if count > 1
-			raise "No instance found with Name: #{iname}" if must_exist and count != 1
+			raise "No instance found with Name: #{name} in any of the states: #{states}" if must_exist and count != 1
 			return nil if count == 0
 			instance = instances.first()
 			return instance
@@ -349,7 +342,7 @@ EOF
 				# Need to refresh to get applied tags
 				tag_instance(instance, template[:tags]) { |s| yield s }
 				instance = @resource.instance(instance.id())
-				update_dns(instance, wait) { |s| yield s }
+				update_dns(wait, instance) { |s| yield s }
 			end
 			return instance
 		end
@@ -378,33 +371,10 @@ EOF
 			end
 		end
 
-		def rename_instance(wait=false)
-			@mgr.normalize_name_parameters()
-			newname = @mgr.getparam("newname")
-			src = resolve_instance()
-			dest = resolve_instance(false, newname)
-			if dest
-				raise "Destination already exists and 'swap' parameter not set" unless @mgr.getparam("swap")
-				tag_instance(dest) { |s| yield s } # tag dest with name (oldname)
-				# Refresh dest with new tags
-				dest = @resource.instance(dest.id())
-			else
-				remove_dns(src, wait) { |s| yield s }
-			end
-			@mgr.setparam("name", newname)
-			tag_instance(src) { |s| yield s }
-			# Refresh src with new tags
-			src = @resource.instance(src.id())
-			update_dns(src, wait) { |s| yield s }
-			if dest
-				update_dns(dest, wait) { |s| yield s }
-			end
-		end
-
 		def reboot_instance(wait=true)
 			@mgr.normalize_name_parameters()
+			instance = resolve_instance(false, [ "running" ])
 			name = @mgr.getparam("name")
-			instance = resolve_instance(false, name, "running")
 			if instance
 				yield "Rebooting #{name}"
 				instance.reboot()
@@ -415,8 +385,8 @@ EOF
 
 		def start_instance(wait=true)
 			@mgr.normalize_name_parameters()
+			instance = resolve_instance(false, [ "stopped" ])
 			name, nodns = @mgr.getparams("name", "nodns")
-			instance = resolve_instance(false, name, "stopped")
 			if instance
 				@mgr.setparam("volname", name)
 				volume = resolve_volume(false)
@@ -441,7 +411,7 @@ EOF
 				# Need to refresh
 				instance = @resource.instance(instance.id())
 
-				update_dns(instance, wait) { |s| yield s }
+				update_dns(wait, instance) { |s| yield s }
 			else
 				yield "No stopped instance found with Name: #{name}"
 			end
@@ -449,9 +419,8 @@ EOF
 
 		def stop_instance(wait=true)
 			@mgr.normalize_name_parameters()
-			name = @mgr.getparam("name")
-			detach = @mgr.getparam("detach")
-			instance = resolve_instance(false, name, "running")
+			instance = resolve_instance(false, [ "running" ])
+			name, detach = @mgr.getparams("name", "detach")
 			if instance
 				yield "Stopping #{name}"
 				instance.stop()
@@ -472,7 +441,7 @@ EOF
 			@mgr.setparam("volname", @mgr.getparam("name")) unless @mgr.getparam("volname")
 			volume = resolve_volume(false, [ "in-use" ])
 			return unless volume
-			instance = resolve_instance(true)
+			instance = resolve_instance()
 			device = nil
 			volume.attachments().each() do |att|
 				if att.instance_id == instance.id
@@ -489,8 +458,8 @@ EOF
 
 		def terminate_instance(wait=true, deletevol=false)
 			@mgr.normalize_name_parameters()
+			instance = resolve_instance(false)
 			name = @mgr.getparam("name")
-			instance = resolve_instance(false, name)
 			if instance
 				yield "Terminating #{name}"
 				instance.terminate()
@@ -547,16 +516,11 @@ EOF
 			yield "Synchronized"
 		end
 
-		def update_dns(instance, wait=false)
+		def update_dns(wait=false, instance=nil)
 			@mgr.normalize_name_parameters()
-			name = get_tag(instance, "Name")
-			if instance.state.name != "running"
-				yield "Not updating DNS for non-running instance: #{name}, state: #{instance.state.name}"
-				return
-			end
-			@mgr.setparam("name", name)
+			instance = resolve_instance(true, [ "running" ]) unless instance
 
-			nodns = @mgr.getparam("nodns")
+			name, nodns = @mgr.getparams("name", "nodns")
 			unless nodns
 				pub_ip = instance.public_ip_address
 				priv_ip = instance.private_ip_address

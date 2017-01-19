@@ -17,7 +17,6 @@ Usage: ec2 <command> (options) (args) - manage a CloudFormation stack
   reboot <name> - reboot an instance
   start <name> - start a stopped instance
   stop <name> - stop a running instance
-  rename <oldname> <newname> - rename an instance and update dns
   snapshot <name> - take a snapshot of the data volume with name <name>
   template - dump the default template for creating instances
   terminate <name> - terminate an instance
@@ -36,7 +35,7 @@ end
 
 begin
 
-commands = [ "create", "updatedns", "deletekeypair", "genkeypair", "list", "reboot", "rename", "start", "stop", "snapshot", "terminate", "template" ]
+commands = [ "create", "updatedns", "deletekeypair", "genkeypair", "list", "reboot", "start", "stop", "snapshot", "terminate", "template" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
@@ -104,14 +103,9 @@ when "create"
 		value = keyval[(e+1)..-1]
 		params[key] = value
 	end
-when "updatedns", "stop", "start", "terminate", "snapshot", "rename"
+when "updatedns", "stop", "start", "terminate", "snapshot"
 	opts.on("-w", "--wait", "Wait for DNS records to sync") do
 		wait = true
-	end
-	if command == "rename"
-		opts.on("-s", "--swap", "If <newname> already exists, this flag will swap names") do
-			params["swap"] = true
-		end
 	end
 	if command == "stop"
 		opts.on("-d", "--detach", "Detach the data volume after stopping") do
@@ -177,9 +171,7 @@ when "updatedns"
 	name = ARGV.shift()
 	raise UsageException.new("Missing required argument") unless name
 	cfg.setparam("name", name)
-	cfg.normalize_name_parameters()
-	instance = cfg.ec2.resolve_instance()
-	cfg.ec2.update_dns(instance, wait) { |status| puts status }
+	cfg.ec2.update_dns(wait) { |status| puts status }
 when "reboot"
 	name = ARGV.shift()
 	raise UsageException.new("Missing <name> argument") unless name
@@ -197,12 +189,6 @@ when "stop"
 	cfg.ec2.stop_instance(wait) { |status| puts status }
 when "template"
 	cfg.ec2.dump_template()
-when "rename"
-	name, newname = ARGV.shift(2)
-	raise UsageException.new("Missing <name> argument") unless newname
-	cfg.setparam("name", name)
-	cfg.setparam("newname", newname)
-	cfg.ec2.rename_instance(wait) { |status| puts status }
 when "snapshot"
 	name = ARGV.shift()
 	raise UsageException.new("Missing <name> argument") unless name

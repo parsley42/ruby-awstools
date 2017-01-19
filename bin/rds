@@ -8,20 +8,14 @@ cfgfile = ENV["RAWS_CLOUDCFG"]
 opts = OptionParser.new
 
 opts.banner = <<-EOF
-Usage: ec2 <command> (options) (args) - manage a CloudFormation stack
+Usage: rds <command> (options) (args) - manage a CloudFormation stack
  Where <command> is one of:
-  create <name> <keyname> <template> - create one or more instances from a template (name or path)
-  updatedns <name> - update A records for an instance
-  deletekeypair <keyname>
-  genkeypair <keyname> (outputdir) - generate a keypair and store it in <keyname>.pem
-  reboot <name> - reboot an instance
-  start <name> - start a stopped instance
-  stop <name> - stop a running instance
-  rename <oldname> <newname> - rename an instance and update dns
-  snapshot <name> - take a snapshot of the data volume with name <name>
-  template - dump the default template for creating instances
-  terminate <name> - terminate an instance
-  list <instances|snapshots|volumes> - list instances/snapshots/volumes for the current project
+  create <name> <rootpassword> <template> - create an rds db instance from a template (name or path) with the provided root password
+  snapshot <name> - take a snapshot of the db instance <name>
+  template - dump the default template for creating db instances
+  delete <name> - delete a db instance
+  updatedns <name> - refresh DNS CNAME for the db instance
+  list - list db instances for the current project
  Options are:
 EOF
 opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
@@ -36,7 +30,7 @@ end
 
 begin
 
-commands = [ "create", "updatedns", "deletekeypair", "genkeypair", "list", "reboot", "rename", "start", "stop", "snapshot", "terminate", "template" ]
+commands = [ "create", "list", "rename", "snapshot", "delete", "template", "updatedns" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
@@ -44,52 +38,33 @@ raise UsageException.new("Unknown command: #{command}") unless commands.include?
 params = {}
 tags = {}
 wait = false
-dryrun = false
 datasize = nil
-deletevol = false
+deletestorage = false
 
 case command
 when "create"
-	opts.on("-a", "--ami AMIID", "Create with a specific AMI") do |ami|
-		params["ami"] = ami
-	end
-	opts.on("-d", "--data-vol SIZE", "Create with a new data volume of size SIZE") do |dsize|
+	opts.on("-d", "--data-vol SIZE", "Create with storage of size SIZE") do |dsize|
 		params["datasize"] = dsize
-	end
-	opts.on("-D", "--dry-run", "Don't actually create anything, just verify parameters") do
-		params["dryrun"] = true
 	end
 	opts.on("-N", "--no-dns", "Don't create DNS records for <name>.${DNSDomain}") do
 		params["nodns"] = true
 	end
-	opts.on("-w", "--wait", "Wait for DNS records to sync") do
+	opts.on("-w", "--wait", "Wait for db instance to be available") do
 		wait = true
-	end
-	opts.on("-e", "--ebs-optimized", "Create ebs-optimized instances") do
-		params["ebsoptimized"] = true
 	end
 	opts.on("-i", "--iops IOPS", "Specify provisioned iops, only used with io1 volumes") do |iops|
 		params["iops"] = iops
 	end
-	opts.on("-m", "--monitoring", "Enable ec2 monitoring (CPU, disk/network, status checks)") do
-		params["monitor"] = true
-	end
-	opts.on("-s", "--snapshot SNAP", "Create data volume from snapshot SNAP") do |snap|
+	opts.on("-s", "--snapshot SNAP", "Create db instance from snapshot SNAP") do |snap|
 		params["snapname"] = snap
 	end
-	opts.on("-v", "--volume VOL", "Attach the given data volume") do |vol|
-		params["volname"] = vol
+	opts.on("-S", "--storage-type TYPE", "Create with storage of type TYPE (gp2, io1, etc.)") do |stype|
+		params["storage_type"] = stype
 	end
-	opts.on("-V", "--volume-type TYPE", "Create a new volume of type TYPE (gp2, io1, etc.)") do |vtype|
-		params["volume_type"] = vtype
-	end
-	opts.on("-t", "--instance-type TYPE", "Use TYPE for instance type instead of template default") do |type|
+	opts.on("-t", "--db-instance-type TYPE", "Use TYPE for db instance type instead of template default") do |type|
 		params["type"] = type
 	end
-	opts.on("-r", "--root-size SIZE", "Increase root volume size to SIZE") do |size|
-		params["rootsize"] = size
-	end
-	opts.on("-z", "--availability-zone ZONE", "Create instance the given zone (letter only)") do |zone|
+	opts.on("-z", "--availability-zone ZONE", "Create db instance in the given zone (letter only)") do |zone|
 		params["az"] = zone
 	end
 	opts.on("-T", "--tag KEYVAL", "Add tag where KEYVAL is of the form key=value") do |keyval|
@@ -104,28 +79,13 @@ when "create"
 		value = keyval[(e+1)..-1]
 		params[key] = value
 	end
-when "updatedns", "stop", "start", "terminate", "snapshot", "rename"
+when "updatedns", "terminate", "snapshot"
 	opts.on("-w", "--wait", "Wait for DNS records to sync") do
 		wait = true
 	end
-	if command == "rename"
-		opts.on("-s", "--swap", "If <newname> already exists, this flag will swap names") do
-			params["swap"] = true
-		end
-	end
-	if command == "stop"
-		opts.on("-d", "--detach", "Detach the data volume after stopping") do
-			params["detach"] = true
-		end
-	end
-	if command == "start"
-		opts.on("-N", "--no-dns", "Don't create DNS records for <name>.${DNSDomain}") do
-			params["nodns"] = true
-		end
-	end
 	if command == "terminate"
-		opts.on("-d", "--delete-volume", "Delete the data volume") do
-			deletevol = true
+		opts.on("-d", "--delete-storage", "Delete db instance storage") do
+			deletestorage = true
 		end
 	end
 end
@@ -142,99 +102,33 @@ cfg.setparams(params)
 
 case command
 when "list"
-	type = ARGV.shift()
-	raise UsageException.new("Missing required argument") unless type
-	case type
-	when "instances"
-		format = "%-15s %-14s %-19s"
-		puts format % [ "Name", "State", "Id" ]
-		cfg.ec2.list_instances().each() do |i|
-			puts format % [ cfg.ec2.get_tag(i, "Name"), i.state.name(), i.id() ]
-		end
-	when "snapshots"
-		format = "%-30s %-14s %-24s"
-		puts format % [ "Name", "State", "Id" ]
-		cfg.ec2.list_snapshots().each() do |s|
-			puts format % [ cfg.ec2.get_tag(s, "Name"), s.state(), s.id() ]
-		end
-	when "volumes"
-		format = "%-21s %-14s %-21s"
-		puts format % [ "Name", "State", "Id" ]
-		cfg.ec2.list_volumes().each() do |v|
-			puts format % [ cfg.ec2.get_tag(v, "Name"), v.state(), v.id() ]
-		end
+	format = "%-15s %-15s %-14s %-19s"
+	puts format % [ "Name", "Identifier", "Instance class", "Allocated storage" ]
+	cfg.rds.list_db_instances().each() do |i|
+		puts format % [ cfg.rds.get_tag(i, "Name"), i.db_instance_identifier, i.db_instance_class, i.allocated_storage ]
 	end
 when "create"
-	name, key, template = ARGV.shift(3)
+	name, rootpass, template = ARGV.shift(3)
 	raise UsageException.new("Missing required argument") unless template
-	raise UsageException.new("Error: both snapshot and volume specified") if params["volname"] and ( params["snapname"] or params["datasize"] )
 	cfg.setparam("name", name)
-	cfg.setparam("key", key)
-	# one-liner to validate the key
-	cfg.ec2.resource.key_pair(key).key_name()
-	instance = cfg.ec2.create_instance(template, wait) { |status| puts status }
+	cfg.setparam("rootpassword", rootpass)
+	dbinstance = cfg.rds.create_db_instance(template, wait) { |status| puts status }
+	cfg.rds.dump_template()
 when "updatedns"
-	name = ARGV.shift()
-	raise UsageException.new("Missing required argument") unless name
-	cfg.setparam("name", name)
-	cfg.normalize_name_parameters()
-	instance = cfg.ec2.resolve_instance()
-	cfg.ec2.update_dns(instance, wait) { |status| puts status }
-when "reboot"
-	name = ARGV.shift()
-	raise UsageException.new("Missing <name> argument") unless name
-	cfg.setparam("name", name)
-	cfg.ec2.reboot_instance() { |status| puts status }
-when "start"
-	name = ARGV.shift()
-	raise UsageException.new("Missing <name> argument") unless name
-	cfg.setparam("name", name)
-	cfg.ec2.start_instance(wait) { |status| puts status }
-when "stop"
-	name = ARGV.shift()
-	raise UsageException.new("Missing <name> argument") unless name
-	cfg.setparam("name", name)
-	cfg.ec2.stop_instance(wait) { |status| puts status }
-when "template"
-	cfg.ec2.dump_template()
-when "rename"
-	name, newname = ARGV.shift(2)
-	raise UsageException.new("Missing <name> argument") unless newname
-	cfg.setparam("name", name)
-	cfg.setparam("newname", newname)
-	cfg.ec2.rename_instance(wait) { |status| puts status }
+  name = ARGV.shift()
+  raise UsageException.new("Missing required name argument") unless name
+  cfg.setparam("name", name)
+  cfg.rds.update_dns() { |status| puts status }
 when "snapshot"
 	name = ARGV.shift()
 	raise UsageException.new("Missing <name> argument") unless name
 	cfg.setparam("volname", name)
 	cfg.ec2.create_snapshot(wait) { |status| puts status }
-when "terminate"
+when "delete"
 	name = ARGV.shift()
 	raise UsageException.new("Missing <name> argument") unless name
 	cfg.setparam("name", name)
-	cfg.ec2.terminate_instance(wait, deletevol) { |status| puts status }
-when "genkeypair"
-	keyname = ARGV.shift()
-	raise UsageException.new("Missing <keyname> argument") unless keyname
-	outputdir = ARGV.shift()
-	if outputdir
-		raise UsageException.new("Not a directory: #{outputdir}") unless File::stat(outputdir).directory?
-		outputdir += "/" unless outputdir.end_with?("/")
-		keyfilename = "#{outputdir}#{keyname}.pem"
-	else
-		keyfilename = "#{keyname}.pem"
-	end
-	raise UsageException.new("File already exists: #{keyfilename}") if File::exist?(keyfilename)
-	puts "Creating keypair #{keyname} and storing in #{keyfilename}"
-	key = cfg.ec2.client.create_key_pair({key_name: keyname})
-	keyfile = File.open(keyfilename, "w")
-	keyfile.write(key.key_material())
-	keyfile.close()
-when "deletekeypair"
-	keyname = ARGV.shift()
-	raise UsageException.new("Missing <keyname> argument") unless keyname
-	cfg.ec2.delete_key_pair({key_name: keyname})
-	puts "Deleted"
+	cfg.rds.delete_db_instance(wait, deletestorage) { |status| puts status }
 end
 
 rescue UsageException => e

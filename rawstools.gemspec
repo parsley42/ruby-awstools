@@ -9,6 +9,6 @@ Gem::Specification.new do |s|
 	s.homepage = 'https://github.com/uva-its/ruby-awstools'
 	s.license = 'MIT'
 	s.files = Dir.glob("{bin,lib}/**/*") + %w(LICENSE README.md)
-	s.executables = ['ec2', 'cfn', 'r53', 'sdb']
+	s.executables = ['ec2', 'cfn', 'rds', 'r53', 'sdb']
 	s.add_runtime_dependency "aws-sdk", ">= 2.6.6"
 end

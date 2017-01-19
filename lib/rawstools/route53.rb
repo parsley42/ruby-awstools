@@ -60,7 +60,9 @@ module RAWSTools
 		end
 
 		def change_records(template)
-			@mgr.normalize_name_parameters()
+			# Note: call to normalize_name_parameters removed as it interfered
+			# with CNAME records that pointed somewhere else. The caller should
+			# use normalize_name_parameters if needed.
 			templatefile = nil
 			if File::exist?("route53/#{template}.json")
 				templatefile = "route53/#{template}.json"
@@ -74,6 +76,7 @@ module RAWSTools
 			@mgr.resolve_vars( { "child" => set }, "child" )
 			@mgr.symbol_keys(set)
 
+			# puts "Record set:\n#{set}"
 			resp = @client.change_resource_record_sets(set)
 			return resp
 		end

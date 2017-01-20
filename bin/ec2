@@ -58,10 +58,7 @@ when "create"
 	opts.on("-D", "--dry-run", "Don't actually create anything, just verify parameters") do
 		params["dryrun"] = true
 	end
-	opts.on("-N", "--no-dns", "Don't create DNS records for <name>.${DNSDomain}") do
-		params["nodns"] = true
-	end
-	opts.on("-w", "--wait", "Wait for DNS records to sync") do
+	opts.on("-w", "--wait", "Wait for all operations to complete before exiting") do
 		wait = true
 	end
 	opts.on("-e", "--ebs-optimized", "Create ebs-optimized instances") do

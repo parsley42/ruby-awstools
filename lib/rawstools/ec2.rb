@@ -150,10 +150,8 @@ EOF
 			@mgr.normalize_name_parameters()
 			volname = @mgr.getparam("volname")
 			vol = resolve_volume(true, [ "available", "in-use" ])
-			now = Time.new()
-			timestamp = now.strftime("%Y%m%d%H%M")
-			snapname = "#{volname}.#{timestamp}"
-			yield "Creating snapshot #{snapname}"
+			snapname = "#{volname}.#{@mgr.timestamp()}"
+			yield "#{@mgr.timestamp()} Creating snapshot #{snapname}"
 			snap = vol.create_snapshot()
 			tags = vol.tags
 			snaptags = []
@@ -164,12 +162,12 @@ EOF
 					snaptags << { "key" => tag.key, "value" => tag.value }
 				end
 			end
-			yield "Tagging snapshot"
+			yield "#{@mgr.timestamp()} Tagging snapshot"
 			snap.create_tags(tags: snaptags)
 			return unless wait
-			yield "Waiting for snapshot to complete"
+			yield "#{@mgr.timestamp()} Waiting for snapshot to complete"
 			snap.wait_until_completed()
-			yield "Completed"
+			yield "#{@mgr.timestamp()} Completed"
 		end
 
 		def create_volume(size, wait=true)
@@ -243,21 +241,21 @@ EOF
 			end
 
 			if volname
-				yield "Looking up volume: #{@mgr.getparam("volname")}"
+				yield "#{@mgr.timestamp()} Looking up volume: #{@mgr.getparam("volname")}"
 				volume=resolve_volume()
 			else
 				volname = @mgr.getparam("name")
 				@mgr.setparam("volname", volname)
 				volume=resolve_volume(false)
 				if volume
-					yield "Found existing volume: #{volname}"
+					yield "#{@mgr.timestamp()} Found existing volume: #{volname}"
 				end
 			end
 
 			if volume
 				vol_az = volume.availability_zone()
 				if availability_zone and availability_zone != vol_az
-					yield "Overriding provided availability zone: #{availability_zone} with zone from volume: #{volname}: #{vol_az}"
+					yield "#{@mgr.timestamp()} Overriding provided availability zone: #{availability_zone} with zone from volume: #{volname}: #{vol_az}"
 				end
 				az = vol_az[-1].upcase()
 				@mgr.setparam("az", az)
@@ -265,7 +263,7 @@ EOF
 			else
 				az = @mgr["AvailabilityZones"].sample().upcase()
 				availability_zone = @mgr["Region"] + az.downcase()
-				yield "Picked random availability zone: #{availability_zone}"
+				yield "#{@mgr.timestamp()} Picked random availability zone: #{availability_zone}"
 				@mgr.setparam("az", az)
 				@mgr.setparam("availability_zone", availability_zone)
 			end
@@ -317,19 +315,19 @@ EOF
 					end
 				end
 			end
-			yield "Dry run, creating: #{ispec}" if dry_run
+			yield "#{@mgr.timestamp()} Dry run, creating: #{ispec}" if dry_run
 
 			instances = @resource.create_instances(ispec)
 			instance = nil
 			unless dry_run
 				instance = instances.first()
-				yield "Created instance #{name} (id: #{instance.id()}), waiting for it to enter state running ..."
+				yield "#{@mgr.timestamp()} Created instance #{name} (id: #{instance.id()}), waiting for it to enter state running ..."
 				instance.wait_until_running()
 				@client.wait_until(:instance_running, instance_ids: [ instance.id() ])
-				yield "Running"
+				yield "#{@mgr.timestamp()} Running"
 
 				if volume
-					yield "Attaching data volume: #{volname}"
+					yield "#{@mgr.timestamp()} Attaching data volume: #{volname}"
 					instance.attach_volume({
 						volume_id: volume.id(),
 						device: "/dev/sdf",
@@ -355,16 +353,16 @@ EOF
 			cfgtags["Domain"] = @mgr["DNSDomain"]
 			cfgtags.add(tags) if tags
 
-			yield "Tagging instance #{name}"
+			yield "#{@mgr.timestamp()} Tagging instance #{name}"
 			instance.create_tags(tags: cfgtags.ltags())
 
 			cfgtags["InstanceName"] = @mgr.getparam("name")
 			instance.block_device_mappings().each() do |b|
 				if b.device_name.end_with?("a") or b.device_name.end_with?("a1")
-					yield "Tagging root volume"
+					yield "#{@mgr.timestamp()} Tagging root volume"
 					cfgtags["Name"] = "#{name}-root"
 				else
-					yield "Tagging data volume"
+					yield "#{@mgr.timestamp()} Tagging data volume"
 					cfgtags["Name"] = name
 				end
 				@resource.volume(b.ebs.volume_id()).create_tags(tags: cfgtags.ltags())
@@ -376,10 +374,10 @@ EOF
 			instance = resolve_instance(false, [ "running" ])
 			name = @mgr.getparam("name")
 			if instance
-				yield "Rebooting #{name}"
+				yield "#{@mgr.timestamp()} Rebooting #{name}"
 				instance.reboot()
 			else
-				yield "No running instance found with Name: #{name}"
+				yield "#{@mgr.timestamp()} No running instance found with Name: #{name}"
 			end
 		end
 
@@ -392,10 +390,10 @@ EOF
 				volume = resolve_volume(false)
 				if volume
 					if volume.availability_zone() != @resource.subnet(instance.subnet_id()).availability_zone()
-						yield "Found existing volume in wrong availability zone, ignoring"
+						yield "#{@mgr.timestamp()} Found existing volume in wrong availability zone, ignoring"
 						volume = nil
 					else
-						yield "Attaching existing data volume: #{name}"
+						yield "#{@mgr.timestamp()} Attaching existing data volume: #{name}"
 						instance.attach_volume({
 							volume_id: volume.id(),
 							device: "/dev/sdf",
@@ -403,17 +401,17 @@ EOF
 						@client.wait_until(:volume_in_use, volume_ids: [ volume.id() ])
 					end
 				end
-				yield "Starting #{name}"
+				yield "#{@mgr.timestamp()} Starting #{name}"
 				instance.start()
-				yield "Started instance #{name} (id: #{instance.id()}), waiting for it to enter state running ..."
+				yield "#{@mgr.timestamp()} Started instance #{name} (id: #{instance.id()}), waiting for it to enter state running ..."
 				instance.wait_until_running()
-				yield "Running"
+				yield "#{@mgr.timestamp()} Running"
 				# Need to refresh
 				instance = @resource.instance(instance.id())
 
 				update_dns(wait, instance) { |s| yield s }
 			else
-				yield "No stopped instance found with Name: #{name}"
+				yield "#{@mgr.timestamp()} No stopped instance found with Name: #{name}"
 			end
 		end
 
@@ -422,18 +420,18 @@ EOF
 			instance = resolve_instance(false, [ "running" ])
 			name, detach = @mgr.getparams("name", "detach")
 			if instance
-				yield "Stopping #{name}"
+				yield "#{@mgr.timestamp()} Stopping #{name}"
 				instance.stop()
-				remove_dns(instance, wait) { |s| yield s }
+				remove_dns(wait) { |s| yield s }
 				return unless wait or detach
-				yield "Waiting for instance to stop..."
+				yield "#{@mgr.timestamp()} Waiting for instance to stop..."
 				instance.wait_until_stopped()
-				yield "Stopped"
+				yield "#{@mgr.timestamp()} Stopped"
 				if detach
 					detach_volume() { |s| yield s }
 				end
 			else
-				yield "No running instance found with Name: #{name}"
+				yield "#{@mgr.timestamp()} No running instance found with Name: #{name}"
 			end
 		end
 
@@ -449,7 +447,7 @@ EOF
 				end
 			end
 			return unless device
-			yield "Detaching volume #{volume.id} from instance #{instance.id}"
+			yield "#{@mgr.timestamp()} Detaching volume #{volume.id} from instance #{instance.id}"
 			volume.detach_from_instance({
 				instance_id: instance.id,
 				device: device,
@@ -461,17 +459,17 @@ EOF
 			instance = resolve_instance(false)
 			name = @mgr.getparam("name")
 			if instance
-				yield "Terminating #{name}"
+				yield "#{@mgr.timestamp()} Terminating #{name}"
 				instance.terminate()
-				remove_dns(instance, wait) { |s| yield s }
+				remove_dns(wait) { |s| yield s }
 				return unless wait or deletevol
-				yield "Waiting for instance to terminate..."
+				yield "#{@mgr.timestamp()} Waiting for instance to terminate..."
 				instance.wait_until_terminated()
-				yield "Terminated"
+				yield "#{@mgr.timestamp()} Terminated"
 				@mgr.setparam("volname", name)
 				delete_volume(wait) { |s| yield s } if deletevol
 			else
-				yield "No running instance found with Name: #{name}"
+				yield "#{@mgr.timestamp()} No running instance found with Name: #{name}"
 			end
 		end
 
@@ -480,20 +478,20 @@ EOF
 			volname = @mgr.getparam("volname")
 			volume = resolve_volume(false)
 			if volume
-				yield "Deleting volume: #{volname}"
+				yield "#{@mgr.timestamp()} Deleting volume: #{volname}"
 				volume.delete()
 				return unless wait
-				yield "Waiting for volume to finished deleting..."
+				yield "#{@mgr.timestamp()} Waiting for volume to finished deleting..."
 				@client.wait_until(:volume_deleted, volume_ids: [ volume.id() ])
-				yield "Deleted"
+				yield "#{@mgr.timestamp()} Deleted"
 			else
-				yield "Not deleting volume - no volume found with Name: #{volname} and Status: available"
+				yield "#{@mgr.timestamp()} Not deleting volume - no volume found with Name: #{volname} and Status: available"
 			end
 		end
 
-		def remove_dns(instance, wait=false)
-			name = get_tag(instance, "Name")
-			@mgr.setparam("name", name)
+		def remove_dns(wait=false)
+			name, fqdn = @mgr.getparams("name", "fqdn")
+			instance = resolve_instance(true)
 
 			pub_ip = instance.public_ip_address
 			priv_ip = instance.private_ip_address
@@ -503,17 +501,17 @@ EOF
 
 			change_ids = []
 			if pub_ip and pubzone
-				yield "Removing public DNS record #{name} -> #{pub_ip}"
+				yield "#{@mgr.timestamp()} Removing public DNS record #{fqdn} -> #{pub_ip}"
 				change_ids << @mgr.route53.delete(pubzone)
 			end
 			if priv_ip and privzone
-				yield "Removing private DNS record #{name} -> #{priv_ip}"
+				yield "#{@mgr.timestamp()} Removing private DNS record #{fqdn} -> #{priv_ip}"
 				change_ids << @mgr.route53.delete(privzone)
 			end
 			return unless wait
-			yield "Waiting for zones to synchronize..."
+			yield "#{@mgr.timestamp()} Waiting for zones to synchronize..."
 			change_ids.each() { |id| @mgr.route53.wait_sync(id) }
-			yield "Synchronized"
+			yield "#{@mgr.timestamp()} Synchronized"
 		end
 
 		def update_dns(wait=false, instance=nil)
@@ -532,21 +530,21 @@ EOF
 				if pub_ip and pubzone
 					@mgr.setparam("zone_id", pubzone)
 					@mgr.setparam("ipaddr", pub_ip)
-					yield "Adding public DNS record #{name} -> #{pub_ip}"
+					yield "#{@mgr.timestamp()} Adding public DNS record #{name} -> #{pub_ip}"
 					change_ids << @mgr.route53.change_records("arec")
 				end
 				if priv_ip and privzone
 					@mgr.setparam("zone_id", privzone)
 					@mgr.setparam("ipaddr", priv_ip)
-					yield "Adding private DNS record #{name} -> #{priv_ip}"
+					yield "#{@mgr.timestamp()} Adding private DNS record #{name} -> #{priv_ip}"
 					change_ids << @mgr.route53.change_records("arec")
 				end
 				return unless wait
-				yield "Waiting for zones to synchronize..."
+				yield "#{@mgr.timestamp()} Waiting for zones to synchronize..."
 				change_ids.each() { |id| @mgr.route53.wait_sync(id) }
-				yield "Synchronized"
+				yield "#{@mgr.timestamp()} Synchronized"
 			else
-				yield "Not updating DNS for #{name}"
+				yield "#{@mgr.timestamp()} Not updating DNS for #{name}"
 			end
 		end
 	end

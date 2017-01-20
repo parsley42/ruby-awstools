@@ -15,7 +15,8 @@ Usage: rds <command> (options) (args) - manage a CloudFormation stack
   template - dump the default template for creating db instances
   delete <name> - delete a db instance
   updatedns <name> - refresh DNS CNAME for the db instance
-  list - list db instances for the current project
+  list instances - list db instances for the current project
+  list snapshots (name) - list db snapshots for the current project, optionally for a single db instance
  Options are:
 EOF
 opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
@@ -39,20 +40,17 @@ params = {}
 tags = {}
 wait = false
 datasize = nil
-deletestorage = false
+unsafe = false
 
 case command
 when "create"
-	opts.on("-d", "--data-vol SIZE", "Create with storage of size SIZE") do |dsize|
+	opts.on("-d", "--data-size SIZE", "Create with allocated storage of size SIZE") do |dsize|
 		params["datasize"] = dsize
 	end
-	opts.on("-N", "--no-dns", "Don't create DNS records for <name>.${DNSDomain}") do
-		params["nodns"] = true
-	end
-	opts.on("-w", "--wait", "Wait for db instance to be available") do
+	opts.on("-w", "--wait", "Wait for all operations to complete before exiting") do
 		wait = true
 	end
-	opts.on("-i", "--iops IOPS", "Specify provisioned iops, only used with io1 volumes") do |iops|
+	opts.on("-i", "--iops IOPS", "Specify provisioned iops, only used with io1 storage") do |iops|
 		params["iops"] = iops
 	end
 	opts.on("-s", "--snapshot SNAP", "Create db instance from snapshot SNAP") do |snap|
@@ -79,13 +77,13 @@ when "create"
 		value = keyval[(e+1)..-1]
 		params[key] = value
 	end
-when "updatedns", "terminate", "snapshot"
-	opts.on("-w", "--wait", "Wait for DNS records to sync") do
+when "updatedns", "delete"
+	opts.on("-w", "--wait", "Wait for all operations to complete before exiting") do
 		wait = true
 	end
-	if command == "terminate"
-		opts.on("-d", "--delete-storage", "Delete db instance storage") do
-			deletestorage = true
+	if command == "delete"
+		opts.on("-u", "--unsafe", "Don't create a final snapshot") do
+			unsafe = true
 		end
 	end
 end
@@ -102,33 +100,40 @@ cfg.setparams(params)
 
 case command
 when "list"
-	format = "%-15s %-15s %-14s %-19s"
-	puts format % [ "Name", "Identifier", "Instance class", "Allocated storage" ]
-	cfg.rds.list_db_instances().each() do |i|
-		puts format % [ cfg.rds.get_tag(i, "Name"), i.db_instance_identifier, i.db_instance_class, i.allocated_storage ]
-	end
+  type = ARGV.shift()
+  raise "Missing <instances|snapshots> in list command" unless type
+  case type
+  when "instances"
+  	format = "%-15s %-15s %-14s %-19s"
+  	puts format % [ "Name", "Identifier", "Instance class", "Allocated storage" ]
+  	cfg.rds.list_db_instances().each() do |i|
+  		puts format % [ cfg.rds.get_tag(i, "Name"), i.db_instance_identifier, i.db_instance_class, i.allocated_storage ]
+  	end
+  when "snapshots"
+    format = "%-15s %-35s %-14s"
+    puts format % [ "Name", "Identifier", "Storage Size" ]
+    cfg.rds.list_snapshots(ARGV.shift()).each do |s|
+      puts format % [ cfg.rds.get_tag(s, "Name"), s.db_snapshot_identifier, s.allocated_storage ]
+    end
+  end
 when "create"
 	name, rootpass, template = ARGV.shift(3)
 	raise UsageException.new("Missing required argument") unless template
-	cfg.setparam("name", name)
-	cfg.setparam("rootpassword", rootpass)
-	dbinstance = cfg.rds.create_db_instance(template, wait) { |status| puts status }
+	dbinstance = cfg.rds.create_instance(name, rootpass, template, wait) { |status| puts status }
+when "template"
 	cfg.rds.dump_template()
 when "updatedns"
   name = ARGV.shift()
   raise UsageException.new("Missing required name argument") unless name
-  cfg.setparam("name", name)
-  cfg.rds.update_dns() { |status| puts status }
+  cfg.rds.update_dns(name, wait) { |status| puts status }
 when "snapshot"
 	name = ARGV.shift()
 	raise UsageException.new("Missing <name> argument") unless name
-	cfg.setparam("volname", name)
-	cfg.ec2.create_snapshot(wait) { |status| puts status }
+	cfg.rds.create_snapshot(name, wait) { |status| puts status }
 when "delete"
 	name = ARGV.shift()
 	raise UsageException.new("Missing <name> argument") unless name
-	cfg.setparam("name", name)
-	cfg.rds.delete_db_instance(wait, deletestorage) { |status| puts status }
+	cfg.rds.delete_instance(name, wait, unsafe) { |status| puts status }
 end
 
 rescue UsageException => e

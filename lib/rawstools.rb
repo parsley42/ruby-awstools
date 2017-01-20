@@ -116,7 +116,11 @@ module RAWSTools
 				end
 			end
 			@config["SubnetTypes"] = subnet_types
+		end
 
+		def timestamp()
+			now = Time.new()
+			return now.strftime("%Y%m%d%H%M")
 		end
 
 		def normalize_name_parameters()
@@ -147,12 +151,10 @@ module RAWSTools
 				case name
 				when "name"
 					setparam("fqdn", fqdn)
+					dbname = norm.gsub(".","-")
+					setparam("dbname", dbname)
 				when "cname"
 					setparam("cfqdn", fqdn)
-				when "volname"
-					setparam("vfqdn", fqdn)
-				when "snapname"
-					setparam("sfqdn", fqdn)
 				end
 			end
 			az = getparam("az")

@@ -132,17 +132,24 @@ EOF
 			return s.first()
 		end
 
-		def list_snapshots()
+		def list_snapshots(name=nil)
 			f = [
 				{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
 			]
+			if name
+				@mgr.setparam("name", name)
+				@mgr.normalize_name_parameters()
+				f << { name: "tag:VolumeName", values: [ @mgr.getparam("name") ] }
+			end
 			snapshots = @resource.snapshots(filters: f)
 			return snapshots
 		end
 
-		def create_snapshot(wait=false)
+		def create_snapshot(name, wait=false)
+			@mgr.setparam("name", name)
 			@mgr.normalize_name_parameters()
 			volname = @mgr.getparam("volname")
+
 			vol = resolve_volume(true, [ "available", "in-use" ])
 			snapname = "#{volname}.#{@mgr.timestamp()}"
 			yield "#{@mgr.timestamp()} Creating snapshot #{snapname}"
@@ -152,6 +159,7 @@ EOF
 			tags.each() do |tag|
 				if tag.key == "Name"
 					snaptags << { "key" => tag.key, "value" => snapname }
+					snaptags << { "key" => "VolumeName", "value" => volname }
 				elsif not tag.key.start_with?("aws:")
 					snaptags << { "key" => tag.key, "value" => tag.value }
 				end
@@ -215,7 +223,9 @@ EOF
 			@client.wait_until(:volume_in_use, volume_ids: [ volume ])
 		end
 
-		def create_instance(template, wait=true)
+		def create_instance(name, key, template, wait=true)
+			@mgr.setparam("name", name)
+			@mgr.setparam("key", key)
 			@mgr.normalize_name_parameters()
 			name, volname, snapname, datasize, availability_zone, dryrun, nodns = @mgr.getparams("name", "volname", "snapname", "datasize", "availability_zone", "dryrun", "nodns")
 			raise "Instance #{name} already exists" if resolve_instance(false)
@@ -334,7 +344,7 @@ EOF
 				# Need to refresh to get applied tags
 				tag_instance(instance, template[:tags]) { |s| yield s }
 				instance = @resource.instance(instance.id())
-				update_dns(wait, instance) { |s| yield s }
+				update_dns(nil, wait, instance) { |s| yield s }
 			end
 			return instance
 		end
@@ -363,7 +373,8 @@ EOF
 			end
 		end
 
-		def reboot_instance(wait=true)
+		def reboot_instance(name, wait=true)
+			@mgr.setparam("name", name)
 			@mgr.normalize_name_parameters()
 			instance = resolve_instance(false, [ "running" ])
 			name = @mgr.getparam("name")
@@ -375,7 +386,8 @@ EOF
 			end
 		end
 
-		def start_instance(wait=true)
+		def start_instance(name, wait=true)
+			@mgr.setparam("name", name)
 			@mgr.normalize_name_parameters()
 			instance = resolve_instance(false, [ "stopped" ])
 			name, nodns = @mgr.getparams("name", "nodns")
@@ -403,13 +415,14 @@ EOF
 				# Need to refresh
 				instance = @resource.instance(instance.id())
 
-				update_dns(wait, instance) { |s| yield s }
+				update_dns(nil, wait, instance) { |s| yield s }
 			else
 				yield "#{@mgr.timestamp()} No stopped instance found with Name: #{name}"
 			end
 		end
 
-		def stop_instance(wait=true)
+		def stop_instance(name, wait=true)
+			@mgr.setparam("name", name)
 			@mgr.normalize_name_parameters()
 			instance = resolve_instance(false, [ "running" ])
 			name, detach = @mgr.getparams("name", "detach")
@@ -448,7 +461,8 @@ EOF
 			})
 		end
 
-		def terminate_instance(wait=true, deletevol=false)
+		def terminate_instance(name, wait=true, deletevol=false)
+			@mgr.setparam("name", name)
 			@mgr.normalize_name_parameters()
 			instance = resolve_instance(false)
 			name = @mgr.getparam("name")
@@ -461,14 +475,17 @@ EOF
 				instance.wait_until_terminated()
 				yield "#{@mgr.timestamp()} Terminated"
 				@mgr.setparam("volname", name)
-				delete_volume(wait) { |s| yield s } if deletevol
+				delete_volume(nil, wait) { |s| yield s } if deletevol
 			else
 				yield "#{@mgr.timestamp()} No running instance found with Name: #{name}"
 			end
 		end
 
-		def delete_volume(wait=true)
-			@mgr.normalize_name_parameters()
+		def delete_volume(volname=nil, wait=true)
+			if name
+				@mgr.setparam("volname", volname)
+				@mgr.normalize_name_parameters()
+			end
 			volname = @mgr.getparam("volname")
 			volume = resolve_volume(false)
 			if volume
@@ -508,8 +525,11 @@ EOF
 			yield "#{@mgr.timestamp()} Synchronized"
 		end
 
-		def update_dns(wait=false, instance=nil)
-			@mgr.normalize_name_parameters()
+		def update_dns(name=nil, wait=false, instance=nil)
+			if name
+				@mgr.setparam("name", name)
+				@mgr.normalize_name_parameters()
+			end
 			instance = resolve_instance(true, [ "running" ]) unless instance
 
 			name, nodns = @mgr.getparams("name", "nodns")

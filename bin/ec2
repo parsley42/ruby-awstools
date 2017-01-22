@@ -20,7 +20,8 @@ Usage: ec2 <command> (options) (args) - manage a CloudFormation stack
   snapshot <name> - take a snapshot of the data volume with name <name>
   template - dump the default template for creating instances
   terminate <name> - terminate an instance
-  list <instances|snapshots|volumes> - list instances/snapshots/volumes for the current project
+  list <instances|volumes> - list instances/volumes for the current project
+  list <snapshots> (name) - list snapshots for the current project, optionally for a given name
  Options are:
 EOF
 opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
@@ -145,7 +146,7 @@ when "list"
 	when "snapshots"
 		format = "%-30s %-14s %-24s"
 		puts format % [ "Name", "State", "Id" ]
-		cfg.ec2.list_snapshots().each() do |s|
+		cfg.ec2.list_snapshots(ARGV.shift()).each() do |s|
 			puts format % [ cfg.ec2.get_tag(s, "Name"), s.state(), s.id() ]
 		end
 	when "volumes"
@@ -159,43 +160,35 @@ when "create"
 	name, key, template = ARGV.shift(3)
 	raise UsageException.new("Missing required argument") unless template
 	raise UsageException.new("Error: both snapshot and volume specified") if params["volname"] and ( params["snapname"] or params["datasize"] )
-	cfg.setparam("name", name)
-	cfg.setparam("key", key)
 	# one-liner to validate the key
 	cfg.ec2.resource.key_pair(key).key_name()
-	instance = cfg.ec2.create_instance(template, wait) { |status| puts status }
+	instance = cfg.ec2.create_instance(name, key, template, wait) { |status| puts status }
 when "updatedns"
 	name = ARGV.shift()
 	raise UsageException.new("Missing required argument") unless name
-	cfg.setparam("name", name)
-	cfg.ec2.update_dns(wait) { |status| puts status }
+	cfg.ec2.update_dns(name, wait) { |status| puts status }
 when "reboot"
 	name = ARGV.shift()
 	raise UsageException.new("Missing <name> argument") unless name
-	cfg.setparam("name", name)
-	cfg.ec2.reboot_instance() { |status| puts status }
+	cfg.ec2.reboot_instance(name) { |status| puts status }
 when "start"
 	name = ARGV.shift()
 	raise UsageException.new("Missing <name> argument") unless name
-	cfg.setparam("name", name)
-	cfg.ec2.start_instance(wait) { |status| puts status }
+	cfg.ec2.start_instance(name, wait) { |status| puts status }
 when "stop"
 	name = ARGV.shift()
 	raise UsageException.new("Missing <name> argument") unless name
-	cfg.setparam("name", name)
-	cfg.ec2.stop_instance(wait) { |status| puts status }
+	cfg.ec2.stop_instance(name, wait) { |status| puts status }
 when "template"
 	cfg.ec2.dump_template()
 when "snapshot"
 	name = ARGV.shift()
 	raise UsageException.new("Missing <name> argument") unless name
-	cfg.setparam("volname", name)
-	cfg.ec2.create_snapshot(wait) { |status| puts status }
+	cfg.ec2.create_snapshot(name, wait) { |status| puts status }
 when "terminate"
 	name = ARGV.shift()
 	raise UsageException.new("Missing <name> argument") unless name
-	cfg.setparam("name", name)
-	cfg.ec2.terminate_instance(wait, deletevol) { |status| puts status }
+	cfg.ec2.terminate_instance(name, wait, deletevol) { |status| puts status }
 when "genkeypair"
 	keyname = ARGV.shift()
 	raise UsageException.new("Missing <keyname> argument") unless keyname

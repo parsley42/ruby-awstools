@@ -128,7 +128,7 @@ module RAWSTools
 			base = @config["DNSBase"]
 			# NOTE: skipping 'snapname' for now, since they will likely
 			# be of the form <name>-<timestamp>
-			["name", "newname", "cname", "volname"].each() do |name|
+			["name", "cname", "volname"].each() do |name|
 				norm = getparam(name)
 				next unless norm
 				if norm.end_with?(".")
@@ -153,6 +153,8 @@ module RAWSTools
 					setparam("fqdn", fqdn)
 					dbname = norm.gsub(".","-")
 					setparam("dbname", dbname)
+					ansible_name = norm.gsub(".", "_")
+					setparam("ansible_name", ansible_name)
 				when "cname"
 					setparam("cfqdn", fqdn)
 				end

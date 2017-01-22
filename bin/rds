@@ -53,7 +53,7 @@ when "create"
 	opts.on("-i", "--iops IOPS", "Specify provisioned iops, only used with io1 storage") do |iops|
 		params["iops"] = iops
 	end
-	opts.on("-s", "--snapshot SNAP", "Create db instance from snapshot SNAP") do |snap|
+	opts.on("-s", "--snapshot SNAP", "Create db instance from snapshot with identifier SNAP") do |snap|
 		params["snapname"] = snap
 	end
 	opts.on("-S", "--storage-type TYPE", "Create with storage of type TYPE (gp2, io1, etc.)") do |stype|
@@ -110,10 +110,10 @@ when "list"
   		puts format % [ cfg.rds.get_tag(i, "Name"), i.db_instance_identifier, i.db_instance_class, i.allocated_storage ]
   	end
   when "snapshots"
-    format = "%-15s %-35s %-14s"
-    puts format % [ "Name", "Identifier", "Storage Size" ]
+    format = "%-15s %-35s %-24s %-14s"
+    puts format % [ "Name", "Identifier", "Created", "Storage Size" ]
     cfg.rds.list_snapshots(ARGV.shift()).each do |s|
-      puts format % [ cfg.rds.get_tag(s, "Name"), s.db_snapshot_identifier, s.allocated_storage ]
+      puts format % [ cfg.rds.get_tag(s, "Name"), s.db_snapshot_identifier, s.snapshot_create_time ,s.allocated_storage ]
     end
   end
 when "create"

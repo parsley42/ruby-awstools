@@ -20,6 +20,18 @@ module RAWSTools
   # monitoring_interval: 1
   # monitoring_role_arn: (requires override)
 EOF
+
+	RDS_Restore_Template = <<EOF
+  db_instance_identifier: ${@dbname} # required
+  db_instance_class: ${@type|db.t2.micro}
+  availability_zone: ${availability_zone|none}
+  publicly_accessible: false
+  auto_minor_version_upgrade: true
+  engine: (requires override)
+  iops: ${@iops|0}
+  storage_type: ${@storage_type|gp2}
+  copy_tags_to_snapshot: true
+EOF
 	class RDS
 		attr_reader :client, :resource
 
@@ -129,8 +141,50 @@ EOF
 			@mgr.resolve_vars( { "child" => template }, "child" )
 			@mgr.symbol_keys(template)
 
+			# TODO: Check for snapshot, use RDS_Restore_Template if so,
+			# and delete :db_subnet_group_name, :monitoring_interval,
+			# :monitoring_role_arn
+			snapname = @mgr.getparam("snapname")
+			snapshot = nil
+			latest = nil
+			if snapname
+				begin
+					@resource.db_snapshots({ db_snapshot_identifier: snapname }).first do |s|
+						if get_tag(s, "Domain") == @mgr["DNSDomain"]
+							snapshot = s
+						end
+					end
+				rescue
+				end
+			end
+			unless snapshot
+				@resource.db_snapshots({ db_instance_identifier: dbname }).each do |s|
+					if get_tag(s, "Domain") == @mgr["DNSDomain"]
+						unless snapshot
+							snapshot = s
+							latest = s.snapshot_create_time
+						else
+							snaptime = s.snapshot_create_time
+							if snaptime > latest
+								snapshot = s
+								latest = snaptime
+							end
+						end
+					end
+				end
+				if snapshot
+					yield "#{@mgr.timestamp()} Found snapshot(s) for #{name}, restoring from #{snapshot.db_snapshot_identifier}"
+				end
+			else
+				yield "#{@mgr.timestamp()} Creating #{name} from provided snapshot #{snapname}"
+			end
+
 			# Load the default template
-			apibase = @mgr.expand_strings(RDS_Default_Template)
+			if snapshot
+				apibase = @mgr.expand_strings(RDS_Restore_Template)
+			else
+				apibase = @mgr.expand_strings(RDS_Default_Template)
+			end
 			dbspec = YAML::load(apibase)
 			@mgr.resolve_vars( { "child" => dbspec }, "child" )
 			@mgr.symbol_keys(dbspec)
@@ -145,10 +199,26 @@ EOF
 			cfgtags.add(tags) if tags
 			dbspec[:tags] = cfgtags.ltags()
 
-#			puts "Options hash:\n#{dbspec}"
-			dbinstance = @resource.create_db_instance(dbspec)
-			yield "#{@mgr.timestamp()} Created db instance #{dbname} (id: #{dbinstance.id()}), waiting for it to become available"
+			# puts "Options hash:\n#{dbspec}"
+			modify_params = {}
+			if snapshot
+				[ :vpc_security_group_ids, :monitoring_interval, :monitoring_role_arn ].each do |k|
+					modify_params[k] = dbspec[k]
+					dbspec.delete(k)
+				end
+				dbinstance = snapshot.restore(dbspec)
+			else
+				dbinstance = @resource.create_db_instance(dbspec)
+			end
+			yield "#{@mgr.timestamp()} Created db instance #{name} (id: #{dbinstance.id()}), waiting for it to become available"
 			@client.wait_until(:db_instance_available, db_instance_identifier: dbname)
+			if snapshot
+				yield "#{@mgr.timestamp()} Modifying restored database with rootpassword and other template values"
+				modify_params[:master_user_password] = @mgr.getparam("rootpassword")
+				modify_params[:apply_immediately] = true
+				dbinstance = dbinstance.modify(modify_params)
+				@client.wait_until(:db_instance_available, db_instance_identifier: dbname)
+			end
 			yield "#{@mgr.timestamp()} #{dbname} is online"
 
 			# Get updated dbinstance with an endpoint

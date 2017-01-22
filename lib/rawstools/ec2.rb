@@ -68,7 +68,6 @@ EOF
 					values: states,
 				}
 			]
-			f << @mgr["Filter"] if @mgr["Filter"]
 			instances = @resource.instances(filters: f)
 			count = instances.count()
 			raise "Multiple matches for Name: #{instance}" if count > 1
@@ -84,7 +83,6 @@ EOF
 				{ name: "instance-state-name", values: states },
 				{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
 			]
-			f << @mgr["Filter"] if @mgr["Filter"]
 			instances = @resource.instances(filters: f)
 			return instances
 		end
@@ -102,7 +100,6 @@ EOF
 				{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
 				{ name: "status", values: status },
 			]
-			f << @mgr["Filter"] if @mgr["Filter"]
 			v = @resource.volumes(filters: f)
 			count = v.count()
 			raise "Multiple matches for Name: #{vname}" if count > 1
@@ -115,7 +112,6 @@ EOF
 			f = [
 				{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
 			]
-			f << @mgr["Filter"] if @mgr["Filter"]
 			volumes = @resource.volumes(filters: f)
 			return volumes
 		end
@@ -128,7 +124,6 @@ EOF
 				{ name: "tag:Name", values: [ @mgr.getparam("snapname") ] },
 				{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
 			]
-			f << @mgr["Filter"] if @mgr["Filter"]
 			s = @resource.snapshots(filters: f)
 			count = s.count()
 			raise "Multiple matches for Name: #{sname}" if count > 1
@@ -141,7 +136,6 @@ EOF
 			f = [
 				{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
 			]
-			f << @mgr["Filter"] if @mgr["Filter"]
 			snapshots = @resource.snapshots(filters: f)
 			return snapshots
 		end

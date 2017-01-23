@@ -56,8 +56,11 @@ api_template:
 EOF
 		end
 
-		def resolve_instance(must_exist=true, states=nil)
-			@mgr.normalize_name_parameters()
+		def resolve_instance(name=nil, states=nil)
+			if name
+				@mgr.setparam("name", name)
+				@mgr.normalize_name_parameters()
+			end
 			name = @mgr.getparam("name")
 			states = [ "pending", "running", "shutting-down", "stopping", "stopped" ] unless states
 			f = [
@@ -70,11 +73,9 @@ EOF
 			]
 			instances = @resource.instances(filters: f)
 			count = instances.count()
-			raise "Multiple matches for Name: #{instance}" if count > 1
-			raise "No instance found with Name: #{name} in any of the states: #{states}" if must_exist and count != 1
-			return nil if count == 0
-			instance = instances.first()
-			return instance
+			return nil, "Multiple matches for Name: #{instance}" if count > 1
+			return nil, "No instance found with Name: #{name} in any of the states: #{states}" if count != 1
+			return instances.first(), nil
 		end
 
 		def list_instances(states=nil)
@@ -93,19 +94,86 @@ EOF
 			end
 		end
 
-		def resolve_volume(must_exist=true, status=[ "available" ] )
-			vname = @mgr.getparam("volname")
+		def resolve_volume(volname=nil, status=[ "available" ] )
+			if volname
+				@mgr.setparam("volname", volname)
+				@mgr.normalize_name_parameters()
+			end
+			volname = @mgr.getparam("volname")
 			f = [
-				{ name: "tag:Name", values: [ vname ] },
+				{ name: "tag:Name", values: [ volname ] },
 				{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
 				{ name: "status", values: status },
 			]
 			v = @resource.volumes(filters: f)
 			count = v.count()
-			raise "Multiple matches for Name: #{vname}" if count > 1
-			raise "No volume found with Name: #{vname} and Status: #{status}" if must_exist and count != 1
-			return nil if count == 0
-			return v.first()
+			return nil, "Multiple matches for volume: #{volname}" if count > 1
+			return nil, "No volume found with Name: #{volname} and Status: #{status}" if count != 1
+			return v.first(), nil
+		end
+
+		def get_instance_data_volume(i)
+			bd = i.block_device_mappings()
+			rd = i.root_device_name
+			name = get_tag(i, "Name")
+			bd.each() do |b|
+				next if b.device_name == rd
+				v = @resource.volume(b.ebs.volume_id)
+				if get_tag(v, "Name") == name
+					return v, nil
+				end
+			end
+			return nil, "Couldn't locate an attached volume with Name: #{name}"
+		end
+
+		def get_data_volume(name=nil)
+			if name
+				@mgr.setparam("name", name)
+				@mgr.normalize_name_parameters()
+			end
+			name = @mgr.getparam("name")
+			i = resolve_instance()
+			return nil, "Instance #{name} not found" unless i
+			return get_instance_data_volume(i)
+		end
+
+		def get_instance_root_volume(i)
+			rd = i.root_device_name
+			i.block_device_mappings.each() do |b|
+				return @resource.volume(b.ebs.volume_id), nil if b.device_name == rd
+			end
+		end
+
+		def get_root_volume(name=nil)
+			if name
+				@mgr.setparam("name", name)
+				@mgr.normalize_name_parameters()
+			end
+			name = @mgr.getparam("name")
+			i = resolve_instance()
+			return nil, "Instance #{name} not found" unless i
+			return get_instance_root_volume(i)
+		end
+
+		def delete_volume(volname=nil, wait=true)
+			if volname
+				@mgr.setparam("volname", volname)
+				@mgr.normalize_name_parameters()
+			end
+			volname = @mgr.getparam("volname")
+			volume, err = resolve_volume()
+			if volume
+				yield "#{@mgr.timestamp()} Deleting volume: #{volname}"
+				volume.delete()
+				return true unless wait
+				yield "#{@mgr.timestamp()} Waiting for volume to finished deleting..."
+				@client.wait_until(:volume_deleted, volume_ids: [ volume.id() ])
+				yield "#{@mgr.timestamp()} Deleted"
+				return true
+			else
+				yield "#{@mgr.timestamp()} #{err}"
+				return false
+			end
 		end
 
 		def list_volumes()
@@ -118,18 +186,28 @@ EOF
 
 		# NOTE: snapshots should all have fqdns of the form <timestamp>.<name>, where
 		# <name> is the fqdn of the volume snapshotted.
-		def resolve_snapshot(must_exist=true)
-			sname = @mgr.getparam("snapname")
+		def resolve_snapshot(snapname)
 			f = [
-				{ name: "tag:Name", values: [ @mgr.getparam("snapname") ] },
+				{ name: "tag:Name", values: [ snapname ] },
 				{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
 			]
 			s = @resource.snapshots(filters: f)
 			count = s.count()
-			raise "Multiple matches for Name: #{sname}" if count > 1
-			raise "No snapshot found with Name: #{sname}" if must_exist and count != 1
-			return nil if count == 0
-			return s.first()
+			return nil, "Multiple matches for Name: #{snapname}" if count > 1
+			return nil, "No snapshot found with Name: #{snapname}" if count != 1
+			return s.first(), nil
+		end
+
+		def delete_snapshot(snapname)
+			s, err = resolve_snapshot(snapname)
+			if s
+				yield "#{@mgr.timestamp()} Deleting snapshot #{snapname}, id: #{s.id()}"
+				s.delete()
+				return true
+			else
+				yield "#{@mgr.timestamp()} Couldn't resolve snapshot #{snapname}"
+				return false
+			end
 		end
 
 		def list_snapshots(name=nil)
@@ -145,12 +223,16 @@ EOF
 			return snapshots
 		end
 
-		def create_snapshot(name, wait=false)
-			@mgr.setparam("name", name)
+		def create_snapshot(volname, wait=false)
+			@mgr.setparam("volname", volname)
 			@mgr.normalize_name_parameters()
 			volname = @mgr.getparam("volname")
 
-			vol = resolve_volume(true, [ "available", "in-use" ])
+			vol, err = resolve_volume(nil, [ "available", "in-use" ])
+			unless vol
+				yield "#{@mgr.timestamp()} #{err}"
+				return nil
+			end
 			snapname = "#{volname}.#{@mgr.timestamp()}"
 			yield "#{@mgr.timestamp()} Creating snapshot #{snapname}"
 			snap = vol.create_snapshot()
@@ -166,61 +248,19 @@ EOF
 			end
 			yield "#{@mgr.timestamp()} Tagging snapshot"
 			snap.create_tags(tags: snaptags)
-			return unless wait
+			return snap unless wait
 			yield "#{@mgr.timestamp()} Waiting for snapshot to complete"
 			snap.wait_until_completed()
 			yield "#{@mgr.timestamp()} Completed"
+			return snap
 		end
 
 		def create_volume(size, wait=true)
-			raise "Rewrite me"
-			snapshot = @mgr.getparam("snapname")
-			volname = @mgr.getparam("volname")
-			raise "No size or snapshot specified calling create_volume" unless size or snapshot
-			voltype = @mgr.expand_strings("${@volume_type|${DefaultVolumeType}}")
-			az = @mgr.expand_strings("${Region}${@az}").downcase()
-			volspec = {
-				availability_zone: az,
-				volume_type: voltype,
-			}
-			if snapshot
-				volspec[:snapshot_id] = resolve_snapshot()
-			else
-				volspec[:encrypted] = true
-			end
-			volspec[:size] = size if size
-			if voltype.downcase() == "io1"
-				iops = @mgr.getparam("iops")
-				raise "No iops parameter specified for volume type io1" unless iops
-				volspec[:iops] = iops
-			end
-			vol = @resource.create_volume(volspec)
-			@client.wait_until(:volume_available, volume_ids: [ vol.id() ]) if wait
-			cfgtags = @mgr.tags()
-			cfgtags["Name"] = @mgr.getparam("name")
-			cfgtags["Domain"] = @mgr["DNSDomain"]
-			vol.create_tags(tags: cfgtags.ltags())
-			return vol
+			# TODO: Implement
 		end
 
 		def attach_volume()
-			raise "Rewrite me"
-			instance = resolve_instance()
-			volume = resolve_volume()
-			last = "f"
-			instance.block_device_mappings.each() do |b|
-				d = b.device_name[-1]
-				next if d == "1"
-				next if d <= last
-				last = d
-			end
-			raise "Too many volumes attached to #{instance}" if last == "p"
-			dev = last.next()
-			instance.attach_volume({
-				volume_id: volume.id(),
-				device: "/dev/sd#{dev.next()}",
-			})
-			@client.wait_until(:volume_in_use, volume_ids: [ volume ])
+			# TODO: Implement
 		end
 
 		def create_instance(name, key, template, wait=true)
@@ -228,16 +268,31 @@ EOF
 			@mgr.setparam("key", key)
 			@mgr.normalize_name_parameters()
 			name, volname, snapname, datasize, availability_zone, dryrun, nodns = @mgr.getparams("name", "volname", "snapname", "datasize", "availability_zone", "dryrun", "nodns")
-			raise "Instance #{name} already exists" if resolve_instance(false)
+
+			i, err = resolve_instance()
+			if i
+				yield "#{@mgr.timestamp()} Instance #{name} already exists"
+				return nil
+			end
+
 			templatefile = nil
 			if template.end_with?(".yaml")
 				templatefile = template
 			else
 				templatefile = "ec2/#{template}.yaml"
 			end
-			raw = File::read(templatefile)
+			begin
+				raw = File::read(templatefile)
+			rescue
+				yield "#{@mgr.timestamp()} Error reading template file #{templatefile}"
+				return nil
+			end
 
-			raise "Invalid parameters: volume provided with snapshot and/or data size" if volname and ( snapname or datasize )
+			if volname and ( snapname or datasize )
+				yield "#{@mgr.timestamp()} Invalid parameters: volume provided with snapshot and/or data size"
+				return nil
+			end
+
 			if dryrun == "true" or dryrun == true
 				dry_run = true
 			else
@@ -245,14 +300,21 @@ EOF
 			end
 
 			if volname
-				yield "#{@mgr.timestamp()} Looking up volume: #{@mgr.getparam("volname")}"
-				volume=resolve_volume()
-			else
-				volname = @mgr.getparam("name")
-				@mgr.setparam("volname", volname)
-				volume=resolve_volume(false)
+				yield "#{@mgr.timestamp()} Looking up volume: #{volname}"
+				volume, err = resolve_volume()
+				unless volume
+					yield "#{@mgr.timestamp} Error looking up given volume: #{err}"
+					return nil
+				end
+			end
+			existing, err = resolve_volume(name)
+			if existing
 				if volume
+					yield "#{@mgr.timestamp()} Launching with volume #{volname} will create a duplicate volume name for existing volume #{name}; delete existing volume or use attach volume instead"
+					return nil
+				else
 					yield "#{@mgr.timestamp()} Found existing volume: #{volname}"
+					volume = existing
 				end
 			end
 
@@ -309,7 +371,11 @@ EOF
 						e=dev[:ebs]
 						if snapname
 							e.delete(:encrypted)
-							snapshot = resolve_snapshot()
+							snapshot, err = resolve_snapshot()
+							unless snapshot
+								yield "#{@mgr.timestamp()} Error resolving snapshot: #{snapname}"
+								return nil
+							end
 							e[:snapshot_id] = snapshot.id()
 						else
 							e.delete(:snapshot_id)
@@ -345,8 +411,10 @@ EOF
 				tag_instance(instance, template[:tags]) { |s| yield s }
 				instance = @resource.instance(instance.id())
 				update_dns(nil, wait, instance) { |s| yield s }
+				return instance
+			else
+				return true
 			end
-			return instance
 		end
 
 		def tag_instance(instance, tags=nil)
@@ -376,24 +444,26 @@ EOF
 		def reboot_instance(name, wait=true)
 			@mgr.setparam("name", name)
 			@mgr.normalize_name_parameters()
-			instance = resolve_instance(false, [ "running" ])
+			instance, err = resolve_instance(nil, [ "running" ])
 			name = @mgr.getparam("name")
 			if instance
 				yield "#{@mgr.timestamp()} Rebooting #{name}"
 				instance.reboot()
+				return instance
 			else
-				yield "#{@mgr.timestamp()} No running instance found with Name: #{name}"
+				yield "#{@mgr.timestamp()} Error resolving #{name}: #{err}"
+				return nil
 			end
 		end
 
 		def start_instance(name, wait=true)
 			@mgr.setparam("name", name)
 			@mgr.normalize_name_parameters()
-			instance = resolve_instance(false, [ "stopped" ])
-			name, nodns = @mgr.getparams("name", "nodns")
+			instance, err = resolve_instance(nil, [ "stopped" ])
+			name = @mgr.getparam("name")
 			if instance
 				@mgr.setparam("volname", name)
-				volume = resolve_volume(false)
+				volume, err = resolve_volume()
 				if volume
 					if volume.availability_zone() != @resource.subnet(instance.subnet_id()).availability_zone()
 						yield "#{@mgr.timestamp()} Found existing volume in wrong availability zone, ignoring"
@@ -417,14 +487,15 @@ EOF
 
 				update_dns(nil, wait, instance) { |s| yield s }
 			else
-				yield "#{@mgr.timestamp()} No stopped instance found with Name: #{name}"
+				yield "#{@mgr.timestamp()} Error resolving #{name}: #{err}"
+				return nil
 			end
 		end
 
 		def stop_instance(name, wait=true)
 			@mgr.setparam("name", name)
 			@mgr.normalize_name_parameters()
-			instance = resolve_instance(false, [ "running" ])
+			instance, err = resolve_instance(nil, [ "running" ])
 			name, detach = @mgr.getparams("name", "detach")
 			if instance
 				yield "#{@mgr.timestamp()} Stopping #{name}"
@@ -438,33 +509,64 @@ EOF
 					detach_volume() { |s| yield s }
 				end
 			else
-				yield "#{@mgr.timestamp()} No running instance found with Name: #{name}"
+				yield "#{@mgr.timestamp()} Error resolving #{name}: #{err}"
 			end
 		end
 
-		def detach_volume()
-			@mgr.setparam("volname", @mgr.getparam("name")) unless @mgr.getparam("volname")
-			volume = resolve_volume(false, [ "in-use" ])
-			return unless volume
-			instance = resolve_instance()
+		def detach_instance_volume(instance, volname=nil)
+			name = @mgr.getparam("name")
+			unless volname
+				volume, err = get_instance_data_volume(instance)
+				unless volume
+					yield "#{@mgr.timestamp()} Couldn't find data volume for #{name}: #{err}"
+					return nil
+				end
+			else
+				volume, err = resolve_volume(volname, [ "in-use" ])
+				unless volume
+					yield "#{@mgr.timestamp} Unable to resolve volume #{volname}"
+					return nil
+				end
+			end
 			device = nil
 			volume.attachments().each() do |att|
 				if att.instance_id == instance.id
 					device = att.device
 				end
 			end
-			return unless device
+			unless device
+				yield "#{@mgr.timestamp()} Volume not attached"
+				return nil
+			end
 			yield "#{@mgr.timestamp()} Detaching volume #{volume.id} from instance #{instance.id}"
-			volume.detach_from_instance({
+			return volume.detach_from_instance({
 				instance_id: instance.id,
 				device: device,
 			})
 		end
 
+		# Detach data volume from an instance
+		def detach_volume(name=nil, volname=nil)
+			if name
+				@mgr.setparam("name", name)
+			end
+			if volname
+				@mgr.setparam("volname", volname)
+			end
+			@mgr.normalize_name_parameters()
+			name, volname = @mgr.getparams("name", "volname")
+			instance, err = resolve_instance()
+			unless instance
+				yield "#{@mgr.timestamp()} detach_volume called on non-existing instance #{name}: #{err}"
+			  return nil
+			end
+			return detach_instance_volume(instance, volname) { |s| yield s }
+		end
+
 		def terminate_instance(name, wait=true, deletevol=false)
 			@mgr.setparam("name", name)
 			@mgr.normalize_name_parameters()
-			instance = resolve_instance(false)
+			instance, err = resolve_instance()
 			name = @mgr.getparam("name")
 			if instance
 				yield "#{@mgr.timestamp()} Terminating #{name}"
@@ -477,32 +579,14 @@ EOF
 				@mgr.setparam("volname", name)
 				delete_volume(nil, wait) { |s| yield s } if deletevol
 			else
-				yield "#{@mgr.timestamp()} No running instance found with Name: #{name}"
-			end
-		end
-
-		def delete_volume(volname=nil, wait=true)
-			if name
-				@mgr.setparam("volname", volname)
-				@mgr.normalize_name_parameters()
-			end
-			volname = @mgr.getparam("volname")
-			volume = resolve_volume(false)
-			if volume
-				yield "#{@mgr.timestamp()} Deleting volume: #{volname}"
-				volume.delete()
-				return unless wait
-				yield "#{@mgr.timestamp()} Waiting for volume to finished deleting..."
-				@client.wait_until(:volume_deleted, volume_ids: [ volume.id() ])
-				yield "#{@mgr.timestamp()} Deleted"
-			else
-				yield "#{@mgr.timestamp()} Not deleting volume - no volume found with Name: #{volname} and Status: available"
+				yield "#{@mgr.timestamp()} Error resolving #{name}: #{err}"
 			end
 		end
 
 		def remove_dns(wait=false)
 			name, fqdn = @mgr.getparams("name", "fqdn")
-			instance = resolve_instance(true)
+			instance, err = resolve_instance()
+			raise "remove_dns called on non-existing instance #{name}, error: #{err}" unless instance
 
 			pub_ip = instance.public_ip_address
 			priv_ip = instance.private_ip_address
@@ -530,36 +614,38 @@ EOF
 				@mgr.setparam("name", name)
 				@mgr.normalize_name_parameters()
 			end
-			instance = resolve_instance(true, [ "running" ]) unless instance
+			instance, err = resolve_instance(nil, [ "running" ]) unless instance
 
-			name, nodns = @mgr.getparams("name", "nodns")
-			unless nodns
-				pub_ip = instance.public_ip_address
-				priv_ip = instance.private_ip_address
-
-				pubzone = @mgr["PublicDNSId"]
-				privzone = @mgr["PrivateDNSId"]
-
-				change_ids = []
-				if pub_ip and pubzone
-					@mgr.setparam("zone_id", pubzone)
-					@mgr.setparam("ipaddr", pub_ip)
-					yield "#{@mgr.timestamp()} Adding public DNS record #{name} -> #{pub_ip}"
-					change_ids << @mgr.route53.change_records("arec")
-				end
-				if priv_ip and privzone
-					@mgr.setparam("zone_id", privzone)
-					@mgr.setparam("ipaddr", priv_ip)
-					yield "#{@mgr.timestamp()} Adding private DNS record #{name} -> #{priv_ip}"
-					change_ids << @mgr.route53.change_records("arec")
-				end
-				return unless wait
-				yield "#{@mgr.timestamp()} Waiting for zones to synchronize..."
-				change_ids.each() { |id| @mgr.route53.wait_sync(id) }
-				yield "#{@mgr.timestamp()} Synchronized"
-			else
-				yield "#{@mgr.timestamp()} Not updating DNS for #{name}"
+			name = @mgr.getparam("name")
+			unless instance
+				yield "#{@mgr.timestamp()} Update_dns called on non-existing instance #{name}: #{err}"
+				return false
 			end
+
+			pub_ip = instance.public_ip_address
+			priv_ip = instance.private_ip_address
+
+			pubzone = @mgr["PublicDNSId"]
+			privzone = @mgr["PrivateDNSId"]
+
+			change_ids = []
+			if pub_ip and pubzone
+				@mgr.setparam("zone_id", pubzone)
+				@mgr.setparam("ipaddr", pub_ip)
+				yield "#{@mgr.timestamp()} Adding public DNS record #{name} -> #{pub_ip}"
+				change_ids << @mgr.route53.change_records("arec")
+			end
+			if priv_ip and privzone
+				@mgr.setparam("zone_id", privzone)
+				@mgr.setparam("ipaddr", priv_ip)
+				yield "#{@mgr.timestamp()} Adding private DNS record #{name} -> #{priv_ip}"
+				change_ids << @mgr.route53.change_records("arec")
+			end
+			return true unless wait
+			yield "#{@mgr.timestamp()} Waiting for zones to synchronize..."
+			change_ids.each() { |id| @mgr.route53.wait_sync(id) }
+			yield "#{@mgr.timestamp()} Synchronized"
+			return true
 		end
 	end
 end

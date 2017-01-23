@@ -22,6 +22,7 @@ Usage: ec2 <command> (options) (args) - manage a CloudFormation stack
   terminate <name> - terminate an instance
   list <instances|volumes> - list instances/volumes for the current project
   list <snapshots> (name) - list snapshots for the current project, optionally for a given name
+  delete <volume|snapshot> <name> - delete a volume or snapshot
  Options are:
 EOF
 opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
@@ -36,7 +37,7 @@ end
 
 begin
 
-commands = [ "create", "updatedns", "deletekeypair", "genkeypair", "list", "reboot", "start", "stop", "snapshot", "terminate", "template" ]
+commands = [ "create", "delete", "updatedns", "deletekeypair", "genkeypair", "list", "reboot", "start", "stop", "snapshot", "terminate", "template" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
@@ -49,6 +50,10 @@ datasize = nil
 deletevol = false
 
 case command
+when "delete"
+  opts.on("-w", "--wait", "Wait for operation to complete before exiting (volume only)") do
+		wait = true
+	end
 when "create"
 	opts.on("-a", "--ami AMIID", "Create with a specific AMI") do |ami|
 		params["ami"] = ami
@@ -133,15 +138,38 @@ cfg = RAWSTools::CloudManager.new(cfgfile)
 cfg.setparams(params)
 
 case command
+when "delete"
+  type, name = ARGV.shift(2)
+  raise UsageException.new("Missing required argument") unless name
+  case type
+  when "snapshot"
+    success = cfg.ec2.delete_snapshot(name) { |status| puts status }
+  when "volume"
+    success = cfg.ec2.delete_volume(name, wait) { |status| puts status }
+  else
+    raise UsageException.new("Invalid type argument to delete: #{name}")
+  end
+  exit 1 unless success
 when "list"
 	type = ARGV.shift()
-	raise UsageException.new("Missing required argument") unless type
+	raise UsageException.new("Missing required type argument") unless type
 	case type
 	when "instances"
-		format = "%-15s %-14s %-19s"
-		puts format % [ "Name", "State", "Id" ]
+		format = "%-15s %-14s %-19s %-10s %-8s %-8s %-8s %-8s"
+		puts format % [ "Name", "State", "Id", "Type", "RootSize", "RootType", "DataSize", "DataType" ]
 		cfg.ec2.list_instances().each() do |i|
-			puts format % [ cfg.ec2.get_tag(i, "Name"), i.state.name(), i.id() ]
+      datasize = "n/a"
+      datatype = "n/a"
+      v, err = cfg.ec2.get_instance_data_volume(i)
+      if v
+        datasize = v.size
+        datatype = v.volume_type
+      end
+      r, err = cfg.ec2.get_instance_root_volume(i)
+      rootsize = r.size
+      roottype = r.volume_type
+      #puts "Volume is #{v.id}, volsize is #{volsize}"
+			puts format % [ cfg.ec2.get_tag(i, "Name"), i.state.name(), i.id(), i.instance_type(), rootsize, roottype, datasize, datatype ]
 		end
 	when "snapshots"
 		format = "%-30s %-14s %-24s"
@@ -150,11 +178,13 @@ when "list"
 			puts format % [ cfg.ec2.get_tag(s, "Name"), s.state(), s.id() ]
 		end
 	when "volumes"
-		format = "%-21s %-14s %-21s"
-		puts format % [ "Name", "State", "Id" ]
+		format = "%-21s %-14s %-21s %-4s %-8s"
+		puts format % [ "Name", "State", "Id", "Size", "Type" ]
 		cfg.ec2.list_volumes().each() do |v|
-			puts format % [ cfg.ec2.get_tag(v, "Name"), v.state(), v.id() ]
+			puts format % [ cfg.ec2.get_tag(v, "Name"), v.state(), v.id(), v.size, v.volume_type ]
 		end
+  else
+    raise UsageException.new("Invalid type argument to list: #{type}")
 	end
 when "create"
 	name, key, template = ARGV.shift(3)

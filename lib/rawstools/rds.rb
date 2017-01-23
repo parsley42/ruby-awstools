@@ -51,22 +51,34 @@ EOF
 
 		# Set dbname parameter and check for existence of
 		# the db instance
-		def resolve_db_instance(must_exist=true)
-			@mgr.normalize_name_parameters()
-			name = @mgr.getparam("name")
-			dbname = name.gsub(".","-")
-			@mgr.setparam("dbname", dbname)
+		def resolve_instance(name=nil)
+			if name
+				@mgr.setparam("name", name)
+				@mgr.normalize_name_parameters()
+			end
+			name, dbname = @mgr.getparam("name", "dbname")
 			dbi = @resource.db_instance(dbname)
 			begin
+				# Innocuous call that will raise an exception if it doesn't exist
 				dbi.db_instance_arn
 			rescue
-				raise "No db instance found named #{dbname}" if must_exist
 				return nil
 			end
 			return dbi
 		end
 
-		def list_db_instances()
+		def resolve_snapshot(snapname)
+			begin
+				s = @resource.db_snapshots({ db_snapshot_identifier: snapname }).first
+				if get_tag(s, "Domain") == @mgr["DNSDomain"]
+					return s
+				end
+			rescue
+			end
+			return nil
+		end
+
+		def list_instances()
 			dbinstances = []
 			@resource.db_instances().each do |i|
 				if get_tag(i, "Domain") == @mgr["DNSDomain"]
@@ -106,18 +118,18 @@ EOF
 			return dbsnapshots
 		end
 
-		def create_snapshot(name, wait=false)
+		def create_snapshot(name)
 			@mgr.setparam("name", name)
 			@mgr.normalize_name_parameters()
 			name, dbname = @mgr.getparams("name", "dbname")
 
-			dbinstance = resolve_db_instance()
+			dbinstance = resolve_instance()
 			unless dbinstance
-				yield "Unable to resolve db instance #{name}"
+				yield "#{@mgr.timestamp()} Unable to resolve db instance #{name}"
 				return
 			end
 			snapname = "#{dbname}-#{@mgr.timestamp()}"
-			yield "Creating snapshot #{snapname} for #{name}"
+			yield "#{@mgr.timestamp()} Creating snapshot #{snapname} for #{name}"
 			dbinstance.create_snapshot({ db_snapshot_identifier: snapname })
 		end
 
@@ -126,7 +138,10 @@ EOF
 			@mgr.setparam("rootpassword", rootpass)
 			@mgr.normalize_name_parameters()
 			name = @mgr.getparam("name")
-			raise "Database instance #{name} already exists" if resolve_db_instance(false)
+			if resolve_instance()
+				yield "#{@mgr.timestamp()} Database instance #{name} already exists"
+				return nil
+			end
 			dbname = @mgr.getparam("dbname")
 			templatefile = nil
 			if template.end_with?(".yaml")
@@ -134,7 +149,12 @@ EOF
 			else
 				templatefile = "rds/#{template}.yaml"
 			end
-			raw = File::read(templatefile)
+			begin
+				raw = File::read(templatefile)
+			rescue
+				yield "#{@mgr.timestamp()} Error reading template file #{templatefile}"
+				return nil
+			end
 
 			raw = @mgr.expand_strings(raw)
 			template = YAML::load(raw)
@@ -148,13 +168,12 @@ EOF
 			snapshot = nil
 			latest = nil
 			if snapname
-				begin
-					s = @resource.db_snapshots({ db_snapshot_identifier: snapname }).first
-					if get_tag(s, "Domain") == @mgr["DNSDomain"]
-						yield "#{@mgr.timestamp} Found requested snapshot #{snapname}"
-						snapshot = s
-					end
-				rescue
+				snapshot = resolve_snapshot(snapname)
+				if snapshot
+					yield "#{@mgr.timestamp()} Found requested snapshot #{snapname}"
+				else
+					yield "#{@mgr.timestamp()} Unable to resolve snapshot #{snapname}"
+					return nil
 				end
 			end
 			unless snapshot
@@ -222,7 +241,7 @@ EOF
 			yield "#{@mgr.timestamp()} #{dbname} is online"
 
 			# Get updated dbinstance with an endpoint
-			dbinstance = resolve_db_instance()
+			dbinstance = resolve_instance()
 			update_dns(nil, wait, dbinstance) { |s| yield s }
 
 			return dbinstance
@@ -232,15 +251,20 @@ EOF
 			@mgr.setparam("name", name)
 			@mgr.normalize_name_parameters()
 			name, dbname, fqdn = @mgr.getparams("name", "dbname", "fqdn")
-			dbinstance = resolve_db_instance(true)
+			dbinstance = resolve_instance(nil)
+
+			unless dbinstance
+				yield "#{@mgr.timestamp()} Error resolving db instance #{name}"
+				return nil
+			end
 
 			if unsafe
 				yield "#{@mgr.timestamp()} Permanently deleting #{name}"
-				dbinstance.delete({ skip_final_snapshot: true })
+				dbinstance = dbinstance.delete({ skip_final_snapshot: true })
 			else
 				snapname = "#{dbname}-#{@mgr.timestamp()}"
 				yield "#{@mgr.timestamp()} Creating final snapshot #{snapname} and deleting #{name}"
-				dbinstance.delete({
+				dbinstance = dbinstance.delete({
 					skip_final_snapshot: false,
 					final_db_snapshot_identifier: snapname
 				})
@@ -255,11 +279,12 @@ EOF
 			yield "#{@mgr.timestamp()} Removing private DNS record #{fqdn}"
 			privzone = @mgr["PrivateDNSId"]
 			change_id = @mgr.route53.delete(privzone)
-			return unless wait
+			return dbinstance unless wait
 
 			yield "#{@mgr.timestamp()} Waiting for zone to synchronize..."
 			@mgr.route53.wait_sync(change_id)
 			yield "#{@mgr.timestamp()} Synchronized"
+			return dbinstance
 		end
 
 		def update_dns(name=nil, wait=false, dbinstance=nil)
@@ -267,9 +292,14 @@ EOF
 				@mgr.setparam("name", name)
 				@mgr.normalize_name_parameters()
 			end
-			dbinstance = resolve_db_instance(true) unless dbinstance
+			dbinstance = resolve_instance(nil) unless dbinstance
 
 			name = @mgr.getparam("name")
+			unless dbinstance
+				yield "#{@mgr.timestamp()} Update_dns called on non-existing db instance #{name}"
+				return false
+			end
+
 			cfqdn = @mgr.getparam("fqdn")
 			fqdn = dbinstance.endpoint.address + "."
 			#puts "fqdn is #{fqdn}"
@@ -286,10 +316,11 @@ EOF
 				yield "#{@mgr.timestamp()} Adding private DNS CNAME record #{cfqdn} -> #{fqdn}"
 				change_ids << @mgr.route53.change_records("cname")
 			end
-			return unless wait
+			return true unless wait
 			yield "#{@mgr.timestamp()} Waiting for zones to synchronize..."
 			change_ids.each() { |id| @mgr.route53.wait_sync(id) }
 			yield "#{@mgr.timestamp()} Synchronized"
+			return true
 		end
 	end
 end

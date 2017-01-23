@@ -106,7 +106,7 @@ when "list"
   when "instances"
   	format = "%-15s %-15s %-14s %-19s"
   	puts format % [ "Name", "Identifier", "Instance class", "Allocated storage" ]
-  	cfg.rds.list_db_instances().each() do |i|
+  	cfg.rds.list_instances().each() do |i|
   		puts format % [ cfg.rds.get_tag(i, "Name"), i.db_instance_identifier, i.db_instance_class, i.allocated_storage ]
   	end
   when "snapshots"

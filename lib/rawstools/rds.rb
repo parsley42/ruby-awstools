@@ -149,10 +149,10 @@ EOF
 			latest = nil
 			if snapname
 				begin
-					@resource.db_snapshots({ db_snapshot_identifier: snapname }).first do |s|
-						if get_tag(s, "Domain") == @mgr["DNSDomain"]
-							snapshot = s
-						end
+					s = @resource.db_snapshots({ db_snapshot_identifier: snapname }).first
+					if get_tag(s, "Domain") == @mgr["DNSDomain"]
+						yield "#{@mgr.timestamp} Found requested snapshot #{snapname}"
+						snapshot = s
 					end
 				rescue
 				end
@@ -283,7 +283,7 @@ EOF
 			change_ids = []
 			if privzone
 				@mgr.setparam("zone_id", privzone)
-				yield "#{@mgr.timestamp()} Adding private DNS CNAME record #{fqdn} -> #{cfqdn}"
+				yield "#{@mgr.timestamp()} Adding private DNS CNAME record #{cfqdn} -> #{fqdn}"
 				change_ids << @mgr.route53.change_records("cname")
 			end
 			return unless wait

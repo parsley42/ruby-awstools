@@ -67,8 +67,8 @@ module RAWSTools
 			@installdir = File.dirname(Pathname.new(__FILE__).realpath) + "/rawstools"
 			@params = {}
 			@subdom = nil
-
-			raw = File::read(filename)
+			@file = File::open(filename)
+			raw = @file.read()
 			# A number of config items need to be defined before using expand_strings
 			@config = YAML::load(raw)
 			@ec2 = Ec2.new(self)
@@ -116,6 +116,15 @@ module RAWSTools
 				end
 			end
 			@config["SubnetTypes"] = subnet_types
+		end
+
+		# Implement a simple mutex to prevent collisions
+		def lock()
+			@file.flock(File::LOCK_EX)
+		end
+
+		def unlock()
+			@file.flock(File::LOCK_UN)
 		end
 
 		def timestamp()

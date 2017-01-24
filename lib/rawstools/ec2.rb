@@ -92,6 +92,7 @@ EOF
 			item.tags.each() do |tag|
 				return tag.value if tag.key == tagname
 			end
+			return nil
 		end
 
 		def resolve_volume(volname=nil, status=[ "available" ] )
@@ -275,6 +276,12 @@ EOF
 				return nil
 			end
 
+			rr = @mgr.route53.lookup(@mgr["PrivateDNSId"])
+			if rr.size != 0
+				yield "#{@mgr.timestamp()} DNS record for #{name} already exists"
+				return nil
+			end
+
 			templatefile = nil
 			if template.end_with?(".yaml")
 				templatefile = template
@@ -397,24 +404,80 @@ EOF
 				yield "#{@mgr.timestamp()} Running"
 
 				if volume
-					yield "#{@mgr.timestamp()} Attaching data volume: #{volname}"
-					instance.attach_volume({
-						volume_id: volume.id(),
-						device: "/dev/sdf",
-					})
-					@client.wait_until(:volume_in_use, volume_ids: [ volume.id() ])
+					if volume.state == "available"
+						yield "#{@mgr.timestamp()} Attaching data volume: #{volname}"
+						instance.attach_volume({
+							volume_id: volume.id(),
+							device: "/dev/sdf",
+						})
+						@client.wait_until(:volume_in_use, volume_ids: [ volume.id() ])
+					else
+						yield "#{@mgr.timestamp()} Data volume not in state 'available'"
+						return abort_instance(instance, wait) { |s| yield s }
+					end
 				end
 
 				# Need to refresh to get attached volumes
 				instance = @resource.instance(instance.id())
-				# Need to refresh to get applied tags
+
+				# Acquire global lock during tagging and dns updates to insure
+				# unique instance names and unused DNS records.
+				@mgr.lock()
+				# Need to refresh to get applied tags.
+				i, err = resolve_instance()
+				if i
+					yield "#{@mgr.timestamp()} Instance #{name} created during launch"
+					return abort_instance(instance, wait) { |s| yield s }
+				end
 				tag_instance(instance, template[:tags]) { |s| yield s }
+
 				instance = @resource.instance(instance.id())
-				update_dns(nil, wait, instance) { |s| yield s }
+				rr = @mgr.route53.lookup(@mgr["PrivateDNSId"])
+				if rr.size != 0
+					yield "#{@mgr.timestamp()} DNS record for #{name} created during launch"
+					return abort_instance(instance, wait) { |s| yield s }
+				end
+
+				update_dns(nil, wait, instance, true) { |s| yield s }
+				# @mgr.unlock() - called by update_dns as soon as records are added
 				return instance
 			else
 				return true
 			end
+		end
+
+		# Abort creation because of errors detected post create_instances
+		def abort_instance(instance, wait)
+			yield "#{@mgr.timestamp()} Aborting instance #{instance.id()}"
+			instance.block_device_mappings().each() do |b|
+				v = @resource.volume(b.ebs.volume_id)
+				# Volumes without a Name should be deleted. Note that if an
+				# instance is aborted after tagging, the volume will get left
+				# behind. This should be extremely rare, since the most likely
+				# collision is two people creating an instance with the same
+				# name at the same time.
+				unless get_tag(v, "Name")
+					yield "#{@mgr.timestamp()} Marking new unnamed volume #{b.ebs.volume_id} (#{b.device_name}) for automatic deletion"
+					instance.modify_attribute({
+						attribute: "blockDeviceMapping",
+						block_device_mappings: [
+					    {
+					      device_name: b.device_name,
+					      ebs: {
+					        volume_id: b.ebs.volume_id,
+					        delete_on_termination: true,
+					      },
+					    },
+					  ],
+					})
+				end
+			end
+			yield "#{@mgr.timestamp()} Sending termination command"
+			instance.terminate()
+			return nil unless wait
+			yield "#{@mgr.timestamp()} Waiting for instance to terminate..."
+			instance.wait_until_terminated()
+			yield "#{@mgr.timestamp()} Terminated"
 		end
 
 		def tag_instance(instance, tags=nil)
@@ -609,7 +672,7 @@ EOF
 			yield "#{@mgr.timestamp()} Synchronized"
 		end
 
-		def update_dns(name=nil, wait=false, instance=nil)
+		def update_dns(name=nil, wait=false, instance=nil, unlock=false)
 			if name
 				@mgr.setparam("name", name)
 				@mgr.normalize_name_parameters()
@@ -641,6 +704,8 @@ EOF
 				yield "#{@mgr.timestamp()} Adding private DNS record #{name} -> #{priv_ip}"
 				change_ids << @mgr.route53.change_records("arec")
 			end
+			# Don't hold the global lock while waiting for zones to synchronize
+			@mgr.unlock() if unlock
 			return true unless wait
 			yield "#{@mgr.timestamp()} Waiting for zones to synchronize..."
 			change_ids.each() { |id| @mgr.route53.wait_sync(id) }

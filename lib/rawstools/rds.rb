@@ -56,7 +56,7 @@ EOF
 				@mgr.setparam("name", name)
 				@mgr.normalize_name_parameters()
 			end
-			name, dbname = @mgr.getparam("name", "dbname")
+			name, dbname = @mgr.getparams("name", "dbname")
 			dbi = @resource.db_instance(dbname)
 			begin
 				# Innocuous call that will raise an exception if it doesn't exist
@@ -65,6 +65,72 @@ EOF
 				return nil
 			end
 			return dbi
+		end
+
+		def get_backup(instance)
+			bw = instance.preferred_backup_window()
+			start = bw.split("-")[0]
+			slocal = Time.parse("#{start} UTC").getlocal()
+			return "#{slocal.strftime("%I:%M%p")}"
+		end
+
+		def set_backup(name, tstring)
+			if dbi = resolve_instance(name)
+				return set_instance_backup(dbi, tstring)
+			end
+			return false, "Instance #{name} not found"
+		end
+
+		def set_instance_backup(instance, tstring)
+			b = Time.parse(tstring)
+			u_start = b.utc()
+			u_end = u_start + 30*60
+			w_start = u_start.strftime("%H:%M")
+			w_end = u_end.strftime("%H:%M")
+			begin
+				instance = instance.modify({
+					apply_immediately: true,
+					preferred_backup_window: "#{w_start}-#{w_end}"
+				})
+			rescue => e
+				return false, e.message
+			end
+			return true, get_backup(instance)
+		end
+
+		def get_maintenance(instance)
+			mw = instance.preferred_maintenance_window()
+			start = mw.split("-")[0]
+			sday = start.split(":")[0]
+			stime = start.split(":")[1,2].join(":")
+			sdt = DateTime.parse("#{sday} #{stime} UTC").to_time().getlocal()
+			day = sdt.strftime("%a").downcase()
+			return "#{day} #{sdt.strftime("%I:%M%p")}"
+		end
+
+		def set_maintenance(name, dstring, tstring)
+			if dbi = resolve_instance(name)
+				return set_instance_maintenance(dbi, dstring, tstring)
+			end
+			return false, "Instance #{name} not found"
+		end
+
+		def set_instance_maintenance(instance, dstring, tstring)
+			tz = Time.now().strftime("%Z")
+			b = DateTime.parse("#{dstring} #{tstring} #{tz}")
+			u_start = b.to_time().utc()
+			u_end = u_start + 30*60
+			w_start = u_start.strftime("%a:%H:%M").downcase()
+			w_end = u_end.strftime("%a:%H:%M").downcase()
+			begin
+				instance = instance.modify({
+					apply_immediately: true,
+					preferred_maintenance_window: "#{w_start}-#{w_end}"
+				})
+			rescue => e
+				return false, e.message
+			end
+			return true, get_maintenance(instance)
 		end
 
 		def resolve_snapshot(snapname)
@@ -142,6 +208,13 @@ EOF
 				yield "#{@mgr.timestamp()} Database instance #{name} already exists"
 				return nil
 			end
+
+			rr = @mgr.route53.lookup(@mgr["PrivateDNSId"])
+			if rr.size != 0
+				yield "#{@mgr.timestamp()} DNS record for #{name} already exists"
+				return nil
+			end
+
 			dbname = @mgr.getparam("dbname")
 			templatefile = nil
 			if template.end_with?(".yaml")
@@ -219,6 +292,14 @@ EOF
 			dbspec[:tags] = cfgtags.ltags()
 
 			# puts "Options hash:\n#{dbspec}"
+			@mgr.lock()
+			i, err = resolve_instance()
+			if i
+				yield "#{@mgr.timestamp()} Instance #{name} already being created"
+				@mgr.unlock()
+				return nil
+			end
+
 			modify_params = {}
 			if snapshot
 				[ :vpc_security_group_ids, :monitoring_interval, :monitoring_role_arn ].each do |k|
@@ -242,7 +323,17 @@ EOF
 
 			# Get updated dbinstance with an endpoint
 			dbinstance = resolve_instance()
-			update_dns(nil, wait, dbinstance) { |s| yield s }
+
+			@mgr.lock()
+			rr = @mgr.route53.lookup(@mgr["PrivateDNSId"])
+			if rr.size != 0
+				yield "#{@mgr.timestamp()} DNS record for #{name} created during build, aborting"
+				@mgr.unlock()
+				dbinstance.delete({ skip_final_snapshot: true })
+				return nil
+			end
+
+			update_dns(nil, wait, dbinstance, true) { |s| yield s }
 
 			return dbinstance
 		end
@@ -287,7 +378,7 @@ EOF
 			return dbinstance
 		end
 
-		def update_dns(name=nil, wait=false, dbinstance=nil)
+		def update_dns(name=nil, wait=false, dbinstance=nil, unlock=false)
 			if name
 				@mgr.setparam("name", name)
 				@mgr.normalize_name_parameters()
@@ -316,6 +407,7 @@ EOF
 				yield "#{@mgr.timestamp()} Adding private DNS CNAME record #{cfqdn} -> #{fqdn}"
 				change_ids << @mgr.route53.change_records("cname")
 			end
+			@mgr.unlock() if unlock # Don't hold global lock while waiting for DNS sync
 			return true unless wait
 			yield "#{@mgr.timestamp()} Waiting for zones to synchronize..."
 			change_ids.each() { |id| @mgr.route53.wait_sync(id) }

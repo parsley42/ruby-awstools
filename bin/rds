@@ -15,6 +15,8 @@ Usage: rds <command> (options) (args) - manage a CloudFormation stack
   template - dump the default template for creating db instances
   delete <name> - delete a db instance
   updatedns <name> - refresh DNS CNAME for the db instance
+  update backup <name> <time> - change backup window for an instance (e.g. 2:30am)
+  update maintenance <name> <day> <time> - change maintenance window for an instance (e.g. Thursday 2:00am)
   list instances - list db instances for the current project
   list snapshots (name) - list db snapshots for the current project, optionally for a single db instance
  Options are:
@@ -31,7 +33,7 @@ end
 
 begin
 
-commands = [ "create", "list", "rename", "snapshot", "delete", "template", "updatedns" ]
+commands = [ "create", "list", "rename", "snapshot", "delete", "template", "update", "updatedns" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
@@ -101,13 +103,20 @@ cfg.setparams(params)
 case command
 when "list"
   type = ARGV.shift()
-  raise "Missing <instances|snapshots> in list command" unless type
+  raise UsageException.new("Missing <instances|snapshots> in list command") unless type
   case type
   when "instances"
-  	format = "%-15s %-15s %-14s %-19s"
-  	puts format % [ "Name", "Identifier", "Instance class", "Allocated storage" ]
+    format = "%-15s %-15s %-14s %-19s %-12s %-12s"
+    puts format % [ "Name", "Identifier", "Instance class", "Allocated storage", "Backup Start", "Maint Start" ]
   	cfg.rds.list_instances().each() do |i|
-  		puts format % [ cfg.rds.get_tag(i, "Name"), i.db_instance_identifier, i.db_instance_class, i.allocated_storage ]
+      puts format % [
+        cfg.rds.get_tag(i, "Name"),
+        i.db_instance_identifier,
+        i.db_instance_class,
+        i.allocated_storage,
+        cfg.rds.get_backup(i),
+        cfg.rds.get_maintenance(i),
+      ]
   	end
   when "snapshots"
     format = "%-15s %-35s %-24s %-14s"
@@ -115,6 +124,31 @@ when "list"
     cfg.rds.list_snapshots(ARGV.shift()).each do |s|
       puts format % [ cfg.rds.get_tag(s, "Name"), s.db_snapshot_identifier, s.snapshot_create_time ,s.allocated_storage ]
     end
+  end
+when "update"
+  type = ARGV.shift()
+  raise UsageException.new("Missing <backup|maintenance> in update command") unless type
+  case type
+  when "backup"
+    name, time = ARGV.shift(2)
+    raise UsageException.new("Missing required argument") unless time
+    success, message = cfg.rds.set_backup(name, time)
+    if success
+      puts "Set backup window to #{message}"
+    else
+      puts "Error setting backup window: #{message}"
+    end
+  when "maintenance"
+    name, day, time = ARGV.shift(3)
+    raise UsageException.new("Missing required argument") unless time
+    success, message = cfg.rds.set_maintenance(name, day, time)
+    if success
+      puts "Set maintenance window to #{message}"
+    else
+      puts "Error setting maintenance window: #{message}"
+    end
+  else
+    raise UsageException.new("Invalid argument to update command, need one of backup, maintenance")
   end
 when "create"
 	name, rootpass, template = ARGV.shift(3)

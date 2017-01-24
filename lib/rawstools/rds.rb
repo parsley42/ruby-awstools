@@ -67,6 +67,44 @@ EOF
 			return dbi
 		end
 
+		def resize_storage(name, size)
+			if dbi = resolve_instance(name)
+				return resize_instance_storage(dbi, size)
+			end
+			return false, "Instance #{name} not found"
+		end
+
+		def resize_instance_storage(instance, size)
+			begin
+				instance = instance.modify({
+					apply_immediately: false,
+					allocated_storage: size,
+				})
+			rescue => e
+				return false, e.message
+			end
+			return true, get_maintenance(instance)
+		end
+
+		def resize_instance(name, type)
+			if dbi = resolve_instance(name)
+				return resize_instance_type(dbi, type)
+			end
+			return false, "Instance #{name} not found"
+		end
+
+		def resize_instance_type(instance, type)
+			begin
+				instance = instance.modify({
+					apply_immediately: false,
+					db_instance_class: type,
+				})
+			rescue => e
+				return false, e.message
+			end
+			return true, get_maintenance(instance)
+		end
+
 		def get_backup(instance)
 			bw = instance.preferred_backup_window()
 			start = bw.split("-")[0]

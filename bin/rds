@@ -17,6 +17,8 @@ Usage: rds <command> (options) (args) - manage a CloudFormation stack
   updatedns <name> - refresh DNS CNAME for the db instance
   update backup <name> <time> - change backup window for an instance (e.g. 2:30am)
   update maintenance <name> <day> <time> - change maintenance window for an instance (e.g. Thursday 2:00am)
+  resize instance <name> <type> - change size of instance to new type during next maintenance window (e.g. db.t2.small)
+  resize storage <name> <size> - change storage size to new size (in GB) during next maintenance window
   list instances - list db instances for the current project
   list snapshots (name) - list db snapshots for the current project, optionally for a single db instance
  Options are:
@@ -33,7 +35,7 @@ end
 
 begin
 
-commands = [ "create", "list", "rename", "snapshot", "delete", "template", "update", "updatedns" ]
+commands = [ "create", "list", "rename", "snapshot", "delete", "template", "resize", "update", "updatedns" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
@@ -124,6 +126,31 @@ when "list"
     cfg.rds.list_snapshots(ARGV.shift()).each do |s|
       puts format % [ cfg.rds.get_tag(s, "Name"), s.db_snapshot_identifier, s.snapshot_create_time ,s.allocated_storage ]
     end
+  end
+when "resize"
+  type = ARGV.shift()
+  raise UsageException.new("Missing <instance|storage> in resize command") unless type
+  case type
+  when "instance"
+    name, type = ARGV.shift(2)
+    raise UsageException.new("Missing required argument") unless type
+    success, message = cfg.rds.resize_instance(name, type)
+    if success
+      puts "Resizing #{name} to #{type} during next maintenance window: #{message}"
+    else
+      puts "Error resizing #{name}: #{message}"
+    end
+  when "storage"
+    name, size = ARGV.shift(2)
+    raise UsageException.new("Missing required argument") unless size
+    success, message = cfg.rds.resize_storage(name, size)
+    if success
+      puts "Resizing storage for #{name} to #{size} during next maintenance window: #{message}"
+    else
+      puts "Error resizing #{name}: #{message}"
+    end
+  else
+    raise UsageException.new("Invalid argument to update command, need one of backup, maintenance")
   end
 when "update"
   type = ARGV.shift()

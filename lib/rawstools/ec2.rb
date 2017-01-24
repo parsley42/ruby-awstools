@@ -422,12 +422,12 @@ EOF
 
 				# Acquire global lock during tagging and dns updates to insure
 				# unique instance names and unused DNS records.
-				@mgr.lock()
+				@mgr.lock() # NOTE: unlock() will be called by either abort_instance or update_dns
 				# Need to refresh to get applied tags.
 				i, err = resolve_instance()
 				if i
 					yield "#{@mgr.timestamp()} Instance #{name} created during launch"
-					return abort_instance(instance, wait) { |s| yield s }
+					return abort_instance(instance, wait, true) { |s| yield s }
 				end
 				tag_instance(instance, template[:tags]) { |s| yield s }
 
@@ -435,7 +435,7 @@ EOF
 				rr = @mgr.route53.lookup(@mgr["PrivateDNSId"])
 				if rr.size != 0
 					yield "#{@mgr.timestamp()} DNS record for #{name} created during launch"
-					return abort_instance(instance, wait) { |s| yield s }
+					return abort_instance(instance, wait, true) { |s| yield s }
 				end
 
 				update_dns(nil, wait, instance, true) { |s| yield s }
@@ -447,7 +447,8 @@ EOF
 		end
 
 		# Abort creation because of errors detected post create_instances
-		def abort_instance(instance, wait)
+		def abort_instance(instance, wait, unlock=false)
+			@mgr.unlock() if unlock
 			yield "#{@mgr.timestamp()} Aborting instance #{instance.id()}"
 			instance.block_device_mappings().each() do |b|
 				v = @resource.volume(b.ebs.volume_id)

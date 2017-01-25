@@ -264,6 +264,29 @@ EOF
 			# TODO: Implement
 		end
 
+		def list_types()
+			Dir::chdir("ec2") do
+				Dir::glob("*.yaml").map() { |t| t[0,t.index(".yaml")] }
+			end
+		end
+
+		def get_metadata(template)
+			templatefile = nil
+			if template.end_with?(".yaml")
+				templatefile = template
+			else
+				templatefile = "ec2/#{template}.yaml"
+			end
+			begin
+				raw = File::read(templatefile)
+				data = YAML::load(raw)
+				return data["metadata"], nil if data["metadata"]
+				return nil, "No metadata found for #{template}"
+			rescue
+				return nil, "Error reading template file #{templatefile}"
+			end
+		end
+
 		def create_instance(name, key, template, wait=true)
 			@mgr.setparam("name", name)
 			@mgr.setparam("key", key)
@@ -320,8 +343,8 @@ EOF
 					yield "#{@mgr.timestamp()} Launching with volume #{volname} will create a duplicate volume name for existing volume #{name}; delete existing volume or use attach volume instead"
 					return nil
 				else
-					yield "#{@mgr.timestamp()} Found existing volume: #{volname}"
 					volume = existing
+					yield "#{@mgr.timestamp()} Found existing volume for #{name}: #{volume.id()}"
 				end
 			end
 
@@ -405,7 +428,7 @@ EOF
 
 				if volume
 					if volume.state == "available"
-						yield "#{@mgr.timestamp()} Attaching data volume: #{volname}"
+						yield "#{@mgr.timestamp()} Attaching data volume: #{volume.id()}"
 						instance.attach_volume({
 							volume_id: volume.id(),
 							device: "/dev/sdf",
@@ -564,7 +587,7 @@ EOF
 			if instance
 				yield "#{@mgr.timestamp()} Stopping #{name}"
 				instance.stop()
-				remove_dns(wait) { |s| yield s }
+				remove_dns(instance) { |s| yield s }
 				return unless wait or detach
 				yield "#{@mgr.timestamp()} Waiting for instance to stop..."
 				instance.wait_until_stopped()
@@ -635,7 +658,7 @@ EOF
 			if instance
 				yield "#{@mgr.timestamp()} Terminating #{name}"
 				instance.terminate()
-				remove_dns(wait) { |s| yield s }
+				remove_dns(instance, wait) { |s| yield s }
 				return unless wait or deletevol
 				yield "#{@mgr.timestamp()} Waiting for instance to terminate..."
 				instance.wait_until_terminated()
@@ -647,11 +670,8 @@ EOF
 			end
 		end
 
-		def remove_dns(wait=false)
-			name, fqdn = @mgr.getparams("name", "fqdn")
-			instance, err = resolve_instance()
-			raise "remove_dns called on non-existing instance #{name}, error: #{err}" unless instance
-
+		def remove_dns(instance, wait=false)
+			fqdn = @mgr.getparam("fqdn")
 			pub_ip = instance.public_ip_address
 			priv_ip = instance.private_ip_address
 

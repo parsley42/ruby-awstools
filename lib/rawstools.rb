@@ -60,7 +60,7 @@ module RAWSTools
 	# For reading in the configuration file and initializing service clients
 	# and resources
 	class CloudManager
-		attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :rds, :route53
+		attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :rds, :route53, :tags
 
 		def initialize(filename)
 			@filename = filename
@@ -78,6 +78,7 @@ module RAWSTools
 			@s3res = Aws::S3::Resource.new( client: @s3 )
 			@rds = RDS.new(self)
 			@route53 = Route53.new(self)
+			@tags = Tags.new(self)
 			raw = expand_strings(raw)
 			# Now replace config with expanded version
 			#puts "Expanded:\n#{raw}"
@@ -173,10 +174,6 @@ module RAWSTools
 				setparam("az", az.upcase())
 				setparam("availability_zone", @config["Region"] + az.downcase())
 			end
-		end
-
-		def tags()
-			return Tags.new(self)
 		end
 
 		def setparams(hash)

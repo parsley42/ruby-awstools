@@ -22,6 +22,8 @@ Usage: ec2 <command> (options) (args) - manage a CloudFormation stack
   terminate <name> - terminate an instance
   list <instances|volumes> - list instances/volumes for the current project
   list <snapshots> (name) - list snapshots for the current project, optionally for a given name
+  list servertypes - list the available server types for the project
+  metadata <type> - show the metadata for a given server type
   delete <volume|snapshot> <name> - delete a volume or snapshot
  Options are:
 EOF
@@ -37,7 +39,7 @@ end
 
 begin
 
-commands = [ "create", "delete", "updatedns", "deletekeypair", "genkeypair", "list", "reboot", "start", "stop", "snapshot", "terminate", "template" ]
+commands = [ "create", "delete", "updatedns", "deletekeypair", "genkeypair", "list", "metadata", "reboot", "start", "stop", "snapshot", "terminate", "template" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
@@ -136,6 +138,8 @@ raise UsageException.new("Not a regular file: #{cfgfile}") unless File::stat(cfg
 
 cfg = RAWSTools::CloudManager.new(cfgfile)
 cfg.setparams(params)
+tags["Creator"] = ENV["USER"] unless tags["Creator"]
+cfg.tags.add(tags)
 
 case command
 when "delete"
@@ -150,6 +154,15 @@ when "delete"
     raise UsageException.new("Invalid type argument to delete: #{name}")
   end
   exit 1 unless success
+when "metadata"
+  template = ARGV.shift()
+  raise UsageException.new("Missing required type argument") unless template
+  data, err = cfg.ec2.get_metadata(template)
+  if data
+    puts("#{YAML::dump(data)}")
+  else
+    puts("#{err}")
+  end
 when "list"
 	type = ARGV.shift()
 	raise UsageException.new("Missing required type argument") unless type
@@ -171,6 +184,8 @@ when "list"
       #puts "Volume is #{v.id}, volsize is #{volsize}"
 			puts format % [ cfg.ec2.get_tag(i, "Name"), i.state.name(), i.id(), i.instance_type(), rootsize, roottype, datasize, datatype ]
 		end
+  when "servertypes"
+    puts "#{cfg.ec2.list_types().join(", ")}"
 	when "snapshots"
 		format = "%-30s %-14s %-24s"
 		puts format % [ "Name", "State", "Id" ]

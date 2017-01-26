@@ -401,11 +401,12 @@ EOF
 						e=dev[:ebs]
 						if snapname
 							e.delete(:encrypted)
-							snapshot, err = resolve_snapshot()
+							snapshot, err = resolve_snapshot(snapname)
 							unless snapshot
 								yield "#{@mgr.timestamp()} Error resolving snapshot: #{snapname}"
 								return nil
 							end
+							yield "#{@mgr.timestamp()} Launching with data volume from snapshot #{snapname}, id #{snapshot.id()}"
 							e[:snapshot_id] = snapshot.id()
 						else
 							e.delete(:snapshot_id)
@@ -417,7 +418,12 @@ EOF
 			end
 			yield "#{@mgr.timestamp()} Dry run, creating: #{ispec}" if dry_run
 
-			instances = @resource.create_instances(ispec)
+			begin
+				instances = @resource.create_instances(ispec)
+			rescue => e
+				yield "#{@mgr.timestamp()} Caught exception creating instance: #{e.message}"
+				return nil
+			end
 			instance = nil
 			unless dry_run
 				instance = instances.first()

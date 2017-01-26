@@ -206,7 +206,12 @@ when "create"
 	raise UsageException.new("Missing required argument") unless template
 	raise UsageException.new("Error: both snapshot and volume specified") if params["volname"] and ( params["snapname"] or params["datasize"] )
 	# one-liner to validate the key
-	cfg.ec2.resource.key_pair(key).key_name()
+  begin
+    cfg.ec2.resource.key_pair(key).key_name()
+  rescue => e
+    puts "Looking up keypair: #{e.message}"
+    exit 1
+  end
 	instance = cfg.ec2.create_instance(name, key, template, wait) { |status| puts status }
 when "updatedns"
 	name = ARGV.shift()

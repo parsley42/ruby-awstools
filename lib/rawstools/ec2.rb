@@ -383,10 +383,12 @@ EOF
 			template_block_devs = template[:api_template][:block_device_mappings]
 			ispec = ispec.merge(template[:api_template])
 			ispec[:block_device_mappings] = base_block_devs
-			template_block_devs.each() do |bdev|
-				dev = bdev[:device_name]
-				base_block_devs.delete_if() { |bbdev| bbdev[:device_name] == dev }
-				base_block_devs << bdev
+			if template_block_devs
+				template_block_devs.each() do |bdev|
+					dev = bdev[:device_name]
+					base_block_devs.delete_if() { |bbdev| bbdev[:device_name] == dev }
+					base_block_devs << bdev
+				end
 			end
 
 			if ispec[:user_data]

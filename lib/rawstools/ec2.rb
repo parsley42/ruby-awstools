@@ -133,8 +133,8 @@ EOF
 				@mgr.normalize_name_parameters()
 			end
 			name = @mgr.getparam("name")
-			i = resolve_instance()
-			return nil, "Instance #{name} not found" unless i
+			i, err = resolve_instance()
+			return nil, "#{err}" unless i
 			return get_instance_data_volume(i)
 		end
 
@@ -151,8 +151,8 @@ EOF
 				@mgr.normalize_name_parameters()
 			end
 			name = @mgr.getparam("name")
-			i = resolve_instance()
-			return nil, "Instance #{name} not found" unless i
+			i, err = resolve_instance()
+			return nil, "#{err}" unless i
 			return get_instance_root_volume(i)
 		end
 
@@ -224,9 +224,11 @@ EOF
 			return snapshots
 		end
 
-		def create_snapshot(volname, wait=false)
-			@mgr.setparam("volname", volname)
-			@mgr.normalize_name_parameters()
+		def create_snapshot(volname=nil, wait=false)
+			if volname
+				@mgr.setparam("volname", volname)
+				@mgr.normalize_name_parameters()
+			end
 			volname = @mgr.getparam("volname")
 
 			vol, err = resolve_volume(nil, [ "available", "in-use" ])
@@ -288,9 +290,11 @@ EOF
 		end
 
 		def create_instance(name, key, template, wait=true)
-			@mgr.setparam("name", name)
+			if name
+				@mgr.setparam("name", name)
+				@mgr.normalize_name_parameters()
+			end
 			@mgr.setparam("key", key)
-			@mgr.normalize_name_parameters()
 			name, volname, snapname, datasize, availability_zone, dryrun, nodns = @mgr.getparams("name", "volname", "snapname", "datasize", "availability_zone", "dryrun", "nodns")
 
 			i, err = resolve_instance()
@@ -534,9 +538,11 @@ EOF
 			end
 		end
 
-		def reboot_instance(name, wait=true)
-			@mgr.setparam("name", name)
-			@mgr.normalize_name_parameters()
+		def reboot_instance(name=nil)
+			if name
+				@mgr.setparam("name", name)
+				@mgr.normalize_name_parameters()
+			end
 			instance, err = resolve_instance(nil, [ "running" ])
 			name = @mgr.getparam("name")
 			if instance
@@ -549,9 +555,11 @@ EOF
 			end
 		end
 
-		def start_instance(name, wait=true)
-			@mgr.setparam("name", name)
-			@mgr.normalize_name_parameters()
+		def start_instance(name=nil, wait=true)
+			if name
+				@mgr.setparam("name", name)
+				@mgr.normalize_name_parameters()
+			end
 			instance, err = resolve_instance(nil, [ "stopped" ])
 			name = @mgr.getparam("name")
 			if instance
@@ -585,9 +593,11 @@ EOF
 			end
 		end
 
-		def stop_instance(name, wait=true)
-			@mgr.setparam("name", name)
-			@mgr.normalize_name_parameters()
+		def stop_instance(name=nil, wait=true)
+			if name
+				@mgr.setparam("name", name)
+				@mgr.normalize_name_parameters()
+			end
 			instance, err = resolve_instance(nil, [ "running" ])
 			name, detach = @mgr.getparams("name", "detach")
 			if instance
@@ -656,15 +666,19 @@ EOF
 			return detach_instance_volume(instance, volname) { |s| yield s }
 		end
 
-		def terminate_instance(name, wait=true, deletevol=false)
-			@mgr.setparam("name", name)
-			@mgr.normalize_name_parameters()
+		def terminate_instance(name=nil, wait=true, deletevol=false)
+			if name
+				@mgr.setparam("name", name)
+				@mgr.normalize_name_parameters()
+			end
 			instance, err = resolve_instance()
 			name = @mgr.getparam("name")
 			if instance
 				yield "#{@mgr.timestamp()} Terminating #{name}"
+				remove_dns = false
+				remove_dns = true if instance.state.name == "running"
 				instance.terminate()
-				remove_dns(instance, wait) { |s| yield s }
+				remove_dns(instance, wait) { |s| yield s } if remove_dns
 				return unless wait or deletevol
 				yield "#{@mgr.timestamp()} Waiting for instance to terminate..."
 				instance.wait_until_terminated()

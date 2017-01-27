@@ -7,7 +7,7 @@ module RAWSTools
   key_name: ${@key|none}
   security_group_ids:
   - (requires override)
-  user_data: (override or omit)
+  #user_data: (override or omit)
   instance_type: ${@type|none} # or $ {@type|default}
   # NOTE: block_device_mappings are intelligently overwritten;
   # if /dev/sda1 is present in the template, it overwrites the

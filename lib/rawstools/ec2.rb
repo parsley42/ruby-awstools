@@ -441,10 +441,15 @@ EOF
 				if volume
 					if volume.state == "available"
 						yield "#{@mgr.timestamp()} Attaching data volume: #{volume.id()}"
-						instance.attach_volume({
-							volume_id: volume.id(),
-							device: "/dev/sdf",
-						})
+						begin
+							instance.attach_volume({
+								volume_id: volume.id(),
+								device: "/dev/sdf",
+							})
+						rescue => e
+							yield "#{@mgr.timestamp()} Unable to attach volume"
+							return abort_instance(instance, wait, true) { |s| yield s }
+						end
 						@client.wait_until(:volume_in_use, volume_ids: [ volume.id() ])
 					else
 						yield "#{@mgr.timestamp()} Data volume not in state 'available'"

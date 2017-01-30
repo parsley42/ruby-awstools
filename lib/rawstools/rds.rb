@@ -2,7 +2,6 @@ module RAWSTools
 	RDS_Default_Template = <<EOF
   # db_name: "String" # We don't create a default database
   db_instance_identifier: ${@dbname} # required
-  allocated_storage: ${@datasize|10}
   iops: ${@iops|0}
   db_instance_class: ${@type|db.t2.micro} # available types vary by engine, probably needs override
   engine: (requires override)
@@ -235,6 +234,29 @@ EOF
 			snapname = "#{dbname}-#{@mgr.timestamp()}"
 			yield "#{@mgr.timestamp()} Creating snapshot #{snapname} for #{name}"
 			dbinstance.create_snapshot({ db_snapshot_identifier: snapname })
+		end
+
+		def list_types()
+			Dir::chdir("rds") do
+				Dir::glob("*.yaml").map() { |t| t[0,t.index(".yaml")] }
+			end
+		end
+
+		def get_metadata(template)
+			templatefile = nil
+			if template.end_with?(".yaml")
+				templatefile = template
+			else
+				templatefile = "rds/#{template}.yaml"
+			end
+			begin
+				raw = File::read(templatefile)
+				data = YAML::load(raw)
+				return data["metadata"], nil if data["metadata"]
+				return nil, "No metadata found for #{template}"
+			rescue
+				return nil, "Error reading template file #{templatefile}"
+			end
 		end
 
 		def create_instance(name, rootpass, template, wait)

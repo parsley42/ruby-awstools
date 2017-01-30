@@ -10,17 +10,25 @@ opts = OptionParser.new
 opts.banner = <<-EOF
 Usage: rds <command> (options) (args) - manage a CloudFormation stack
  Where <command> is one of:
-  create <name> <rootpassword> <template> - create an rds db instance from a template (name or path) with the provided root password
+  create <name> <rootpassword> <template> - create an rds db instance from a
+    template (name or path) with the provided root password
   snapshot <name> - take a snapshot of the db instance <name>
   template - dump the default template for creating db instances
   delete <name> - delete a db instance
   updatedns <name> - refresh DNS CNAME for the db instance
-  update backup <name> <time> - change backup window for an instance (e.g. 2:30am)
-  update maintenance <name> <day> <time> - change maintenance window for an instance (e.g. Thursday 2:00am)
-  resize instance <name> <type> - change size of instance to new type during next maintenance window (e.g. db.t2.small)
-  resize storage <name> <size> - change storage size to new size (in GB) during next maintenance window
+  update backup <name> <time> - change backup window for an instance
+    (e.g. 2:30am)
+  update maintenance <name> <day> <time> - change maintenance window for an
+    instance (e.g. Thursday 2:00am)
+  resize instance <name> <type> - change size of instance to new type during
+    next maintenance window (e.g. db.t2.small)
+  resize storage <name> <size> - change storage size to new size (in GB)
+    during next maintenance window
   list instances - list db instances for the current project
-  list snapshots (name) - list db snapshots for the current project, optionally for a single db instance
+  list snapshots (name) - list db snapshots for the current project,
+    optionally for a single db instance
+  list types - list the available types of database for the project
+  metadata <type> - show the metadata for a given database type
  Options are:
 EOF
 opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
@@ -35,7 +43,7 @@ end
 
 begin
 
-commands = [ "create", "list", "rename", "snapshot", "delete", "template", "resize", "update", "updatedns" ]
+commands = [ "create", "list", "rename", "snapshot", "delete", "template", "resize", "update", "updatedns", "metadata" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
@@ -103,10 +111,21 @@ cfg = RAWSTools::CloudManager.new(cfgfile)
 cfg.setparams(params)
 
 case command
+when "metadata"
+  template = ARGV.shift()
+  raise UsageException.new("Missing required type argument") unless template
+  data, err = cfg.rds.get_metadata(template)
+  if data
+    puts("#{YAML::dump(data)}")
+  else
+    puts("#{err}")
+  end
 when "list"
   type = ARGV.shift()
   raise UsageException.new("Missing <instances|snapshots> in list command") unless type
   case type
+  when "types"
+    puts "#{cfg.rds.list_types().join(", ")}"
   when "instances"
     format = "%-15s %-15s %-14s %-19s %-12s %-12s"
     puts format % [ "Name", "Identifier", "Instance class", "Allocated storage", "Backup Start", "Maint Start" ]

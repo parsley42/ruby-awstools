@@ -259,7 +259,7 @@ EOF
 			end
 		end
 
-		def create_instance(name, rootpass, template, wait)
+		def create_instance(name, rootpass, template, wait=true)
 			@mgr.setparam("name", name)
 			@mgr.setparam("rootpassword", rootpass)
 			@mgr.normalize_name_parameters()

@@ -201,6 +201,7 @@ EOF
 			tags.each() do |tag|
 				return tag.value if tag.key == tagname
 			end
+			return nil
 		end
 
 		def list_snapshots(name=nil)

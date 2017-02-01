@@ -247,11 +247,12 @@ EOF
 			dbinstance = resolve_instance()
 			unless dbinstance
 				yield "#{@mgr.timestamp()} Unable to resolve db instance #{name}"
-				return
+				return false
 			end
 			snapname = "#{dbname}-#{@mgr.timestamp()}"
 			yield "#{@mgr.timestamp()} Creating snapshot #{snapname} for #{name}"
 			dbinstance.create_snapshot({ db_snapshot_identifier: snapname })
+			return true
 		end
 
 		def list_types()

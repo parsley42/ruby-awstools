@@ -381,7 +381,8 @@ EOF
 
 			modify_params = {}
 			if snapshot
-				[ :vpc_security_group_ids, :monitoring_interval, :monitoring_role_arn, :allocated_storage ].each do |k|
+				dbspec.delete(:allocated_storage)
+				[ :vpc_security_group_ids, :monitoring_interval, :monitoring_role_arn ].each do |k|
 					modify_params[k] = dbspec[k]
 					dbspec.delete(k)
 				end

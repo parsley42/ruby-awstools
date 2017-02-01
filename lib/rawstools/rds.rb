@@ -408,7 +408,16 @@ EOF
 				yield "#{@mgr.timestamp()} Modifying restored database with rootpassword and other template values"
 				modify_params[:master_user_password] = @mgr.getparam("rootpassword")
 				modify_params[:apply_immediately] = true
-				dbinstance = dbinstance.modify(modify_params)
+				begin
+					dbinstance.modify(modify_params)
+				rescue => e
+					yield "#{@mgr.timestamp()} There were non-fatal errors modifying the restored database: #{e.message}"
+					dbinstance.modify({
+						master_user_password: @mgr.getparam("rootpassword"),
+						apply_immediately: true,
+					})
+					yield "#{@mgr.timestamp()} Modified the database updating only the root password"
+				end
 				@client.wait_until(:db_instance_available, db_instance_identifier: dbname)
 			end
 			yield "#{@mgr.timestamp()} #{dbname} is online"

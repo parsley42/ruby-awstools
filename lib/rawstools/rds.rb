@@ -246,7 +246,7 @@ EOF
 
 			dbinstance = resolve_instance()
 			unless dbinstance
-				yield "#{@mgr.timestamp()} Unable to resolve db instance #{name}"
+				yield "#{@mgr.timestamp()} Unable to resolve db instance: #{name}"
 				return false
 			end
 			snapname = "#{dbname}-#{@mgr.timestamp()}"
@@ -381,14 +381,27 @@ EOF
 
 			modify_params = {}
 			if snapshot
-				[ :vpc_security_group_ids, :monitoring_interval, :monitoring_role_arn ].each do |k|
+				[ :vpc_security_group_ids, :monitoring_interval, :monitoring_role_arn, :allocated_storage ].each do |k|
 					modify_params[k] = dbspec[k]
 					dbspec.delete(k)
 				end
-				dbinstance = snapshot.restore(dbspec)
+				begin
+					dbinstance = snapshot.restore(dbspec)
+				rescue => e
+					@mgr.unlock()
+					yield "#{@mgr.timestamp()} Problem restoring database from snapshot: #{e.message}"
+					return nil
+				end
 			else
-				dbinstance = @resource.create_db_instance(dbspec)
+				begin
+					dbinstance = @resource.create_db_instance(dbspec)
+				rescue => e
+					@mgr.unlock()
+					yield "#{@mgr.timestamp()} Problem creating the database: #{e.message}"
+					return nil
+				end
 			end
+			@mgr.unlock()
 			yield "#{@mgr.timestamp()} Created db instance #{name} (id: #{dbinstance.id()}), waiting for it to become available"
 			@client.wait_until(:db_instance_available, db_instance_identifier: dbname)
 			if snapshot

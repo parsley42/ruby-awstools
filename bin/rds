@@ -200,7 +200,7 @@ when "update"
 when "create"
 	name, rootpass, template = ARGV.shift(3)
 	raise UsageException.new("Missing required argument") unless template
-	dbinstance = cfg.rds.create_instance(name, rootpass, template, wait) { |status| puts status }
+	cfg.rds.create_instance(name, rootpass, template, wait) { |status| puts status }
 when "template"
 	cfg.rds.dump_template()
 when "updatedns"

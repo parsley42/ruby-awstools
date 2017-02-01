@@ -181,6 +181,23 @@ EOF
 			return nil
 		end
 
+		def delete_snapshot(snapname)
+			snap = resolve_snapshot(snapname)
+			if snap
+				begin
+					snap = snap.delete()
+				rescue => e
+					yield "#{@mgr.timestamp()} Error deleting snapshot: #{e.message}"
+					return nil
+				end
+				yield "#{@mgr.timestamp()} Deleted snapshot #{snap.db_snapshot_identifier}"
+				return snap
+			else
+				yield "#{@mgr.timestamp()} Unable to resolve database snapshot #{snapname}"
+				return nil
+			end
+		end
+
 		def list_instances()
 			dbinstances = []
 			@resource.db_instances().each do |i|

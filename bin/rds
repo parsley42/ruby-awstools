@@ -14,7 +14,8 @@ Usage: rds <command> (options) (args) - manage a CloudFormation stack
     template (name or path) with the provided root password
   snapshot <name> - take a snapshot of the db instance <name>
   template - dump the default template for creating db instances
-  delete <name> - delete a db instance
+  delete database <name> - delete a db instance
+  delete snapshot <name> - delete a db snapshot
   updatedns <name> - refresh DNS CNAME for the db instance
   update backup <name> <time> - change backup window for an instance
     (e.g. 2:30am)
@@ -94,7 +95,7 @@ when "updatedns", "delete"
 		wait = true
 	end
 	if command == "delete"
-		opts.on("-u", "--unsafe", "Don't create a final snapshot") do
+		opts.on("-u", "--unsafe", "Don't create a final snapshot when deleting a database") do
 			unsafe = true
 		end
 	end
@@ -211,9 +212,16 @@ when "snapshot"
 	raise UsageException.new("Missing <name> argument") unless name
 	cfg.rds.create_snapshot(name, wait) { |status| puts status }
 when "delete"
+  type = ARGV.shift()
+  raise UsageException.new("Missing <type> argument (database or snapshot)") unless type
 	name = ARGV.shift()
 	raise UsageException.new("Missing <name> argument") unless name
-	cfg.rds.delete_instance(name, wait, unsafe) { |status| puts status }
+  case type
+  when "database"
+	  cfg.rds.delete_instance(name, wait, unsafe) { |status| puts status }
+  when "snapshot"
+    cfg.rds.delete_snapshot(name) { |status| puts status }
+  end
 end
 
 rescue UsageException => e

@@ -7,7 +7,7 @@ module RAWSTools
 			@client = Aws::Route53::Client.new( region: @mgr["Region"] )
 		end
 
-		def lookup(zone, fqdn = nil)
+		def lookup(zone, fqdn = nil, type=nil)
 			@mgr.normalize_name_parameters()
 			fqdn = @mgr.getparam("fqdn") unless fqdn
 			raise "No fqdn parameter or function argument; missing a call to normalize_name_parameters?" unless fqdn
@@ -16,6 +16,7 @@ module RAWSTools
 				start_record_name: fqdn,
 				max_items: 1,
 			}
+			lookup[:start_record_type] = type if type
 			records = @client.list_resource_record_sets(lookup)
 			values = []
 			return values unless records.resource_record_sets.size() == 1

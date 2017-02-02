@@ -115,8 +115,8 @@ module RAWSTools
 						subnet_types[stack][st] = SubnetDefinition.new(@config["SubnetTypes"][stack][st]["CIDR"], @config["SubnetTypes"][stack][st]["Subnets"])
 					end
 				end
+				@config["SubnetTypes"] = subnet_types
 			end
-			@config["SubnetTypes"] = subnet_types
 		end
 
 		# Implement a simple mutex to prevent collisions

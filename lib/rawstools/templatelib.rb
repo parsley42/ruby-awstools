@@ -22,7 +22,8 @@ module RAWSTools
 			else
 				@parent = self
 			end
-			@st = @cloudcfg["SubnetTypes"][@parent.templatename]
+			@st = {}
+			@st = @cloudcfg["SubnetTypes"][@parent.templatename] if @cloudcfg["SubnetTypes"]
 			@az = @cloudcfg["AvailabilityZones"]
 			raw = File::read(directory + "/" + @name.downcase() + ".yaml")
 			raw = @cloudcfg.expand_strings(raw)
@@ -66,9 +67,12 @@ module RAWSTools
 		# Returns an Array of string CIDRs, even if it's only 1 long
 		def resolve_cidr(ref)
 			clists = @cloudcfg["CIDRLists"]
-			if @cloudcfg["SubnetTypes"][@parent.templatename][ref] != nil
-				return [ @cloudcfg["SubnetTypes"][@parent.templatename][ref].cidr ]
-			elsif clists[ref] != nil
+			if @cloudcfg["SubnetTypes"]
+				if @cloudcfg["SubnetTypes"][@parent.templatename][ref] != nil
+					return [ @cloudcfg["SubnetTypes"][@parent.templatename][ref].cidr ]
+				end
+			end
+			if clists[ref] != nil
 				if clists[ref].class == Array
 					return clists[ref]
 				else

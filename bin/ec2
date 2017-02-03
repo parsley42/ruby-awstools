@@ -212,6 +212,7 @@ when "create"
     puts "Looking up keypair: #{e.message}"
     exit 1
   end
+  cfg.tags["Servertype"] = template
 	instance = cfg.ec2.create_instance(name, key, template, wait) { |status| puts status }
 when "updatedns"
 	name = ARGV.shift()

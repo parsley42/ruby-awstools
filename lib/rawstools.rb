@@ -176,6 +176,13 @@ module RAWSTools
 			end
 		end
 
+		# Convience method for quickly normalizing a name
+		def normalize(name, param="name")
+			@params[param] = name
+			normalize_name_parameters()
+			return @params[param]
+		end
+
 		def setparams(hash)
 			@params = hash
 		end
@@ -185,7 +192,7 @@ module RAWSTools
 		end
 
 		def getparam(param)
-			@params[param]
+			return @params[param]
 		end
 
 		def getparams(*p)
@@ -195,7 +202,7 @@ module RAWSTools
 		end
 
 		def [](key)
-			@config[key]
+			return @config[key]
 		end
 
 		def symbol_keys(item)

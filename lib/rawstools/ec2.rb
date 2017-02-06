@@ -671,11 +671,9 @@ EOF
 
 		def terminate_instance(name=nil, wait=true, deletevol=false)
 			if name
-				@mgr.setparam("name", name)
-				@mgr.normalize_name_parameters()
+				name = @mgr.normalize(name)
 			end
 			instance, err = resolve_instance()
-			name = @mgr.getparam("name")
 			if instance
 				yield "#{@mgr.timestamp()} Terminating #{name}"
 				remove_dns = false
@@ -690,7 +688,9 @@ EOF
 				delete_volume(nil, wait) { |s| yield s } if deletevol
 			else
 				yield "#{@mgr.timestamp()} Error resolving #{name}: #{err}"
+				return false
 			end
+			return true
 		end
 
 		def remove_dns(instance, wait=false)

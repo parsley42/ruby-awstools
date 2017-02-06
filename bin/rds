@@ -13,6 +13,7 @@ Usage: rds <command> (options) (args) - manage a CloudFormation stack
   create <name> <rootpassword> <template> - create an rds db instance from a
     template (name or path) with the provided root password
   snapshot <name> - take a snapshot of the db instance <name>
+  password <name> <rootpassword> - update the root password for an instance
   template - dump the default template for creating db instances
   delete database <name> - delete a db instance
   delete snapshot <name> - delete a db snapshot
@@ -44,7 +45,7 @@ end
 
 begin
 
-commands = [ "create", "list", "rename", "snapshot", "delete", "template", "resize", "update", "updatedns", "metadata" ]
+commands = [ "create", "list", "rename", "snapshot", "delete", "template", "password", "resize", "update", "updatedns", "metadata" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
@@ -141,10 +142,11 @@ when "list"
       ]
   	end
   when "snapshots"
-    format = "%-15s %-35s %-24s %-14s"
-    puts format % [ "Name", "Identifier", "Created", "Storage Size" ]
+    format = "%-15s %-35s %-16s %6s"
+    puts format % [ "Name", "Identifier", "Created", "Size" ]
     cfg.rds.list_snapshots(ARGV.shift()).each do |s|
-      puts format % [ cfg.rds.get_tag(s, "Name"), s.db_snapshot_identifier, s.snapshot_create_time ,s.allocated_storage ]
+      createstamp = s.snapshot_create_time.getlocal.strftime("%F|%R")
+      puts format % [ cfg.rds.get_tag(s, "Name"), s.db_snapshot_identifier, createstamp ,s.allocated_storage.to_s + "GB" ]
     end
   end
 when "resize"
@@ -207,6 +209,15 @@ when "updatedns"
   name = ARGV.shift()
   raise UsageException.new("Missing required name argument") unless name
   cfg.rds.update_dns(name, wait) { |status| puts status }
+when "password"
+  name, rootpass = ARGV.shift(2)
+  raise UsageException.new("Missing required name argument") unless rootpass
+  success, err = cfg.rds.root_password(name, rootpass)
+  if success
+    puts "Password successfully changed"
+  else
+    puts err
+  end
 when "snapshot"
 	name = ARGV.shift()
 	raise UsageException.new("Missing <name> argument") unless name

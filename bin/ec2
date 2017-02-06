@@ -24,7 +24,8 @@ Usage: ec2 <command> (options) (args) - manage a CloudFormation stack
   list <snapshots> (name) - list snapshots for the current project, optionally for a given name
   list servertypes - list the available server types for the project
   metadata <type> - show the metadata for a given server type
-  delete <volume|snapshot> <name> - delete a volume or snapshot
+  delete volume <name> - delete a volume
+  delete snapshot <snapid> - delete a snapshot
  Options are:
 EOF
 opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
@@ -78,8 +79,8 @@ when "create"
 	opts.on("-m", "--monitoring", "Enable ec2 monitoring (CPU, disk/network, status checks)") do
 		params["monitor"] = true
 	end
-	opts.on("-s", "--snapshot SNAP", "Create data volume from snapshot SNAP") do |snap|
-		params["snapname"] = snap
+	opts.on("-s", "--snapshot-id SNAP", "Create data volume from snapshot SNAP") do |snap|
+		params["snapid"] = snap
 	end
 	opts.on("-v", "--volume VOL", "Attach the given data volume") do |vol|
 		params["volname"] = vol
@@ -187,10 +188,14 @@ when "list"
   when "servertypes"
     puts "#{cfg.ec2.list_types().join(", ")}"
 	when "snapshots"
-		format = "%-30s %-14s %-24s"
-		puts format % [ "Name", "State", "Id" ]
+    hformat = "%-15s %-14s %-7s %-6s %-16s %-24s"
+		format = "%-15s %-14s %-7s %6s %-16s %-24s"
+		puts hformat % [ "Name", "State", "Type", "Size", "Created", "Id" ]
 		cfg.ec2.list_snapshots(ARGV.shift()).each() do |s|
-			puts format % [ cfg.ec2.get_tag(s, "Name"), s.state(), s.id() ]
+      createstamp = s.start_time.getlocal.strftime("%F|%R")
+      stype = cfg.ec2.get_tag(s, "SnapshotType")
+      vsize = s.volume_size.to_s + "GB"
+			puts format % [ cfg.ec2.get_tag(s, "Name"), s.state(), stype, vsize, createstamp, s.id() ]
 		end
 	when "volumes"
 		format = "%-21s %-14s %-21s %-4s %-8s"

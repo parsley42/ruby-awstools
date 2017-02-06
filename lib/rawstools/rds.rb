@@ -280,7 +280,7 @@ EOF
 
 		def create_instance(name, rootpass, template, wait=true)
 			@mgr.setparam("name", name)
-			@mgr.setparam("rootpassword", rootpass)
+			@mgr.setparam("rootpassword", rootpass) # required in the create template
 			@mgr.normalize_name_parameters()
 			name = @mgr.getparam("name")
 			if resolve_instance()
@@ -438,6 +438,24 @@ EOF
 			update_dns(nil, wait, dbinstance, true) { |s| yield s }
 
 			return dbinstance
+		end
+
+		def root_password(name=nil, rootpass)
+			if name
+				@mgr.setparam("name", name)
+				@mgr.normalize_name_parameters()
+			end
+			name = @mgr.getparam("name")
+			dbi = resolve_instance()
+			begin
+				dbi.modify({
+					master_user_password: rootpass,
+					apply_immediately: true,
+				})
+			rescue => e
+				return false, "Error updating master password on #{name}: #{e.message}"
+			end
+			return true, nil
 		end
 
 		def delete_instance(name, wait=true, unsafe=false)

@@ -185,28 +185,25 @@ EOF
 			return volumes
 		end
 
-		# NOTE: snapshots should all have fqdns of the form <timestamp>.<name>, where
-		# <name> is the fqdn of the volume snapshotted.
-		def resolve_snapshot(snapname)
+		def resolve_snapshot(snapid)
 			f = [
-				{ name: "tag:Name", values: [ snapname ] },
+				{ name: "snapshot-id", values: [ snapid ] },
 				{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
 			]
 			s = @resource.snapshots(filters: f)
 			count = s.count()
-			return nil, "Multiple matches for Name: #{snapname}" if count > 1
-			return nil, "No snapshot found with Name: #{snapname}" if count != 1
+			return nil, "No snapshot found for domain #{@mgr["DNSDomain"]} with id: #{snapid}" if count != 1
 			return s.first(), nil
 		end
 
-		def delete_snapshot(snapname)
-			s, err = resolve_snapshot(snapname)
+		def delete_snapshot(snapid)
+			s, err = resolve_snapshot(snapid)
 			if s
-				yield "#{@mgr.timestamp()} Deleting snapshot #{snapname}, id: #{s.id()}"
+				yield "#{@mgr.timestamp()} Deleting snapshot #{snapid}"
 				s.delete()
 				return true
 			else
-				yield "#{@mgr.timestamp()} Couldn't resolve snapshot #{snapname}"
+				yield "#{@mgr.timestamp()} Couldn't resolve snapshot #{snapid}: #{err}"
 				return false
 			end
 		end
@@ -218,13 +215,13 @@ EOF
 			if name
 				@mgr.setparam("name", name)
 				@mgr.normalize_name_parameters()
-				f << { name: "tag:VolumeName", values: [ @mgr.getparam("name") ] }
+				f << { name: "tag:Name", values: [ @mgr.getparam("name") ] }
 			end
 			snapshots = @resource.snapshots(filters: f)
 			return snapshots
 		end
 
-		def create_snapshot(volname=nil, wait=false)
+		def create_snapshot(volname=nil, wait=false, type="manual")
 			if volname
 				@mgr.setparam("volname", volname)
 				@mgr.normalize_name_parameters()
@@ -236,19 +233,16 @@ EOF
 				yield "#{@mgr.timestamp()} #{err}"
 				return nil
 			end
-			snapname = "#{volname}.#{@mgr.timestamp()}"
-			yield "#{@mgr.timestamp()} Creating snapshot #{snapname}"
+			yield "#{@mgr.timestamp()} Creating snapshot for volume #{volname}"
 			snap = vol.create_snapshot()
 			tags = vol.tags
 			snaptags = []
 			tags.each() do |tag|
-				if tag.key == "Name"
-					snaptags << { "key" => tag.key, "value" => snapname }
-					snaptags << { "key" => "VolumeName", "value" => volname }
-				elsif not tag.key.start_with?("aws:")
+				if not tag.key.start_with?("aws:")
 					snaptags << { "key" => tag.key, "value" => tag.value }
 				end
 			end
+			snaptags << { "key" => "SnapshotType", "value" => type }
 			yield "#{@mgr.timestamp()} Tagging snapshot"
 			snap.create_tags(tags: snaptags)
 			return snap unless wait
@@ -295,7 +289,7 @@ EOF
 				@mgr.normalize_name_parameters()
 			end
 			@mgr.setparam("key", key)
-			name, volname, snapname, datasize, availability_zone, dryrun, nodns = @mgr.getparams("name", "volname", "snapname", "datasize", "availability_zone", "dryrun", "nodns")
+			name, volname, snapid, datasize, availability_zone, dryrun, nodns = @mgr.getparams("name", "volname", "snapid", "datasize", "availability_zone", "dryrun", "nodns")
 
 			i, err = resolve_instance()
 			if i
@@ -322,7 +316,7 @@ EOF
 				return nil
 			end
 
-			if volname and ( snapname or datasize )
+			if volname and ( snapid or datasize )
 				yield "#{@mgr.timestamp()} Invalid parameters: volume provided with snapshot and/or data size"
 				return nil
 			end
@@ -405,14 +399,16 @@ EOF
 						true
 					else
 						e=dev[:ebs]
-						if snapname
+						if snapid
 							e.delete(:encrypted)
-							snapshot, err = resolve_snapshot(snapname)
+							snapshot, err = resolve_snapshot(snapid)
 							unless snapshot
-								yield "#{@mgr.timestamp()} Error resolving snapshot: #{snapname}"
+								yield "#{@mgr.timestamp()} Error resolving snapshot: #{snapid}"
 								return nil
 							end
-							yield "#{@mgr.timestamp()} Launching with data volume from snapshot #{snapname}, id #{snapshot.id()}"
+							sname = get_tag(snapshot, "Name")
+							stime = snapshot.start_time.getlocal.strftime("%F|%R")
+							yield "#{@mgr.timestamp()} Launching with data volume from snapshot #{snapshot.id()} for #{sname} created: #{stime}"
 							e[:snapshot_id] = snapshot.id()
 						else
 							e.delete(:snapshot_id)

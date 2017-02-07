@@ -167,7 +167,7 @@ EOF
 				yield "#{@mgr.timestamp()} Deleting volume: #{volname}"
 				volume.delete()
 				return true unless wait
-				yield "#{@mgr.timestamp()} Waiting for volume to finished deleting..."
+				yield "#{@mgr.timestamp()} Waiting for volume to finish deleting..."
 				@client.wait_until(:volume_deleted, volume_ids: [ volume.id() ])
 				yield "#{@mgr.timestamp()} Deleted"
 				return true

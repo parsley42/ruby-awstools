@@ -684,8 +684,20 @@ EOF
 				yield "#{@mgr.timestamp()} Waiting for instance to terminate..."
 				instance.wait_until_terminated()
 				yield "#{@mgr.timestamp()} Terminated"
-				@mgr.setparam("volname", name)
-				delete_volume(nil, wait) { |s| yield s } if deletevol
+				if deletevol
+					@mgr.setparam("volname", name)
+					volume,err = resolve_volume(nil, [ "available", "in-use" ])
+					if volume
+						yield "#{@mgr.timestamp()} Waiting for volume to be available..."
+						@client.wait_until(:volume_available, {
+							volume_ids: [ volume.id() ]
+						})
+						yield "#{@mgr.timestamp()} Deleting volume #{name}, id: #{volume.id()}"
+						delete_volume(nil, wait) { |s| yield s }
+					else
+						yield "#{@mgr.timestamp()} Not deleting data volume: #{err}"
+					end
+				end
 			else
 				yield "#{@mgr.timestamp()} Error resolving #{name}: #{err}"
 				return false

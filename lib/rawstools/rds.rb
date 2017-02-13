@@ -247,9 +247,9 @@ EOF
 
 		def create_snapshot(name=nil, snaptype="manual")
 			if name
-				name = @mgr.normalize(name)
+				@mgr.normalize(name)
 			end
-			dbname = @mgr.getparam("dbname")
+			name, dbname = @mgr.getparams("name", "dbname")
 
 			dbinstance = resolve_instance()
 			unless dbinstance

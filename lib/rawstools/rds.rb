@@ -221,7 +221,7 @@ EOF
 			return nil
 		end
 
-		def list_snapshots(name=nil)
+		def list_snapshots(name=nil, type=nil)
 			dbsnapshots = []
 			params = {}
 			if name
@@ -233,16 +233,23 @@ EOF
 			end
 			@resource.db_snapshots(params).each do |s|
 				if get_tag(s, "Domain") == @mgr["DNSDomain"]
-					dbsnapshots << s
+					if type
+						if get_tag(s, "SnapshotType") == type
+							dbsnapshots << s
+						end
+					else
+						dbsnapshots << s
+					end
 				end
 			end
 			return dbsnapshots
 		end
 
-		def create_snapshot(name)
-			@mgr.setparam("name", name)
-			@mgr.normalize_name_parameters()
-			name, dbname = @mgr.getparams("name", "dbname")
+		def create_snapshot(name=nil, snaptype="manual")
+			if name
+				name = @mgr.normalize(name)
+			end
+			dbname = @mgr.getparam("dbname")
 
 			dbinstance = resolve_instance()
 			unless dbinstance
@@ -250,8 +257,17 @@ EOF
 				return false
 			end
 			snapname = "#{dbname}-#{@mgr.timestamp()}"
+			snaptags = [ { key: "SnapshotType", value: snaptype } ]
+			tags = @client.list_tags_for_resource({ resource_name: dbinstance.db_instance_arn }).tag_list
+			tags.each() do |tag|
+				snaptags << { key: tag.key, value: tag.value }
+			end
 			yield "#{@mgr.timestamp()} Creating snapshot #{snapname} for #{name}"
-			dbinstance.create_snapshot({ db_snapshot_identifier: snapname })
+			params = {
+				db_snapshot_identifier: snapname,
+				tags: snaptags,
+			}
+			dbinstance.create_snapshot(params)
 			return true
 		end
 

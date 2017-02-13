@@ -142,11 +142,13 @@ when "list"
       ]
   	end
   when "snapshots"
-    format = "%-15s %-35s %-16s %6s"
-    puts format % [ "Name", "Identifier", "Created", "Size" ]
+    format = "%-15s %-35s %-9s %-16s %6s"
+    puts format % [ "Name", "Identifier", "Type", "Created", "Size" ]
     cfg.rds.list_snapshots(ARGV.shift()).each do |s|
       createstamp = s.snapshot_create_time.getlocal.strftime("%F|%R")
-      puts format % [ cfg.rds.get_tag(s, "Name"), s.db_snapshot_identifier, createstamp ,s.allocated_storage.to_s + "GB" ]
+      snaptype = cfg.rds.get_tag(s, "SnapshotType")
+      snaptype = "unknown" unless snaptype
+      puts format % [ cfg.rds.get_tag(s, "Name"), s.db_snapshot_identifier, snaptype, createstamp ,s.allocated_storage.to_s + "GB" ]
     end
   end
 when "resize"
@@ -221,7 +223,7 @@ when "password"
 when "snapshot"
 	name = ARGV.shift()
 	raise UsageException.new("Missing <name> argument") unless name
-	cfg.rds.create_snapshot(name, wait) { |status| puts status }
+	cfg.rds.create_snapshot(name) { |status| puts status }
 when "delete"
   type = ARGV.shift()
   raise UsageException.new("Missing <type> argument (database or snapshot)") unless type

@@ -256,7 +256,7 @@ EOF
 				yield "#{@mgr.timestamp()} Unable to resolve db instance: #{name}"
 				return false
 			end
-			snapname = "#{dbname}-#{@mgr.timestamp()}"
+			snapname = "#{dbname}-#{snaptype}-#{@mgr.timestamp()}"
 			snaptags = [ { key: "SnapshotType", value: snaptype } ]
 			tags = @client.list_tags_for_resource({ resource_name: dbinstance.db_instance_arn }).tag_list
 			tags.each() do |tag|

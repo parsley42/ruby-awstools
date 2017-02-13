@@ -208,13 +208,16 @@ EOF
 			end
 		end
 
-		def list_snapshots(name=nil)
+		def list_snapshots(name=nil, type=nil)
 			f = [
 				{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
 			]
 			if name
 				name = @mgr.normalize(name)
 				f << { name: "tag:Name", values: [ name ] }
+			end
+			if type
+				f << { name: "tag:SnapshotType", values: [ type ] }
 			end
 			snapshots = @resource.snapshots(filters: f)
 			return snapshots

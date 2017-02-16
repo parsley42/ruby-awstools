@@ -163,7 +163,7 @@ module RAWSTools
 					setparam("fqdn", fqdn)
 					dbname = norm.gsub(".","-")
 					setparam("dbname", dbname)
-					ansible_name = norm.gsub(".", "_")
+					ansible_name = norm.gsub(/[.-]/, "_")
 					setparam("ansible_name", ansible_name)
 				when "cname"
 					setparam("cfqdn", fqdn)

@@ -7,6 +7,55 @@ module RAWSTools
 			@client = Aws::Route53::Client.new( region: @mgr["Region"] )
 		end
 
+		# Wrapper that will retry on rate exceeded
+		def change_record_sets(set)
+			tries = 0
+			while true
+				begin
+					resp = @client.change_resource_record_sets(set)
+					break
+				rescue => e
+					tries += 1
+					if /rate exceed/i =~ e.message
+						if tries >= 2
+							raise e
+						end
+						sleep 1
+					elsif /rate for operation/i =~ e.message
+						if tries >= 4
+							raise e
+						end
+						sleep 30
+					else
+						raise e
+					end
+				end
+			end
+			return resp
+		end
+
+		# Wrapper that will retry on rate exceeded
+		def list_record_sets(params)
+			tries = 0
+			while true
+				begin
+					resp = @client.list_resource_record_sets(params)
+					break
+				rescue => e
+					if /rate exceed/i =~ e.message
+						tries += 1
+						if tries >= 2
+							raise e
+						end
+						sleep 1
+					else
+						raise e
+					end
+				end
+			end
+			return resp
+		end
+
 		def lookup(zone, fqdn = nil, type=nil)
 			@mgr.normalize_name_parameters()
 			fqdn = @mgr.getparam("fqdn") unless fqdn
@@ -17,7 +66,7 @@ module RAWSTools
 				max_items: 1,
 			}
 			lookup[:start_record_type] = type if type
-			records = @client.list_resource_record_sets(lookup)
+			records = list_record_sets(lookup)
 			values = []
 			return values unless records.resource_record_sets.size() == 1
 			return values unless records.resource_record_sets[0].name == fqdn
@@ -36,7 +85,7 @@ module RAWSTools
 				start_record_name: fqdn,
 				max_items: 1,
 			}
-			records = @client.list_resource_record_sets(lookup)
+			records = list_record_sets(lookup)
 			record = records.resource_record_sets[0]
 			return unless record and record.name == fqdn
 			dset = {
@@ -55,7 +104,7 @@ module RAWSTools
 					]
 				}
 			}
-			resp = @client.change_resource_record_sets(dset)
+			resp = change_record_sets(dset)
 			return resp
 		end
 
@@ -77,7 +126,7 @@ module RAWSTools
 			@mgr.symbol_keys(set)
 
 			# puts "Record set:\n#{set}"
-			resp = @client.change_resource_record_sets(set)
+			resp = change_record_sets(set)
 			return resp
 		end
 

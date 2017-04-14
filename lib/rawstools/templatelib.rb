@@ -24,6 +24,7 @@ module RAWSTools
 			end
 			@st = {}
 			@st = @cloudcfg["SubnetTypes"][@parent.templatename] if @cloudcfg["SubnetTypes"]
+			raise "No SubnetTypes definition for #{@parent.templatename}" unless @st
 			@az = @cloudcfg["AvailabilityZones"]
 			raw = File::read(directory + "/" + @name.downcase() + ".yaml")
 			raw = @cloudcfg.expand_strings(raw)

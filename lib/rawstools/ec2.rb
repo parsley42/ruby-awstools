@@ -312,8 +312,8 @@ EOF
 			end
 			begin
 				raw = File::read(templatefile)
-			rescue
-				yield "#{@mgr.timestamp()} Error reading template file #{templatefile}"
+			rescue => e
+				yield "#{@mgr.timestamp()} Error in File::Read for template file #{templatefile}: #{e.message}"
 				return nil
 			end
 

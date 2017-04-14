@@ -5,8 +5,8 @@ module RAWSTools
   min_count: 1
   max_count: 1
   key_name: ${@key|none}
-  security_group_ids:
-  - (requires override)
+  #security_group_ids:
+  #- (requires override)
   #user_data: (override or omit)
   instance_type: ${@type|none} # or $ {@type|default}
   # NOTE: block_device_mappings are intelligently overwritten;
@@ -30,7 +30,7 @@ module RAWSTools
   #    encrypted: ${@encrypted|true}
   monitoring:
     enabled: ${@monitor|false}
-  subnet_id: (requires override)
+  #subnet_id: (requires override)
   instance_initiated_shutdown_behavior: stop
   # Uncomment to use an instance profile with this template
   #iam_instance_profile:

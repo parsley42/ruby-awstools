@@ -8,17 +8,17 @@ module RAWSTools
   #security_group_ids:
   #- (requires override)
   #user_data: (override or omit)
-  instance_type: ${@type|none} # or $ {@type|default}
+  instance_type: ${@type|none} # or $ {@type|some_default}
   # NOTE: block_device_mappings are intelligently overwritten;
   # if /dev/sda1 is present in the template, it overwrites the
   # one in the template. Otherwise, any additional devs are added
   # to the default definition for /dev/sda1.
-  # The default definition of /dev/sda1 corrects for AMIs built
+  # This definition of /dev/sda1 corrects for AMIs built
   # that incorrectly have delete_on_termination: false
-  block_device_mappings:
-  - device_name: /dev/sda1
-    ebs:
-      delete_on_termination: true
+  # block_device_mappings:
+  # - device_name: /dev/sda1
+  #   ebs:
+  #     delete_on_termination: true
   # Uncomment to create data volume for a given template
   #- device_name: /dev/sdf
   #  ebs:
@@ -374,17 +374,7 @@ EOF
 			@mgr.resolve_vars( { "child" => ispec }, "child" )
 			@mgr.symbol_keys(ispec)
 
-			base_block_devs = ispec[:block_device_mappings]
-			template_block_devs = template[:api_template][:block_device_mappings]
 			ispec = ispec.merge(template[:api_template])
-			ispec[:block_device_mappings] = base_block_devs
-			if template_block_devs
-				template_block_devs.each() do |bdev|
-					dev = bdev[:device_name]
-					base_block_devs.delete_if() { |bbdev| bbdev[:device_name] == dev }
-					base_block_devs << bdev
-				end
-			end
 
 			if ispec[:user_data]
 				ispec[:user_data] = Base64::encode64(ispec[:user_data])
@@ -421,10 +411,18 @@ EOF
 			end
 			yield "#{@mgr.timestamp()} Dry run, creating: #{ispec}" if dry_run
 
+			interfaces = []
+			if template[:additional_interfaces]
+				template[:additional_interfaces].each() do |iface|
+					interfaces << @resource.create_network_interface(iface)
+				end
+			end
+			# puts "Creating: #{ispec}"
 			begin
 				instances = @resource.create_instances(ispec)
 			rescue => e
 				yield "#{@mgr.timestamp()} Caught exception creating instance: #{e.message}"
+				abort_instance(nil, interfaces, wait, false)
 				return nil
 			end
 			instance = nil
@@ -432,8 +430,17 @@ EOF
 				instance = instances.first()
 				yield "#{@mgr.timestamp()} Created instance #{name} (id: #{instance.id()}), waiting for it to enter state running ..."
 				instance.wait_until_running()
-				@client.wait_until(:instance_running, instance_ids: [ instance.id() ])
 				yield "#{@mgr.timestamp()} Running"
+				if interfaces.size > 0
+					iface_index = 1
+					interfaces.each() do |iface|
+						yield "#{@mgr.timestamp()} Attaching additional interface ##{iface_index} to #{instance.id()}"
+						attach = iface.attach({ instance_id: instance.id(), device_index: iface_index })
+						iface.modify_attribute({ attachment: { attachment_id: attach.attachment_id, delete_on_termination: true } })
+						iface_index += 1
+					end
+				end
+				#@client.wait_until(:instance_running, instance_ids: [ instance.id() ])
 
 				if volume
 					if volume.state == "available"
@@ -445,12 +452,12 @@ EOF
 							})
 						rescue => e
 							yield "#{@mgr.timestamp()} Unable to attach volume"
-							return abort_instance(instance, wait, true) { |s| yield s }
+							return abort_instance(instance, [], wait, true) { |s| yield s }
 						end
 						@client.wait_until(:volume_in_use, volume_ids: [ volume.id() ])
 					else
 						yield "#{@mgr.timestamp()} Data volume not in state 'available'"
-						return abort_instance(instance, wait) { |s| yield s }
+						return abort_instance(instance, [], wait, true) { |s| yield s }
 					end
 				end
 
@@ -460,11 +467,15 @@ EOF
 				# Acquire global lock during tagging and dns updates to insure
 				# unique instance names and unused DNS records.
 				@mgr.lock() # NOTE: unlock() will be called by either abort_instance or update_dns
-				# Need to refresh to get applied tags.
-				i, err = resolve_instance()
-				if i
-					yield "#{@mgr.timestamp()} Instance #{name} created during launch"
-					return abort_instance(instance, wait, true) { |s| yield s }
+				# Now that we hold the lock, we double-check to make sure an instance
+				# with the same name wasn't being tagged while this instance was
+				# launching
+				should_not_exist, err = resolve_instance()
+				if should_not_exist
+					# We haven't applied tags yet, but we found an instance with the same
+					# name
+					yield "#{@mgr.timestamp()} Instance with same name \"#{name}\" created during launch"
+					return abort_instance(instance, [], wait, true) { |s| yield s }
 				end
 				tag_instance(instance, template[:tags]) { |s| yield s }
 
@@ -472,7 +483,7 @@ EOF
 				rr = @mgr.route53.lookup(@mgr["PrivateDNSId"])
 				if rr.size != 0
 					yield "#{@mgr.timestamp()} DNS record for #{name} created during launch"
-					return abort_instance(instance, wait, true) { |s| yield s }
+					return abort_instance(instance, [], wait, true) { |s| yield s }
 				end
 
 				update_dns(nil, wait, instance, true) { |s| yield s }
@@ -484,8 +495,14 @@ EOF
 		end
 
 		# Abort creation because of errors detected post create_instances
-		def abort_instance(instance, wait, unlock=false)
+		def abort_instance(instance, interfaces, wait, unlock=false)
 			@mgr.unlock() if unlock
+			if interfaces.size > 0
+				interfaces.each() do |iface|
+					iface.delete()
+				end
+			end
+			return unless instance
 			yield "#{@mgr.timestamp()} Aborting instance #{instance.id()}"
 			instance.block_device_mappings().each() do |b|
 				v = @resource.volume(b.ebs.volume_id)

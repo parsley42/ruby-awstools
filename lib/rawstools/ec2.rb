@@ -436,7 +436,7 @@ EOF
 					tags: vtags,
 				}
 			]
-			puts "Creating: #{ispec}"
+			# puts "Creating: #{ispec}"
 
 			begin
 				instances = @resource.create_instances(ispec)

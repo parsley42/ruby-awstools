@@ -417,7 +417,27 @@ EOF
 					interfaces << @resource.create_network_interface(iface)
 				end
 			end
-			# puts "Creating: #{ispec}"
+			@mgr.normalize_name_parameters()
+			cfgtags = @mgr.tags()
+			name = @mgr.getparam("name")
+			cfgtags["Name"] = name
+			cfgtags["Domain"] = @mgr["DNSDomain"]
+			cfgtags.add(template[:tags]) if template[:tags]
+			itags = cfgtags.ltags()
+			cfgtags["InstanceName"] = @mgr.getparam("name")
+			vtags = cfgtags.ltags()
+			ispec[:tag_specifications] = [
+				{
+					resource_type: "instance",
+					tags: itags,
+				},
+				{
+					resource_type: "volume",
+					tags: vtags,
+				}
+			]
+			puts "Creating: #{ispec}"
+
 			begin
 				instances = @resource.create_instances(ispec)
 			rescue => e
@@ -467,17 +487,14 @@ EOF
 				# Acquire global lock during tagging and dns updates to insure
 				# unique instance names and unused DNS records.
 				@mgr.lock() # NOTE: unlock() will be called by either abort_instance or update_dns
-				# Now that we hold the lock, we double-check to make sure an instance
-				# with the same name wasn't being tagged while this instance was
-				# launching
-				should_not_exist, err = resolve_instance()
-				if should_not_exist
+				# Make sure this is the only instance with this Name
+				i, err = resolve_instance()
+				if err
 					# We haven't applied tags yet, but we found an instance with the same
 					# name
 					yield "#{@mgr.timestamp()} Instance with same name \"#{name}\" created during launch"
 					return abort_instance(instance, [], wait, true) { |s| yield s }
 				end
-				tag_instance(instance, template[:tags]) { |s| yield s }
 
 				instance = @resource.instance(instance.id())
 				rr = @mgr.route53.lookup(@mgr["PrivateDNSId"])
@@ -533,30 +550,6 @@ EOF
 			yield "#{@mgr.timestamp()} Waiting for instance to terminate..."
 			instance.wait_until_terminated()
 			yield "#{@mgr.timestamp()} Terminated"
-		end
-
-		def tag_instance(instance, tags=nil)
-			@mgr.normalize_name_parameters()
-			cfgtags = @mgr.tags()
-			name = @mgr.getparam("name")
-			cfgtags["Name"] = name
-			cfgtags["Domain"] = @mgr["DNSDomain"]
-			cfgtags.add(tags) if tags
-
-			yield "#{@mgr.timestamp()} Tagging instance #{name}"
-			instance.create_tags(tags: cfgtags.ltags())
-
-			cfgtags["InstanceName"] = @mgr.getparam("name")
-			instance.block_device_mappings().each() do |b|
-				if b.device_name.end_with?("a") or b.device_name.end_with?("a1")
-					yield "#{@mgr.timestamp()} Tagging root volume"
-					cfgtags["Name"] = "#{name}-root"
-				else
-					yield "#{@mgr.timestamp()} Tagging data volume"
-					cfgtags["Name"] = name
-				end
-				@resource.volume(b.ebs.volume_id()).create_tags(tags: cfgtags.ltags())
-			end
 		end
 
 		def reboot_instance(name=nil)

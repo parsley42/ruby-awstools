@@ -1,0 +1,9 @@
+2017-04-21 David Parsley <parsley@linuxjedi.org>
+
+  * Tag instance and volume on creation
+
+  * Add "additional_interfaces" support for ec2 instances; allows you to create
+  an instance with a public IP and multiple interfaces. Additional interfaces
+  are marked to delete on termination. Note that you probably want to use
+  Amazon Linux for this, as currently CentOS 7 won't hot-plug the added
+  interface.

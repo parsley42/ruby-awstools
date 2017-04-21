@@ -2,3 +2,4 @@
 lib/rawstools/vendor/ruby
 sample/*/output
 rawstools*gem
+.publish

@@ -26,6 +26,8 @@ module RAWSTools
 	# Class to convert from configuration file format to AWS expected format
 	# for tags
 	class Tags
+		attr_reader :tags
+
 		def initialize(cfg)
 			@tags = Marshal.load(Marshal.dump(cfg["Tags"])) if cfg["Tags"]
 			@tags ||= {}
@@ -60,7 +62,7 @@ module RAWSTools
 	# For reading in the configuration file and initializing service clients
 	# and resources
 	class CloudManager
-		attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :rds, :route53, :tags
+		attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :rds, :route53, :tags, :params
 
 		def initialize(filename)
 			@filename = filename

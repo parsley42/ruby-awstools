@@ -56,6 +56,9 @@ api_template:
 EOF
 		end
 
+		# :call-seq:
+		#   resolve_instance(name, [states]) -> instance_id|nil, error_msg
+		# Resolve an instance name to an instance ID
 		def resolve_instance(name=nil, states=nil)
 			if name
 				name = @mgr.normalize(name)
@@ -285,6 +288,10 @@ EOF
 			end
 		end
 
+		# :call-seq:
+		#   create_instance(name, key, template, wait) -> Aws::EC2::Instance|nil, msg
+		#
+		# If instance is nil, msg contains the error, otherwise msg is informative
 		def create_instance(name, key, template, wait=true)
 			if name
 				@mgr.normalize(name)
@@ -294,13 +301,15 @@ EOF
 
 			i, err = resolve_instance()
 			if i
-				yield "#{@mgr.timestamp()} Instance #{name} already exists"
-				return nil
+				msg = "Instance #{name} already exists"
+				yield "#{@mgr.timestamp()} #{msg}"
+				return nil, msg
 			end
 
 			rr = @mgr.route53.lookup(@mgr["PrivateDNSId"])
 			if rr.size != 0
-				yield "#{@mgr.timestamp()} DNS record for #{name} already exists"
+				msg = "DNS record for #{name} already exists"
+				yield "#{@mgr.timestamp()} #{msg}"
 				return nil
 			end
 
@@ -313,13 +322,15 @@ EOF
 			begin
 				raw = File::read(templatefile)
 			rescue => e
-				yield "#{@mgr.timestamp()} Error in File::Read for template file #{templatefile}: #{e.message}"
-				return nil
+				msg = "Error in File::Read for template file #{templatefile}: #{e.message}"
+				yield "#{@mgr.timestamp()} #{msg}"
+				return nil, msg
 			end
 
 			if volname and ( snapid or datasize )
-				yield "#{@mgr.timestamp()} Invalid parameters: volume provided with snapshot and/or data size"
-				return nil
+				msg = "Invalid parameters: volume provided with snapshot and/or data size"
+				yield "#{@mgr.timestamp()} #{msg}"
+				return nil, msg
 			end
 
 			if dryrun == "true" or dryrun == true
@@ -332,15 +343,17 @@ EOF
 				yield "#{@mgr.timestamp()} Looking up volume: #{volname}"
 				volume, err = resolve_volume()
 				unless volume
-					yield "#{@mgr.timestamp} Error looking up given volume: #{err}"
-					return nil
+					msg = "Error looking up given volume: #{err}"
+					yield "#{@mgr.timestamp()} #{msg}"
+					return nil, msg
 				end
 			end
 			existing, err = resolve_volume(name)
 			if existing
 				if volume
-					yield "#{@mgr.timestamp()} Launching with volume #{volname} will create a duplicate volume name for existing volume #{name}; delete existing volume or use attach volume instead"
-					return nil
+					msg = "Launching with volume #{volname} will create a duplicate volume name for existing volume #{name}; delete existing volume or use attach volume instead"
+					yield "#{@mgr.timestamp()} #{msg}"
+					return nil, msg
 				else
 					volume = existing
 					yield "#{@mgr.timestamp()} Found existing volume for #{name}: #{volume.id()}"
@@ -409,6 +422,9 @@ EOF
 					end
 				end
 			end
+			if ispec[:block_device_mappings].size == 0
+				ispec.delete(:block_device_mappings)
+			end
 			yield "#{@mgr.timestamp()} Dry run, creating: #{ispec}" if dry_run
 
 			interfaces = []
@@ -436,14 +452,15 @@ EOF
 					tags: vtags,
 				}
 			]
-			# puts "Creating: #{ispec}"
+			puts "Creating: #{ispec}"
 
 			begin
 				instances = @resource.create_instances(ispec)
 			rescue => e
-				yield "#{@mgr.timestamp()} Caught exception creating instance: #{e.message}"
+				msg = "Caught exception creating instance: #{e.message}"
+				yield "#{@mgr.timestamp()} #{msg}"
 				abort_instance(nil, interfaces, wait, false)
-				return nil
+				return nil, msg
 			end
 			instance = nil
 			unless dry_run
@@ -462,8 +479,10 @@ EOF
 				end
 				#@client.wait_until(:instance_running, instance_ids: [ instance.id() ])
 
+				msg = nil
 				if volume
 					if volume.state == "available"
+						msg = "Used existing volume"
 						yield "#{@mgr.timestamp()} Attaching data volume: #{volume.id()}"
 						begin
 							instance.attach_volume({
@@ -471,13 +490,17 @@ EOF
 								device: "/dev/sdf",
 							})
 						rescue => e
-							yield "#{@mgr.timestamp()} Unable to attach volume"
-							return abort_instance(instance, [], wait, true) { |s| yield s }
+							msg = "Unable to attach volume, aborting"
+							yield "#{@mgr.timestamp()} #{msg}"
+							abort_instance(instance, [], wait, true) { |s| yield s }
+							return nil, msg
 						end
 						@client.wait_until(:volume_in_use, volume_ids: [ volume.id() ])
 					else
-						yield "#{@mgr.timestamp()} Data volume not in state 'available'"
-						return abort_instance(instance, [], wait, true) { |s| yield s }
+						msg = "Data volume not in state 'available', aborting"
+						yield "#{@mgr.timestamp()} #{msg}"
+						abort_instance(instance, [], wait, true) { |s| yield s }
+						return nil, msg
 					end
 				end
 
@@ -492,22 +515,26 @@ EOF
 				if err
 					# We haven't applied tags yet, but we found an instance with the same
 					# name
-					yield "#{@mgr.timestamp()} Instance with same name \"#{name}\" created during launch"
-					return abort_instance(instance, [], wait, true) { |s| yield s }
+					msg = "Instance with same name \"#{name}\" created during launch, aborting"
+					yield "#{@mgr.timestamp()} #{msg}"
+					abort_instance(instance, [], wait, true) { |s| yield s }
+					return nil, msg
 				end
 
 				instance = @resource.instance(instance.id())
 				rr = @mgr.route53.lookup(@mgr["PrivateDNSId"])
 				if rr.size != 0
-					yield "#{@mgr.timestamp()} DNS record for #{name} created during launch"
-					return abort_instance(instance, [], wait, true) { |s| yield s }
+					msg = "DNS record for #{name} created during launch"
+					yield "#{@mgr.timestamp()} #{msg}"
+					abort_instance(instance, [], wait, true) { |s| yield s }
+					return nil, msg
 				end
 
 				update_dns(nil, wait, instance, true) { |s| yield s }
 				# @mgr.unlock() - called by update_dns as soon as records are added
-				return instance
+				return instance, msg
 			else
-				return true
+				return nil, nil
 			end
 		end
 
@@ -546,7 +573,7 @@ EOF
 			end
 			yield "#{@mgr.timestamp()} Sending termination command"
 			instance.terminate()
-			return nil unless wait
+			return unless wait
 			yield "#{@mgr.timestamp()} Waiting for instance to terminate..."
 			instance.wait_until_terminated()
 			yield "#{@mgr.timestamp()} Terminated"

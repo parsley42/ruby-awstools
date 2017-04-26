@@ -218,7 +218,11 @@ when "create"
     exit 1
   end
   cfg.tags["Servertype"] = template
-	instance = cfg.ec2.create_instance(name, key, template, wait) { |status| puts status }
+	instance, err = cfg.ec2.create_instance(name, key, template, wait) { |status| puts status }
+  unless instance
+    puts "Failed to create instance: #{err}"
+    exit 1
+  end
 when "updatedns"
 	name = ARGV.shift()
 	raise UsageException.new("Missing required argument") unless name

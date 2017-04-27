@@ -422,7 +422,7 @@ EOF
 					end
 				end
 			end
-			if ispec[:block_device_mappings].size == 0
+			if ispec[:block_device_mappings] && ispec[:block_device_mappings].size == 0
 				ispec.delete(:block_device_mappings)
 			end
 			yield "#{@mgr.timestamp()} Dry run, creating: #{ispec}" if dry_run
@@ -452,7 +452,7 @@ EOF
 					tags: vtags,
 				}
 			]
-			puts "Creating: #{ispec}"
+			# puts "Creating: #{ispec}"
 
 			begin
 				instances = @resource.create_instances(ispec)
@@ -477,7 +477,6 @@ EOF
 						iface_index += 1
 					end
 				end
-				#@client.wait_until(:instance_running, instance_ids: [ instance.id() ])
 
 				msg = nil
 				if volume

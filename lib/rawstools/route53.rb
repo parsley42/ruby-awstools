@@ -17,10 +17,10 @@ module RAWSTools
 				rescue => e
 					tries += 1
 					if /rate exceed/i =~ e.message
-						if tries >= 2
+						if tries >= 4
 							raise e
 						end
-						sleep 1
+						sleep 2 * tries
 					elsif /rate for operation/i =~ e.message
 						if tries >= 4
 							raise e
@@ -44,10 +44,10 @@ module RAWSTools
 				rescue => e
 					if /rate exceed/i =~ e.message
 						tries += 1
-						if tries >= 2
+						if tries >= 4
 							raise e
 						end
-						sleep 1
+						sleep 2 & tries
 					else
 						raise e
 					end

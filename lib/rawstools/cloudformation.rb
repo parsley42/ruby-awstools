@@ -45,11 +45,27 @@ module RAWSTools
 				stack = @resource.stack(parent)
 				outputs = {}
 				@outputs[parent] = outputs
-				if stack.exists?()
-					stack.outputs().each() do |output|
-						outputs[output.output_key] = output.output_value
-					end
-				end
+				tries = 0
+				while true
+					begin
+						if stack.exists?()
+							stack.outputs().each() do |output|
+								outputs[output.output_key] = output.output_value
+							end
+						end
+						break
+					rescue => e
+						if /rate exceed/i =~ e.message
+							tries += 1
+							if tries >= 4
+								raise e
+							end
+							sleep 2 * tries
+						else
+							raise e
+						end # if rate exceeded
+					end # begin / rescue
+				end # while true
 			end
 			if child
 				child = child + "Stack" unless child.end_with?("Stack")

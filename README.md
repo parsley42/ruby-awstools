@@ -10,7 +10,7 @@ Ruby aws-sdk, intended to:
 
 To greatly simplify matters, the library and tools have a number of assumptions
 built-in; if any of these don't hold true for your intended use, you may get
-only limited funcationality:
+only limited functionality:
 * VPC's, subnets, security groups, and other long-lived resources will be
   created with CloudFormation templates (with samples provided)
 * You will have (or create) AWS-integrated DNS hosted zones, preferably

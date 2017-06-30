@@ -131,7 +131,7 @@ form ${...}.
 * ${@param(|<default>)} - use the value of a parameter obtained from the command line
   or interactively, or use the default value if the parameter is undefined.
   If <default> is of the form `$var`, the value is taken from the cloud config
-  similarly to ${var} above.
+  similarly to ${&var} above.
 * ${=Template(:child):Output(|default)} - retrieve an output from a previously-created
   cloudformation template, or use the default value if the lookup fails.
 * ${%item:key|default} - Look up the attribute <key> for <item> in the configured

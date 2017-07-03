@@ -93,7 +93,7 @@ leading or trailing dot:
 Thus, whenever a name is provided, it will canonicalized and a FQDN generated
 based on the configured domains. Some examples should make this clear:
 
-When DNSDomain is `foo.com` and DNSBase is `foo.com`, 
+When DNSDomain is `foo.com` and DNSBase is `foo.com`,
 the name is translated to a canonical name and fqdn as
 follows:
 * `bar` -> `bar`, `bar.foo.com`
@@ -257,6 +257,15 @@ Parameters:
 parameters to the stack.
 
 An automatic Output will be created for the stack ID.
+
+### AWS::EC2::NetworkAclEntry
+
+If you specify:
+```
+CidrBlock: $$<SubnetName>
+```
+... where <SubnetName> is e.g. `PrivateSubnet`, cfn will replace the SubnetName
+with the CIDR encompassing those subnets.
 
 ### AWS::EC2::RouteTable
 

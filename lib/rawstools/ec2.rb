@@ -108,6 +108,7 @@ EOF
 				{ name: "tag:Name", values: [ volname ] },
 				{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
 				{ name: "status", values: status },
+				{ name: "attachment.device", values: [ "/dev/sdf", "/dev/xvdf" ] }
 			]
 			v = @resource.volumes(filters: f)
 			count = v.count()

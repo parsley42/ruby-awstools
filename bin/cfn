@@ -130,6 +130,7 @@ stackprefix = (cfg["StackPrefix"]?cfg["StackPrefix"]:"")
 stackname = stackprefix + templatename
 stack_required_capabilities = []
 stack_tags = cfg.tags().ltags()
+cfg.symbol_keys(stack_tags)
 
 case command
 when "generate"

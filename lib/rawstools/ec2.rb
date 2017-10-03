@@ -98,7 +98,7 @@ EOF
 			return nil
 		end
 
-		def resolve_volume(volname=nil, status=[ "available" ] )
+		def resolve_volume(volname=nil, status=[ "available" ], extrafilters=[] )
 			if volname
 				@mgr.setparam("volname", volname)
 				@mgr.normalize_name_parameters()
@@ -109,6 +109,7 @@ EOF
 				{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
 				{ name: "status", values: status }
 			]
+			f += extrafilters
 			v = @resource.volumes(filters: f)
 			count = v.count()
 			return nil, "Multiple matches for volume: #{volname}" if count > 1
@@ -233,7 +234,13 @@ EOF
 			end
 			volname = @mgr.getparam("volname")
 
-			vol, err = resolve_volume(nil, [ "available", "in-use" ])
+			# Look for unattached volume first
+			vol, err = resolve_volume(nil, [ "available" ])
+			# Or an in-use non-root volume
+			unless vol
+				vol, err = resolve_volume(nil, [ "in-use" ],
+				[ { name: "attachment.device", values: [ "/dev/sdf", "/dev/xvdf" ] } ] )
+			end
 			unless vol
 				yield "#{@mgr.timestamp()} #{err}"
 				return nil
@@ -664,7 +671,8 @@ EOF
 					return nil
 				end
 			else
-				volume, err = resolve_volume(volname, [ "in-use" ])
+				volume, err = resolve_volume(volname, [ "in-use" ],
+				[ { name: "attachment.device", values: [ "/dev/sdf", "/dev/xvdf" ] } ] )
 				unless volume
 					yield "#{@mgr.timestamp} Unable to resolve volume #{volname}"
 					return nil

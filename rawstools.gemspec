@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
 	s.name = 'rawstools'
-	s.version = '0.1.1'
+	s.version = '0.1.2'
 	s.date = '2016-10-11'
 	s.summary = 'Ruby AWSTools'
 	s.description = 'Tools for managing a cloud of AWS instances and resources'

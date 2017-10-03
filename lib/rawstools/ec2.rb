@@ -724,6 +724,14 @@ EOF
 				yield "#{@mgr.timestamp()} Terminating #{name}"
 				remove_dns = false
 				remove_dns = true if instance.state.name == "running"
+				if deletevol
+					@mgr.setparam("volname", name)
+					vol, err = resolve_volume(nil, [ "in-use" ],
+					[ { name: "attachment.device", values: [ "/dev/sdf", "/dev/xvdf" ] } ] )
+					unless volume
+						yield "#{@mgr.timestamp()} Not deleting data volume: #{err}"
+					end
+				end
 				instance.terminate()
 				remove_dns(instance, wait) { |s| yield s } if remove_dns
 				return unless wait or deletevol
@@ -731,18 +739,12 @@ EOF
 				instance.wait_until_terminated()
 				yield "#{@mgr.timestamp()} Terminated"
 				if deletevol
-					@mgr.setparam("volname", name)
-					volume,err = resolve_volume(nil, [ "available", "in-use" ])
-					if volume
-						yield "#{@mgr.timestamp()} Waiting for volume to be available..."
-						@client.wait_until(:volume_available, {
-							volume_ids: [ volume.id() ]
-						})
-						yield "#{@mgr.timestamp()} Deleting volume #{name}, id: #{volume.id()}"
-						delete_volume(nil, wait) { |s| yield s }
-					else
-						yield "#{@mgr.timestamp()} Not deleting data volume: #{err}"
-					end
+					yield "#{@mgr.timestamp()} Waiting for volume to be available..."
+					@client.wait_until(:volume_available, {
+						volume_ids: [ volume.id() ]
+					})
+					yield "#{@mgr.timestamp()} Deleting volume #{name}, id: #{volume.id()}"
+					delete_volume(nil, wait) { |s| yield s }
 				end
 			else
 				yield "#{@mgr.timestamp()} Error resolving #{name}: #{err}"

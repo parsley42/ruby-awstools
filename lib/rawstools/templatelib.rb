@@ -61,7 +61,7 @@ module RAWSTools
 			cfgtags = @cloudcfg.tags()
 			cfgtags["Name"] = name if name
 			cfgtags.add(resource["Properties"][tagkey]) if resource["Properties"][tagkey]
-			resource["Properties"][tagkey] = cfgtags.tags()
+			resource["Properties"][tagkey] = cfgtags.cfntags()
 		end
 
 		# Returns an Array of string CIDRs, even if it's only 1 long

@@ -11,7 +11,7 @@ require 'rawstools/templatelib'
 
 module RAWSTools
 	# Classes for loading and processing the configuration file
-	Valid_Classes = [ "String", "Fixnum", "TrueClass", "FalseClass" ]
+	Valid_Classes = [ "String", "Fixnum", "Integer", "TrueClass", "FalseClass" ]
 	Expand_Regex = /\${([@=%&][:|.\-\/\w]+)}/
 
 	class SubnetDefinition
@@ -33,19 +33,20 @@ module RAWSTools
 			@tags ||= {}
 		end
 
-		def tags()
+		# Tags for API calls
+		def apitags()
 			tags = []
 			@tags.each_key do |k|
-				tags.push({ "Key" => k, "Value" => @tags[k] })
+				tags.push({ :key => k, :value => @tags[k] })
 			end
 			return tags
 		end
 
-		# Bucket tags have lowercase
-		def ltags()
+		# Cloudformation template tags
+		def cfntags()
 			tags = []
 			@tags.each_key do |k|
-				tags.push({ "key" => k, "value" => @tags[k] })
+				tags.push({ "Key" => k, "Value" => @tags[k] })
 			end
 			return tags
 		end

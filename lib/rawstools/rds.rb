@@ -384,7 +384,7 @@ EOF
 			cfgtags["Name"] = name
 			cfgtags["Domain"] = @mgr["DNSDomain"]
 			cfgtags.add(tags) if tags
-			dbspec[:tags] = cfgtags.ltags()
+			dbspec[:tags] = cfgtags.apitags()
 
 			# puts "Options hash:\n#{dbspec}"
 			@mgr.lock()

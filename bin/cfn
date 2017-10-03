@@ -129,8 +129,7 @@ upload = false if filenames.length() == 1
 stackprefix = (cfg["StackPrefix"]?cfg["StackPrefix"]:"")
 stackname = stackprefix + templatename
 stack_required_capabilities = []
-stack_tags = cfg.tags().ltags()
-cfg.symbol_keys(stack_tags)
+stack_tags = cfg.tags.apitags()
 
 case command
 when "generate"

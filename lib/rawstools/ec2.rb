@@ -107,8 +107,7 @@ EOF
 			f = [
 				{ name: "tag:Name", values: [ volname ] },
 				{ name: "tag:Domain", values: [ @mgr["DNSDomain"] ] },
-				{ name: "status", values: status },
-				{ name: "attachment.device", values: [ "/dev/sdf", "/dev/xvdf" ] }
+				{ name: "status", values: status }
 			]
 			v = @resource.volumes(filters: f)
 			count = v.count()
@@ -245,10 +244,10 @@ EOF
 			snaptags = []
 			tags.each() do |tag|
 				if not tag.key.start_with?("aws:")
-					snaptags << { "key" => tag.key, "value" => tag.value }
+					snaptags << { key: tag.key, value: tag.value }
 				end
 			end
-			snaptags << { "key" => "SnapshotType", "value" => type }
+			snaptags << { key: "SnapshotType", value: type }
 			yield "#{@mgr.timestamp()} Tagging snapshot"
 			snap.create_tags(tags: snaptags)
 			return snap unless wait
@@ -435,14 +434,14 @@ EOF
 				end
 			end
 			@mgr.normalize_name_parameters()
-			cfgtags = @mgr.tags()
+			cfgtags = @mgr.tags
 			name = @mgr.getparam("name")
 			cfgtags["Name"] = name
 			cfgtags["Domain"] = @mgr["DNSDomain"]
 			cfgtags.add(template[:tags]) if template[:tags]
-			itags = cfgtags.ltags()
+			itags = cfgtags.apitags()
 			cfgtags["InstanceName"] = @mgr.getparam("name")
-			vtags = cfgtags.ltags()
+			vtags = cfgtags.apitags()
 			ispec[:tag_specifications] = [
 				{
 					resource_type: "instance",

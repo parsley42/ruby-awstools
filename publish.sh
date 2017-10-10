@@ -2,6 +2,8 @@
 
 # publish.sh - copy the install archive to a distribution point
 
+# The .publish file, excluded in .gitignore, defines the $PREFIX
+# for publishing the artifact.
 . .publish
 VERSTRING=$(grep "s.version" rawstools.gemspec)
 VERSTRING=${VERSTRING%\'}
@@ -17,5 +19,4 @@ fi
 
 SRCFILE=rawstools-$VERSION.gem
 echo "Publishing $SRCFILE to $PREFIX/ruby-awstools/$PUBVER/rawstools.gem"
-exit 0
 aws s3 cp $SRCFILE $PREFIX/ruby-awstools/$PUBVER/rawstools.gem

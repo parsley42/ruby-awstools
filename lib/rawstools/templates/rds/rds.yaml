@@ -1,0 +1,52 @@
+---
+# Default template for RDS creation API calls.
+# NOTE: for "aurora", "allocated_storage" shouldn't be defined; other values
+# will be split between calls to "create_db_cluster" and "create_db_instance".
+api_template:
+  #db_name: "String" # Not normally used
+  db_instance_identifier: ${@dbname} # required
+  #allocated_storage: 1 # Deleted for aurora
+  db_instance_class: ${@type|db.t2.small} # available types vary by engine, probably needs override
+  #engine: "String" # required
+  master_username: "root"
+  master_user_password: ${@rootpassword}
+  #db_security_groups: ["String"] # ec2 classic only, shouldn't be used
+  #vpc_security_group_ids: ["String"] # normally expanded from CloudFormation outputs
+  #availability_zones: ["String"] # For "aurora" clusters only
+  availability_zone: ${@availability_zone|<DELETE>}
+  #db_subnet_group_name: "String"
+  #preferred_maintenance_window: "String"
+  #db_parameter_group_name: "String"
+  backup_retention_period: 2
+  #preferred_backup_window: "String"
+  #port: 1 # should normally use the default
+  #multi_az: false
+  #engine_version: "String"
+  auto_minor_version_upgrade: true
+  #license_model: "String"
+  iops: ${@iops|0}
+  #option_group_name: "String",
+  #character_set_name: "String"
+  publicly_accessible: false
+  #tags: # Additional tags to the defaults
+  #- key: "String"
+  #  value: "String"
+  #- key: "String"
+  #  value: "String"
+  #db_cluster_identifier: "String" # Set by the library
+  storage_type: ${@storage_type|gp2}
+  #tde_credential_arn: "String"
+  #tde_credential_password: "String"
+  storage_encrypted: true
+  #kms_key_id: "String"
+  #domain: "String" # Active Directory domain
+  copy_tags_to_snapshot: true
+  #monitoring_interval: 1
+  #monitoring_role_arn: "String"
+  #domain_iam_role_name: "String" # for making calls to directory service
+  #promotion_tier: 1
+  #timezone: "String" # MS SQL server only
+  #enable_iam_database_authentication: false
+  #enable_performance_insights: false
+  #performance_insights_kms_key_id: "String"
+  backup_retention_period: 2

@@ -60,8 +60,8 @@ module RAWSTools
 		end
 	end
 
-	# For reading in the configuration file and initializing service clients
-	# and resources
+	# Central library class that loads the configuration file and provides
+  # utility classes for processing names and templates.
 	class CloudManager
 		attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :rds, :route53, :tags, :params
 
@@ -224,6 +224,40 @@ module RAWSTools
 				item.each() { |i| symbol_keys(i) }
 			end
 		end
+
+    # merge 2nd-level hashes, src overwrites dst
+    def merge_templates(src, dst)
+      src.keys.each() do |key|
+        if ! dst.has_key?(key)
+          dst[key] = src[key]
+        else
+          dst[key] = dst[key].merge(src[key])
+        end
+      end
+    end
+
+    # Load API template files in order from least to most specific; throws an
+    # exeption if no specific template with the named type is loaded.
+    def load_template(facility, type)
+      search_dirs = ["#{@installdir}/templates"] + @config["SearchPath"] + "."
+      template = {}
+      found = false
+      search_dirs.each do |dir|
+        if File::exist?("#{dir}/#{facility}/#{facility}.yaml")
+          raw = File::read("#{dir}/#{facility}/#{facility}.yaml")
+          merge_templates(YAML::load(raw), template)
+        end
+        if File::exist?("#{dir}/#{facility}/#{type}.yaml")
+          found = true
+          raw = File::read("#{dir}/#{facility}/#{type}.yaml")
+          merge_templates(YAML::load(raw), template)
+        end
+      end
+      unless found
+        raise "Couldn't find a #{facility} template for #{type}"
+      end
+      return template
+    end
 
 		def expand_string(var)
 			var = $1 if var.match(Expand_Regex)

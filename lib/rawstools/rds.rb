@@ -1,36 +1,5 @@
 module RAWSTools
-	RDS_Default_Template = <<EOF
-  # db_name: "String" # We don't create a default database
-  db_instance_identifier: ${@dbname} # required
-  iops: ${@iops|0}
-  db_instance_class: ${@type|db.t2.micro} # available types vary by engine, probably needs override
-  engine: (requires override)
-  master_username: "root"
-  master_user_password: ${@rootpassword}
-  vpc_security_group_ids:
-  - (requires override)
-  availability_zone: ${@availability_zone|none}
-  db_subnet_group_name: (requires override)
-  backup_retention_period: 2
-  auto_minor_version_upgrade: true
-  publicly_accessible: false
-  storage_type: ${@storage_type|gp2}
-  copy_tags_to_snapshot: true
-  # monitoring_interval: 1
-  # monitoring_role_arn: (requires override)
-EOF
 
-	RDS_Restore_Template = <<EOF
-  db_instance_identifier: ${@dbname} # required
-  db_instance_class: ${@type|db.t2.micro}
-  availability_zone: ${availability_zone|none}
-  publicly_accessible: false
-  auto_minor_version_upgrade: true
-  engine: (requires override)
-  iops: ${@iops|0}
-  storage_type: ${@storage_type|gp2}
-  copy_tags_to_snapshot: true
-EOF
 	class RDS
 		attr_reader :client, :resource
 
@@ -40,12 +9,9 @@ EOF
 			@resource = Aws::RDS::Resource.new(client: @client)
 		end
 
+    # dump the library default template
 		def dump_template()
-			puts <<EOF
----
-api_template:
-#{RDS_Default_Template}
-EOF
+      
 		end
 
 		# Set dbname parameter and check for existence of

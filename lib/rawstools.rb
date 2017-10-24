@@ -13,6 +13,7 @@ module RAWSTools
 	# Classes for loading and processing the configuration file
 	Valid_Classes = [ "String", "Fixnum", "Integer", "TrueClass", "FalseClass" ]
 	Expand_Regex = /\${([@=%&][:|.\-\/\w]+)}/
+  Log_Levels = [:trace, :debug, :info, :warn, :error]
 
 	class SubnetDefinition
 		attr_reader :cidr, :subnets
@@ -93,6 +94,20 @@ module RAWSTools
 				end
 			end
 
+      @loglevel = Log_Levels.index(:info)
+      if @config["LogLevel"] != nil
+        ll = @config["LogLevel"].to_sym()
+        if Log_Levels.index(ll) != nil
+          @loglevel = Log_Levels.index(ll)
+        end
+      end
+      if ENV["RAWSLOGLEVEL"] != nil
+        ll = ENV["RAWSLOGLEVEL"].to_sym()
+        if Log_Levels.index(ll) != nil
+          @loglevel = Log_Levels.index(ll)
+        end
+      end
+
 			[ "DNSBase", "DNSDomain" ].each do |dnsdom|
 				name = @config[dnsdom]
 				if name.end_with?(".")
@@ -122,7 +137,18 @@ module RAWSTools
 			end
 		end
 
-		# Implement a simple mutex to prevent collisions
+    # Log events, takes a symbol log level (see Log_Levels) and a message.
+    # NOTE: eventually there should be a separate configurable log level for
+    # stuff that also gets logged to CloudWatch logs.
+    def log(level, message)
+      ll = Log_Levels.index(level)
+      if ll != nil && ll >= @loglevel
+        $stderr.puts(message)
+      end
+    end
+
+		# Implement a simple mutex to prevent collisions. Scripts can use a lock
+    # to synchronize updates to the repository.
 		def lock()
 			@file.flock(File::LOCK_EX)
 		end
@@ -239,15 +265,19 @@ module RAWSTools
     # Load API template files in order from least to most specific; throws an
     # exeption if no specific template with the named type is loaded.
     def load_template(facility, type)
-      search_dirs = ["#{@installdir}/templates"] + @config["SearchPath"] + "."
+      search_dirs = ["#{@installdir}/templates"] + @config["SearchPath"] + ["."]
       template = {}
       found = false
       search_dirs.each do |dir|
+        log(:debug, "Looking for #{dir}/#{facility}/#{facility}.yaml")
         if File::exist?("#{dir}/#{facility}/#{facility}.yaml")
+          log(:debug, "=> Loading #{dir}/#{facility}/#{facility}.yaml")
           raw = File::read("#{dir}/#{facility}/#{facility}.yaml")
           merge_templates(YAML::load(raw), template)
         end
+        log(:debug, "Looking for #{dir}/#{facility}/#{type}.yaml")
         if File::exist?("#{dir}/#{facility}/#{type}.yaml")
+          log(:debug, "=> Loading #{dir}/#{facility}/#{type}.yaml")
           found = true
           raw = File::read("#{dir}/#{facility}/#{type}.yaml")
           merge_templates(YAML::load(raw), template)

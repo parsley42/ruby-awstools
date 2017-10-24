@@ -11,7 +11,7 @@ module RAWSTools
 
     # dump the library default template
 		def dump_template()
-      
+
 		end
 
 		# Set dbname parameter and check for existence of

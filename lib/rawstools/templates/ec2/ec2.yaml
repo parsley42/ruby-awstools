@@ -1,71 +1,70 @@
 # Default template for EC2 creation API calls.
 # NOTE: For future use
-# TODO: Comment out non-defaulted sections
 api_template:
-  block_device_mappings:
-  - device_name: "String"
-    virtual_name: "String"
-    ebs:
-      encrypted: false
-      delete_on_termination: false
-      iops: 1
-      snapshot_id: "String"
-      volume_size: 1
-      volume_type: "standard" # accepts standard, io1, gp2, sc1, st1
-    no_device: "String",
-  image_id: "String" # required
-  instance_type: "t1.micro" # accepts t1.micro, t2.nano, t2.micro, t2.small, t2.medium, t2.large, t2.xlarge, t2.2xlarge, m1.small, m1.medium, m1.large, m1.xlarge, m3.medium, m3.large, m3.xlarge, m3.2xlarge, m4.large, m4.xlarge, m4.2xlarge, m4.4xlarge, m4.10xlarge, m4.16xlarge, m2.xlarge, m2.2xlarge, m2.4xlarge, cr1.8xlarge, r3.large, r3.xlarge, r3.2xlarge, r3.4xlarge, r3.8xlarge, r4.large, r4.xlarge, r4.2xlarge, r4.4xlarge, r4.8xlarge, r4.16xlarge, x1.16xlarge, x1.32xlarge, x1e.32xlarge, i2.xlarge, i2.2xlarge, i2.4xlarge, i2.8xlarge, i3.large, i3.xlarge, i3.2xlarge, i3.4xlarge, i3.8xlarge, i3.16xlarge, hi1.4xlarge, hs1.8xlarge, c1.medium, c1.xlarge, c3.large, c3.xlarge, c3.2xlarge, c3.4xlarge, c3.8xlarge, c4.large, c4.xlarge, c4.2xlarge, c4.4xlarge, c4.8xlarge, cc1.4xlarge, cc2.8xlarge, g2.2xlarge, g2.8xlarge, g3.4xlarge, g3.8xlarge, g3.16xlarge, cg1.4xlarge, p2.xlarge, p2.8xlarge, p2.16xlarge, d2.xlarge, d2.2xlarge, d2.4xlarge, d2.8xlarge, f1.2xlarge, f1.16xlarge
-  ipv_6_address_count: 1
-  ipv_6_addresses:
-  - ipv_6_address: "String"
-  kernel_id: "String"
-  key_name: "String"
+#  block_device_mappings:
+#  - device_name: "String"
+#    virtual_name: "String"
+#    ebs:
+#      encrypted: false
+#      delete_on_termination: false
+#      iops: 1
+#      snapshot_id: "String"
+#      volume_size: 1
+#      volume_type: "standard" # accepts standard, io1, gp2, sc1, st1
+#    no_device: "String",
+#  image_id: "String" # required
+#  instance_type: "t1.micro" # accepts t1.micro, t2.nano, t2.micro, t2.small, t2.medium, t2.large, t2.xlarge, t2.2xlarge, m1.small, m1.medium, m1.large, m1.xlarge, m3.medium, m3.large, m3.xlarge, m3.2xlarge, m4.large, m4.xlarge, m4.2xlarge, m4.4xlarge, m4.10xlarge, m4.16xlarge, m2.xlarge, m2.2xlarge, m2.4xlarge, cr1.8xlarge, r3.large, r3.xlarge, r3.2xlarge, r3.4xlarge, r3.8xlarge, r4.large, r4.xlarge, r4.2xlarge, r4.4xlarge, r4.8xlarge, r4.16xlarge, x1.16xlarge, x1.32xlarge, x1e.32xlarge, i2.xlarge, i2.2xlarge, i2.4xlarge, i2.8xlarge, i3.large, i3.xlarge, i3.2xlarge, i3.4xlarge, i3.8xlarge, i3.16xlarge, hi1.4xlarge, hs1.8xlarge, c1.medium, c1.xlarge, c3.large, c3.xlarge, c3.2xlarge, c3.4xlarge, c3.8xlarge, c4.large, c4.xlarge, c4.2xlarge, c4.4xlarge, c4.8xlarge, cc1.4xlarge, cc2.8xlarge, g2.2xlarge, g2.8xlarge, g3.4xlarge, g3.8xlarge, g3.16xlarge, cg1.4xlarge, p2.xlarge, p2.8xlarge, p2.16xlarge, d2.xlarge, d2.2xlarge, d2.4xlarge, d2.8xlarge, f1.2xlarge, f1.16xlarge
+#  ipv_6_address_count: 1
+#  ipv_6_addresses:
+#  - ipv_6_address: "String"
+#  kernel_id: "String"
+  key_name: ${@key|<REQUIRED>}
   max_count: 1 # required
   min_count: 1 # required
   monitoring:
-    enabled: false # required
-  placement:
-    availability_zone: "String"
-    affinity: "String"
-    group_name: "String"
-    host_id: "String"
-    tenancy: "default" # accepts default, dedicated, host
-    spread_domain: "String"
-  ramdisk_id: "String"
-  security_group_ids: ["String"]
-  security_groups: ["String"]
-  subnet_id: "String"
-  user_data: "String"
-  additional_info: "String"
-  client_token: "String"
-  disable_api_termination: false
-  dry_run: false
-  ebs_optimized: false
-  iam_instance_profile:
-    arn: "String"
-    name: "String"
-  instance_initiated_shutdown_behavior: "stop" # accepts stop, terminate
-  network_interfaces:
-  - associate_public_ip_address: false
-    delete_on_termination: false
-    description: "String"
-    device_index: 1
-    groups: ["String"]
-    ipv_6_address_count: 1
-    ipv_6_addresses:
-    - ipv_6_address: "String"
-    network_interface_id: "String"
-    private_ip_address: "String"
-    private_ip_addresses:
-    - primary: false
-      private_ip_address: "String" # required
-    secondary_private_ip_address_count: 1
-    subnet_id: "String"
-  private_ip_address: "String"
-  elastic_gpu_specification:
-  - type: "String" # required
-  tag_specifications:
-  - resource_type: "customer-gateway", # accepts customer-gateway, dhcp-options, image, instance, internet-gateway, network-acl, network-interface, reserved-instances, route-table, snapshot, spot-instances-request, subnet, security-group, volume, vpc, vpn-connection, vpn-gateway
-    tags:
-    - key: "String"
-      value: "String"
+    enabled: ${@monitor|false}
+#  placement:
+#    availability_zone: "String"
+#    affinity: "String"
+#    group_name: "String"
+#    host_id: "String"
+#    tenancy: "default" # accepts default, dedicated, host
+#    spread_domain: "String"
+#  ramdisk_id: "String"
+#  security_group_ids: ["String"]
+#  security_groups: ["String"]
+#  subnet_id: "String"
+#  user_data: "String"
+#  additional_info: "String"
+#  client_token: "String"
+#  disable_api_termination: false
+  dry_run: ${dryrun|false}
+  ebs_optimized: ${@ebsoptimized|false}
+#  iam_instance_profile:
+#    arn: "String"
+#    name: "String"
+  instance_initiated_shutdown_behavior: "stop"
+#  network_interfaces:
+#  - associate_public_ip_address: false
+#    delete_on_termination: false
+#    description: "String"
+#    device_index: 1
+#    groups: ["String"]
+#    ipv_6_address_count: 1
+#    ipv_6_addresses:
+#    - ipv_6_address: "String"
+#    network_interface_id: "String"
+#    private_ip_address: "String"
+#    private_ip_addresses:
+#    - primary: false
+#      private_ip_address: "String" # required
+#    secondary_private_ip_address_count: 1
+#    subnet_id: "String"
+#  private_ip_address: "String"
+#  elastic_gpu_specification:
+#  - type: "String" # required
+#  tag_specifications:
+#  - resource_type: "customer-gateway", # accepts customer-gateway, dhcp-options, image, instance, internet-gateway, network-acl, network-interface, reserved-instances, route-table, snapshot, spot-instances-request, subnet, security-group, volume, vpc, vpn-connection, vpn-gateway
+#    tags:
+#    - key: "String"
+#      value: "String"

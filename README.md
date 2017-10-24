@@ -120,23 +120,7 @@ values for `fqdn` and `cfqdn` for a`cname` parameter.
 
 ### Template String Expansion
 
-`ruby-awstools` is heavily template based, reading in YAML data structures
-which get processed and used in AWS method calls. After reading in a template,
-but before parsing the YAML, string replacement is done on variables of the
-form ${...}.
-
-* ${&var} - retrieve a string from the cloud config file, may optionally be
-  indexed with \[key\]([subkey])...; throws an exception if the reference value
-  isn't a string.
-* ${@param(|<default>)} - use the value of a parameter obtained from the command line
-  or interactively, or use the default value if the parameter is undefined.
-  If <default> is of the form `$var`, the value is taken from the cloud config
-  similarly to ${&var} above.
-* ${=Template(:child):Output(|default)} - retrieve an output from a previously-created
-  cloudformation template, or use the default value if the lookup fails.
-* ${%item:key|default} - Look up the attribute <key> for <item> in the configured
-  ConfigDB (AWS SimpleDB) from the cloud config. Mostly useful for retrieving
-  AMI ids stored with the `sdb` tool.
+See the Wiki article
 
 ### Data Element Expansion
 

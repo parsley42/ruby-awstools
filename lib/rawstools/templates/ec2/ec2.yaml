@@ -38,7 +38,7 @@ api_template:
 #  additional_info: "String"
 #  client_token: "String"
 #  disable_api_termination: false
-  dry_run: ${dryrun|false}
+  dry_run: ${@dryrun|false}
   ebs_optimized: ${@ebsoptimized|false}
 #  iam_instance_profile:
 #    arn: "String"

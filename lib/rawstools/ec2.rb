@@ -299,7 +299,7 @@ EOF
 		#   create_instance(name, key, template, wait) -> Aws::EC2::Instance|nil, msg
 		#
 		# If instance is nil, msg contains the error, otherwise msg is informative
-		def create_instance(name, key, template, wait=true)
+		def create_instance(name, key, type, wait=true)
 			if name
 				@mgr.normalize(name)
 			end
@@ -320,16 +320,10 @@ EOF
 				return nil
 			end
 
-			templatefile = nil
-			if template.end_with?(".yaml")
-				templatefile = template
-			else
-				templatefile = "ec2/#{template}.yaml"
-			end
-			begin
-				raw = File::read(templatefile)
-			rescue => e
-				msg = "Error in File::Read for template file #{templatefile}: #{e.message}"
+      begin
+        template = @mgr.load_template("ec2", type)
+      rescue => e
+        msg = "Caught exception loading template: #{e.message}"
 				yield "#{@mgr.timestamp()} #{msg}"
 				return nil, msg
 			end
@@ -383,22 +377,9 @@ EOF
 				@mgr.setparam("availability_zone", availability_zone)
 			end
 
-			raw = @mgr.expand_strings(raw)
-			template = YAML::load(raw)
-			@mgr.resolve_vars( { "child" => template }, "child" )
 			@mgr.symbol_keys(template)
 
-			# Load the default template
-			apibase = @mgr.expand_strings(EC2_Default_Template)
-			ispec = YAML::load(apibase)
-			@mgr.resolve_vars( { "child" => ispec }, "child" )
-			@mgr.symbol_keys(ispec)
-
-			ispec = ispec.merge(template[:api_template])
-
-			if ispec[:user_data]
-				ispec[:user_data] = Base64::encode64(ispec[:user_data])
-			end
+			ispec = template[:api_template]
 
 			if ispec[:block_device_mappings]
 				ispec[:block_device_mappings].delete_if() do |dev|
@@ -432,10 +413,18 @@ EOF
 			if ispec[:block_device_mappings] && ispec[:block_device_mappings].size == 0
 				ispec.delete(:block_device_mappings)
 			end
+
+      @mgr.resolve_vars(template, :api_template)
+
+      if ispec[:user_data]
+				ispec[:user_data] = Base64::encode64(ispec[:user_data])
+			end
+
 			yield "#{@mgr.timestamp()} Dry run, creating: #{ispec}" if dry_run
 
 			interfaces = []
 			if template[:additional_interfaces]
+        @mgr.resolve_vars(template, :additional_interfaces)
 				template[:additional_interfaces].each() do |iface|
 					interfaces << @resource.create_network_interface(iface)
 				end

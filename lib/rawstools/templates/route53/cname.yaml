@@ -1,11 +1,12 @@
 ---
-hosted_zone_id: ${@zone_id|${&PublicDNSId}}
-change_batch:
-  changes:
-  - action: UPSERT
-    resource_record_set:
-      name: ${@cfqdn}
-      type: CNAME
-      ttl: ${@ttl|${&CNAMERecTTL}}
-      resource_records:
-      - value: ${@fqdn}
+api_template:
+  hosted_zone_id: ${@zone_id|<REQUIRED>}
+  change_batch:
+    changes:
+    - action: UPSERT
+      resource_record_set:
+        name: ${@cfqdn|<REQUIRED>}
+        type: CNAME
+        ttl: ${@ttl|${&CNAMERecTTL}}
+        resource_records:
+        - value: ${@fqdn|<REQUIRED>}

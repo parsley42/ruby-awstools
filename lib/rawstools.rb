@@ -10,11 +10,25 @@ require 'rawstools/simpledb'
 require 'rawstools/templatelib'
 
 module RAWSTools
-	# Classes for loading and processing the configuration file
+
+  # An api_template (for rds especially) defines a host of api keys that
+  # may or may not be needed for a given operation. prune_template takes
+  # a list of keys appropriate to an operation and prunes extra keys from
+  # the template. Callers should take care to dup() the original if Multiple
+  # calls need to be made. See e.g. rds create w/ Aurora
+  def prune_template(template, keys)
+    template.keys.each do |key|
+      unless keys.include?(key)
+        template.delete(key)
+      end
+    end
+  end
+
 	Valid_Classes = [ "String", "Fixnum", "Integer", "TrueClass", "FalseClass" ]
 	Expand_Regex = /\${([@=%&][:|.\-\/\w<>]+)}/
   Log_Levels = [:trace, :debug, :info, :warn, :error]
 
+  # Classes for loading and processing the configuration file
 	class SubnetDefinition
 		attr_reader :cidr, :subnets
 

@@ -108,24 +108,22 @@ module RAWSTools
 			return resp
 		end
 
-		def change_records(template)
+		def change_records(type)
 			# Note: call to normalize_name_parameters removed as it interfered
 			# with CNAME records that pointed somewhere else. The caller should
 			# use normalize_name_parameters if needed.
-			templatefile = nil
-			if File::exist?("route53/#{template}.json")
-				templatefile = "route53/#{template}.json"
-			else
-				templatefile = "#{@mgr.installdir}/templates/route53/#{template}.yaml"
+      begin
+        template = @mgr.load_template("route53", type)
+      rescue => e
+        msg = "Caught exception loading route53 template #{type}: #{e.message}"
+				yield "#{@mgr.timestamp()} #{msg}"
+				return nil, msg
 			end
-			raw = File::read(templatefile)
-			raw = @mgr.expand_strings(raw)
-			set = YAML::load(raw)
+      @mgr.symbol_keys(template)
+			@mgr.resolve_vars(template, :api_template)
 
-			@mgr.resolve_vars( { "child" => set }, "child" )
-			@mgr.symbol_keys(set)
-
-			# puts "Record set:\n#{set}"
+      set = template[:api_template]
+			@mgr.log(:debug, "Submitting change_record_sets with:\n#{set}")
 			resp = change_record_sets(set)
 			return resp
 		end

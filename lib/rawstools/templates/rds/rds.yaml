@@ -5,6 +5,7 @@
 api_template:
   #db_name: "String" # Not normally used
   db_instance_identifier: ${@dbname} # required
+  db_cluster_identifier: ${@dbname} # required for aurora
   #allocated_storage: 1 # Deleted for aurora
   db_instance_class: ${@type|db.t2.small} # available types vary by engine, probably needs override
   #engine: "String" # required

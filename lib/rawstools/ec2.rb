@@ -278,21 +278,17 @@ EOF
 			end
 		end
 
-		def get_metadata(template)
-			templatefile = nil
-			if template.end_with?(".yaml")
-				templatefile = template
-			else
-				templatefile = "ec2/#{template}.yaml"
+    # metadata interpretation is left up to the tool/script using the library
+    def get_metadata(type)
+      begin
+        data = @mgr.load_template("ec2", type)
+      rescue => e
+        msg = "Caught exception loading template: #{e.message}"
+				yield "#{@mgr.timestamp()} #{msg}"
+				return nil, msg
 			end
-			begin
-				raw = File::read(templatefile)
-				data = YAML::load(raw)
-				return data["metadata"], nil if data["metadata"]
-				return nil, "No metadata found for #{template}"
-			rescue
-				return nil, "Error reading template file #{templatefile}"
-			end
+			return data["metadata"], nil if data["metadata"]
+			return nil, "No metadata found for #{template}"
 		end
 
 		# :call-seq:
@@ -323,7 +319,7 @@ EOF
       begin
         template = @mgr.load_template("ec2", type)
       rescue => e
-        msg = "Caught exception loading template: #{e.message}"
+        msg = "Caught exception loading ec2 template #{type}: #{e.message}"
 				yield "#{@mgr.timestamp()} #{msg}"
 				return nil, msg
 			end

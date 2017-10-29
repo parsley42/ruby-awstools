@@ -10,10 +10,25 @@ require 'rawstools/simpledb'
 require 'rawstools/templatelib'
 
 module RAWSTools
-	# Classes for loading and processing the configuration file
-	Valid_Classes = [ "String", "Fixnum", "Integer", "TrueClass", "FalseClass" ]
-	Expand_Regex = /\${([@=%&][:|.\-\/\w]+)}/
 
+  # An api_template (for rds especially) defines a host of api keys that
+  # may or may not be needed for a given operation. prune_template takes
+  # a list of keys appropriate to an operation and prunes extra keys from
+  # the template. Callers should take care to dup() the original if Multiple
+  # calls need to be made. See e.g. rds create w/ Aurora
+  def prune_template(template, keys)
+    template.keys.each do |key|
+      unless keys.include?(key)
+        template.delete(key)
+      end
+    end
+  end
+
+	Valid_Classes = [ "String", "Fixnum", "Integer", "TrueClass", "FalseClass" ]
+	Expand_Regex = /\${([@=%&][:|.\-\/\w<>]+)}/
+  Log_Levels = [:trace, :debug, :info, :warn, :error]
+
+  # Classes for loading and processing the configuration file
 	class SubnetDefinition
 		attr_reader :cidr, :subnets
 
@@ -60,8 +75,8 @@ module RAWSTools
 		end
 	end
 
-	# For reading in the configuration file and initializing service clients
-	# and resources
+	# Central library class that loads the configuration file and provides
+  # utility classes for processing names and templates.
 	class CloudManager
 		attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :rds, :route53, :tags, :params
 
@@ -93,6 +108,20 @@ module RAWSTools
 				end
 			end
 
+      @loglevel = Log_Levels.index(:info)
+      if @config["LogLevel"] != nil
+        ll = @config["LogLevel"].to_sym()
+        if Log_Levels.index(ll) != nil
+          @loglevel = Log_Levels.index(ll)
+        end
+      end
+      if ENV["RAWS_LOGLEVEL"] != nil
+        ll = ENV["RAWS_LOGLEVEL"].to_sym()
+        if Log_Levels.index(ll) != nil
+          @loglevel = Log_Levels.index(ll)
+        end
+      end
+
 			[ "DNSBase", "DNSDomain" ].each do |dnsdom|
 				name = @config[dnsdom]
 				if name.end_with?(".")
@@ -122,7 +151,18 @@ module RAWSTools
 			end
 		end
 
-		# Implement a simple mutex to prevent collisions
+    # Log events, takes a symbol log level (see Log_Levels) and a message.
+    # NOTE: eventually there should be a separate configurable log level for
+    # stuff that also gets logged to CloudWatch logs.
+    def log(level, message)
+      ll = Log_Levels.index(level)
+      if ll != nil && ll >= @loglevel
+        $stderr.puts(message)
+      end
+    end
+
+		# Implement a simple mutex to prevent collisions. Scripts can use a lock
+    # to synchronize updates to the repository.
 		def lock()
 			@file.flock(File::LOCK_EX)
 		end
@@ -208,23 +248,66 @@ module RAWSTools
 			return @config[key]
 		end
 
+    # Iterate through a data structure and replace all hash string keys
+    # with symbols. Ruby AWS API calls all take symbols as their hash keys.
+    # Updates the data structure in-place.
 		def symbol_keys(item)
-			case item.class().to_s()
+      case item.class().to_s()
 			when "Hash"
-				keys = item.keys()
-				keys.each() do |key|
+				item.keys().each() do |key|
 					if key.class.to_s() == "String"
-						symkey = key.to_sym()
-						item[symkey] = item[key]
-						item.delete(key)
+            oldkey = key
+						key = key.to_sym()
+						item[key] = item[oldkey]
+						item.delete(oldkey)
 					end
-					symbol_keys(item[symkey])
+					symbol_keys(item[key])
 				end
 			when "Array"
 				item.each() { |i| symbol_keys(i) }
 			end
 		end
 
+    # merge 2nd-level hashes, src overwrites and modifies dst in place
+    def merge_templates(src, dst)
+      src.keys.each() do |key|
+        if ! dst.has_key?(key)
+          dst[key] = src[key]
+        else
+          dst[key] = dst[key].merge(src[key])
+        end
+      end
+    end
+
+    # Load API template files in order from least to most specific; throws an
+    # exeption if no specific template with the named type is loaded.
+    def load_template(facility, type)
+      search_dirs = ["#{@installdir}/templates"] + @config["SearchPath"] + ["."]
+      template = {}
+      found = false
+      search_dirs.each do |dir|
+        log(:debug, "Looking for #{dir}/#{facility}/#{facility}.yaml")
+        if File::exist?("#{dir}/#{facility}/#{facility}.yaml")
+          log(:debug, "=> Loading #{dir}/#{facility}/#{facility}.yaml")
+          raw = File::read("#{dir}/#{facility}/#{facility}.yaml")
+          merge_templates(YAML::load(raw), template)
+        end
+        log(:debug, "Looking for #{dir}/#{facility}/#{type}.yaml")
+        if File::exist?("#{dir}/#{facility}/#{type}.yaml")
+          log(:debug, "=> Loading #{dir}/#{facility}/#{type}.yaml")
+          found = true
+          raw = File::read("#{dir}/#{facility}/#{type}.yaml")
+          merge_templates(YAML::load(raw), template)
+        end
+      end
+      unless found
+        raise "Couldn't find a #{facility} template for #{type}"
+      end
+      return template
+    end
+
+    # Take a string of the form ${something} and expand the value from
+    # config, sdb, parameters, or cloudformation.
 		def expand_string(var)
 			var = $1 if var.match(Expand_Regex)
 			case var[0]
@@ -286,6 +369,8 @@ module RAWSTools
 			end
 		end
 
+    # Iteratively expand all the ${...} values in a string which may be a
+    # full CloudFormation YAML template
 		def expand_strings(data)
 			# NOTE: previous code to remove comments has been removed; it was removing
 			# the comment at the top of user_data, which broke user data.
@@ -297,8 +382,11 @@ module RAWSTools
 			return data
 		end
 
-		# Resolve $var references to cfg items, no error checking on types
+		# Resolve $var, $@var, $%var references to cfg items, no error checking on
+    # types, and evaluate and expand all the string values in a template, called
+    # by library methods just prior to using a template in an API call.
 		def resolve_vars(parent, item)
+      log(:trace, "Resolving values for key: #{item}")
 			case parent[item].class().to_s()
 			when "Array"
 				parent[item].each_index() do |index|
@@ -330,7 +418,16 @@ module RAWSTools
 							raise "Bad variable reference: \"#{cfgvar}\" not defined in #{@filename}"
 						end
 						parent[item] = @config[cfgvar]
-					end
+					end # case cfgvar[0]
+        else
+          expanded = expand_strings(parent[item])
+          log(:trace, "Expanded string \"#{parent[item]}\" -> \"#{expanded}\"")
+          parent[item] = expanded
+          if parent[item] == "<DELETE>"
+            parent.delete(item)
+          elsif parent[item] == "<REQUIRED>"
+            raise "Missing required value for key #{item}"
+          end
 				end
 			end # case item.class
 		end

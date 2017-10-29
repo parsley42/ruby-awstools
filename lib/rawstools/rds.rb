@@ -1,36 +1,50 @@
 module RAWSTools
-	RDS_Default_Template = <<EOF
-  # db_name: "String" # We don't create a default database
-  db_instance_identifier: ${@dbname} # required
-  iops: ${@iops|0}
-  db_instance_class: ${@type|db.t2.micro} # available types vary by engine, probably needs override
-  engine: (requires override)
-  master_username: "root"
-  master_user_password: ${@rootpassword}
-  vpc_security_group_ids:
-  - (requires override)
-  availability_zone: ${@availability_zone|none}
-  db_subnet_group_name: (requires override)
-  backup_retention_period: 2
-  auto_minor_version_upgrade: true
-  publicly_accessible: false
-  storage_type: ${@storage_type|gp2}
-  copy_tags_to_snapshot: true
-  # monitoring_interval: 1
-  # monitoring_role_arn: (requires override)
-EOF
 
-	RDS_Restore_Template = <<EOF
-  db_instance_identifier: ${@dbname} # required
-  db_instance_class: ${@type|db.t2.micro}
-  availability_zone: ${availability_zone|none}
-  publicly_accessible: false
-  auto_minor_version_upgrade: true
-  engine: (requires override)
-  iops: ${@iops|0}
-  storage_type: ${@storage_type|gp2}
-  copy_tags_to_snapshot: true
-EOF
+  # key lists for pruning api_templates
+  Aurora_Cluster_Keys = [ :availability_zones, :backup_retention_period,
+    :character_set_name, :database_name, :db_cluster_identifier,
+    :db_cluster_parameter_group_name, :vpc_security_group_ids,
+    :db_subnet_group_name, :engine, :engine_version, :port, :master_username,
+    :master_user_password, :option_group_name, :preferred_backup_window,
+    :preferred_maintenance_window, :replication_source_identifier,
+    :tags, :storage_encrypted, :kms_key_id, :pre_signed_url,
+    :enable_iam_database_authentication, :destination_region,
+    :source_region
+  ]
+  Aurora_Instance_Keys = [ :db_name, :db_instance_identifier,
+    :db_instance_class, :engine, :db_security_groups, :availability_zone,
+    :db_subnet_group_name, :preferred_maintenance_window,
+    :db_parameter_group_name, :port, :multi_az, :auto_minor_version_upgrade,
+    :license_model, :iops, :option_group_name, :publicly_accessible,
+    :tags, :db_cluster_identifier, :storage_type, :tde_credential_arn,
+    :tde_credential_password, :domain, :copy_tags_to_snapshot,
+    :monitoring_interval, :monitoring_role_arn, :domain_iam_role_name,
+    :promotion_tier, :enable_performance_insights,
+    :performance_insights_kms_key_id
+  ]
+  DB_Instance_Keys = [ :db_name, :db_instance_identifier, :allocated_storage,
+    :db_instance_class, :engine, :master_username, :master_user_password,
+    :db_security_groups, :vpc_security_group_ids, :availability_zone,
+    :db_subnet_group_name, :preferred_maintenance_window,
+    :db_parameter_group_name, :backup_retention_period,
+    :preferred_backup_window, :port, :multi_az, :auto_minor_version_upgrade,
+    :license_model, :iops, :option_group_name, :character_set_name,
+    :publicly_accessible, :tags, :db_cluster_identifier, :storage_type,
+    :tde_credential_arn, :tde_credential_password, :storage_encrypted,
+    :kms_key_id, :domain, :copy_tags_to_snapshot, :monitoring_interval,
+    :monitoring_role_arn, :domain_iam_role_name, :promotion_tier,
+    :timezone, :enable_iam_database_authentication,
+    :enable_performance_insights, :performance_insights_kms_key_id
+  ]
+  DB_Restore_Keys = [
+    :db_instance_identifier, :db_instance_class, :port, :availability_zone,
+    :db_subnet_group_name, :multi_az, :publicly_accessible,
+    :auto_minor_version_upgrade, :license_model, :db_name, :engine,
+    :iops, :option_group_name, :tags, :storage_type, :tde_credential_arn,
+    :tde_credential_password, :domain, :copy_tags_to_snapshot,
+    :domain_iam_role_name, :enable_iam_database_authentication
+  ]
+
 	class RDS
 		attr_reader :client, :resource
 
@@ -38,14 +52,6 @@ EOF
 			@mgr = cloudmgr
 			@client = Aws::RDS::Client.new(region: @mgr["Region"])
 			@resource = Aws::RDS::Resource.new(client: @client)
-		end
-
-		def dump_template()
-			puts <<EOF
----
-api_template:
-#{RDS_Default_Template}
-EOF
 		end
 
 		# Set dbname parameter and check for existence of
@@ -277,24 +283,20 @@ EOF
 			end
 		end
 
-		def get_metadata(template)
-			templatefile = nil
-			if template.end_with?(".yaml")
-				templatefile = template
-			else
-				templatefile = "rds/#{template}.yaml"
+    # metadata interpretation is left up to the tool/script using the library
+		def get_metadata(type)
+      begin
+        data = @mgr.load_template("rds", type)
+      rescue => e
+        msg = "Caught exception loading template: #{e.message}"
+				yield "#{@mgr.timestamp()} #{msg}"
+				return nil, msg
 			end
-			begin
-				raw = File::read(templatefile)
-				data = YAML::load(raw)
-				return data["metadata"], nil if data["metadata"]
-				return nil, "No metadata found for #{template}"
-			rescue
-				return nil, "Error reading template file #{templatefile}"
-			end
+			return data["metadata"], nil if data["metadata"]
+			return nil, "No metadata found for #{template}"
 		end
 
-		def create_instance(name, rootpass, template, wait=true)
+		def create_instance(name, rootpass, type, wait=true)
 			@mgr.setparam("name", name)
 			@mgr.setparam("rootpassword", rootpass) # required in the create template
 			@mgr.normalize_name_parameters()
@@ -311,27 +313,35 @@ EOF
 			end
 
 			dbname = @mgr.getparam("dbname")
-			templatefile = nil
-			if template.end_with?(".yaml")
-				templatefile = template
-			else
-				templatefile = "rds/#{template}.yaml"
-			end
-			begin
-				raw = File::read(templatefile)
-			rescue
-				yield "#{@mgr.timestamp()} Error reading template file #{templatefile}"
+
+      begin
+        base_template = @mgr.load_template("rds", type)
+      rescue => e
+        msg = "Caught exception loading rds template #{type}: #{e.message}"
+        yield "#{@mgr.timestamp()} #{msg}"
+        return nil, msg
+      end
+
+      # puts "Options hash:\n#{dbspec}"
+			@mgr.lock()
+			i, err = resolve_instance()
+			if i
+				yield "#{@mgr.timestamp()} Instance #{name} already exists"
+				@mgr.unlock()
 				return nil
 			end
 
-			raw = @mgr.expand_strings(raw)
-			template = YAML::load(raw)
-			@mgr.resolve_vars( { "child" => template }, "child" )
-			@mgr.symbol_keys(template)
+      @mgr.symbol_keys(base_template)
+      @mgr.resolve_vars(base_template)
+      dbspec = base_template[:api_template]
+      dbspec.delete(:iops) unless dbspec[:storage_type] == "io1"
+      tags = dbspec[:tags]
+			cfgtags = @mgr.tags()
+			cfgtags["Name"] = name
+			cfgtags["Domain"] = @mgr["DNSDomain"]
+			cfgtags.add(tags) if tags
+			dbspec[:tags] = cfgtags.apitags()
 
-			# TODO: Check for snapshot, use RDS_Restore_Template if so,
-			# and delete :db_subnet_group_name, :monitoring_interval,
-			# :monitoring_role_arn
 			snapname = @mgr.getparam("snapname")
 			snapshot = nil
 			latest = nil
@@ -366,42 +376,26 @@ EOF
 				yield "#{@mgr.timestamp()} Creating #{name} from provided snapshot #{snapname}"
 			end
 
-			# Load the default template
-			if snapshot
-				apibase = @mgr.expand_strings(RDS_Restore_Template)
-			else
-				apibase = @mgr.expand_strings(RDS_Default_Template)
-			end
-			dbspec = YAML::load(apibase)
-			@mgr.resolve_vars( { "child" => dbspec }, "child" )
-			@mgr.symbol_keys(dbspec)
-			dbspec.delete(:availability_zone) unless @mgr.getparam("availability_zone")
-			dbspec.delete(:iops) unless dbspec[:storage_type] == "io1"
+      if dbspec[:engine] == "aurora"
+        clspec = dbspec.dup()
+        prune_template(clspec, Aurora_Cluster_Keys)
+        begin
+          dbcluster = @resource.create_db_cluster(clspec)
+        rescue => e
+          @mgr.unlock()
+          yield "#{@mgr.timestamp()} Problem creating Aurora cluster: #{e.message}"
+          return nil
+        end
+        yield "#{@mgr.timestamp()} Created Aurora cluster #{name} (id: #{dbcluster.id()})"
+      end
 
-			dbspec = dbspec.merge(template[:api_template])
-			tags = dbspec[:tags]
-			cfgtags = @mgr.tags()
-			cfgtags["Name"] = name
-			cfgtags["Domain"] = @mgr["DNSDomain"]
-			cfgtags.add(tags) if tags
-			dbspec[:tags] = cfgtags.apitags()
-
-			# puts "Options hash:\n#{dbspec}"
-			@mgr.lock()
-			i, err = resolve_instance()
-			if i
-				yield "#{@mgr.timestamp()} Instance #{name} already being created"
-				@mgr.unlock()
-				return nil
-			end
-
+      # Store params for later modify
 			modify_params = {}
 			if snapshot
-				dbspec.delete(:allocated_storage)
 				[ :vpc_security_group_ids, :monitoring_interval, :monitoring_role_arn ].each do |k|
 					modify_params[k] = dbspec[k]
-					dbspec.delete(k)
 				end
+        prune_template(dbspec, DB_Restore_Keys)
 				begin
 					dbinstance = snapshot.restore(dbspec)
 				rescue => e
@@ -411,6 +405,11 @@ EOF
 				end
 			else
 				begin
+          if dbspec[:engine] == "aurora"
+            prune_template(dbspec, Aurora_Instance_Keys)
+          else
+            prune_template(dbspec, DB_Instance_Keys)
+          end
 					dbinstance = @resource.create_db_instance(dbspec)
 				rescue => e
 					@mgr.unlock()
@@ -423,7 +422,9 @@ EOF
 			@client.wait_until(:db_instance_available, db_instance_identifier: dbname)
 			if snapshot
 				yield "#{@mgr.timestamp()} Modifying restored database with rootpassword and other template values"
-				modify_params[:master_user_password] = @mgr.getparam("rootpassword")
+        if dbspec[:engine] != "aurora"
+          modify_params[:master_user_password] = @mgr.getparam("rootpassword")
+        end
 				modify_params[:apply_immediately] = true
 				begin
 					dbinstance.modify(modify_params)

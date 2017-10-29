@@ -80,7 +80,7 @@ module RAWSTools
 	class CloudManager
 		attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :rds, :route53, :tags, :params
 
-		def initialize(filename)
+		def initialize(filename = "cloudconfig.yaml")
 			@filename = filename
 			@installdir = File.dirname(Pathname.new(__FILE__).realpath) + "/rawstools"
 			@params = {}

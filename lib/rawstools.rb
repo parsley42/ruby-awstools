@@ -78,15 +78,24 @@ module RAWSTools
   # Central library class that loads the configuration file and provides
   # utility classes for processing names and templates.
   class CloudManager
-    attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :rds, :route53, :tags, :params, :stack_prefix
+    attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :rds, :route53, :tags, :params, :stack_family
 
     def initialize()
       @installdir = File.dirname(Pathname.new(__FILE__).realpath) + "/rawstools"
-      @file = File::open("cloudconfig.yaml")
+      begin
+        @file = File::open("cloudconfig.yaml")
+      rescue => e
+        $stderr.puts("Error reading cloudconfig.yaml: #{e.message}")
+        exit(1)
+      end
       raw = @file.read()
       # A number of config items need to be defined before using expand_strings
       @config = YAML::load(raw)
-      search_dirs = ["#{@installdir}/templates"] + @config["SearchPath"] + ["."]
+      search_dirs = ["#{@installdir}/templates"]
+      if @config["SearchPath"]
+        search_dirs += @config["SearchPath"]
+      end
+      search_dirs += ["."]
 
       @loglevel = Log_Levels.index(:info)
       @config = {}

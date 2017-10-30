@@ -7,7 +7,6 @@ require 'rawstools/ec2'
 require 'rawstools/rds'
 require 'rawstools/route53'
 require 'rawstools/simpledb'
-require 'rawstools/templatelib'
 
 module RAWSTools
 
@@ -121,6 +120,11 @@ module RAWSTools
         end
       end
 
+      @sts = Aws::STS::Client.new( region: @config["Region"] )
+      info = @sts.get_caller_identity()
+      if info.account != @config["AccountID"]
+        raise "AccountID for credentials don't match configured AccountID"
+      end
       @params = {}
       @subdom = nil
       @ec2 = Ec2.new(self)

@@ -11,12 +11,13 @@ module RAWSTools
     :enable_iam_database_authentication, :destination_region,
     :source_region
   ]
+  # NOTE: removed :storage_type and :iops, which don't appear to apply
   Aurora_Instance_Keys = [ :db_name, :db_instance_identifier,
     :db_instance_class, :engine, :db_security_groups, :availability_zone,
     :db_subnet_group_name, :preferred_maintenance_window,
     :db_parameter_group_name, :port, :multi_az, :auto_minor_version_upgrade,
-    :license_model, :iops, :option_group_name, :publicly_accessible,
-    :tags, :db_cluster_identifier, :storage_type, :tde_credential_arn,
+    :license_model, :option_group_name, :publicly_accessible,
+    :tags, :db_cluster_identifier, :tde_credential_arn,
     :tde_credential_password, :domain, :copy_tags_to_snapshot,
     :monitoring_interval, :monitoring_role_arn, :domain_iam_role_name,
     :promotion_tier, :enable_performance_insights,
@@ -29,7 +30,7 @@ module RAWSTools
     :db_parameter_group_name, :backup_retention_period,
     :preferred_backup_window, :port, :multi_az, :auto_minor_version_upgrade,
     :license_model, :iops, :option_group_name, :character_set_name,
-    :publicly_accessible, :tags, :db_cluster_identifier, :storage_type,
+    :publicly_accessible, :tags, :storage_type,
     :tde_credential_arn, :tde_credential_password, :storage_encrypted,
     :kms_key_id, :domain, :copy_tags_to_snapshot, :monitoring_interval,
     :monitoring_role_arn, :domain_iam_role_name, :promotion_tier,
@@ -47,6 +48,7 @@ module RAWSTools
 
   class RDS
     attr_reader :client, :resource
+    include RAWSTools
 
     def initialize(cloudmgr)
       @mgr = cloudmgr
@@ -332,7 +334,7 @@ module RAWSTools
       end
 
       @mgr.symbol_keys(base_template)
-      @mgr.resolve_vars(base_template)
+      @mgr.resolve_vars(base_template, :api_template)
       dbspec = base_template[:api_template]
       dbspec.delete(:iops) unless dbspec[:storage_type] == "io1"
       tags = dbspec[:tags]
@@ -380,13 +382,13 @@ module RAWSTools
         clspec = dbspec.dup()
         prune_template(clspec, Aurora_Cluster_Keys)
         begin
-          dbcluster = @resource.create_db_cluster(clspec)
+          resp = @client.create_db_cluster(clspec)
         rescue => e
           @mgr.unlock()
           yield "#{@mgr.timestamp()} Problem creating Aurora cluster: #{e.message}"
           return nil
         end
-        yield "#{@mgr.timestamp()} Created Aurora cluster #{name} (id: #{dbcluster.id()})"
+        yield "#{@mgr.timestamp()} Created Aurora cluster #{name} (id: #{resp.db_cluster.db_cluster_identifier})"
       end
 
       # Store params for later modify
@@ -486,6 +488,8 @@ module RAWSTools
         return nil
       end
 
+      cluster_id = dbinstance.db_cluster_identifier()
+
       if unsafe
         yield "#{@mgr.timestamp()} Permanently deleting #{name}"
         dbinstance = dbinstance.delete({ skip_final_snapshot: true })
@@ -502,6 +506,18 @@ module RAWSTools
         yield "#{@mgr.timestamp()} Waiting for db instance to finish deleting..."
         @client.wait_until(:db_instance_deleted, db_instance_identifier: dbname)
         yield "#{@mgr.timestamp()} Deleted"
+      end
+
+      if cluster_id
+        dbcluster = @resource.db_cluster(cluster_id)
+        if unsafe
+          dbcluster.delete({ skip_final_snapshot: true })
+        else
+          dbcluster.delete({
+            skip_final_snapshot: false,
+            final_db_snapshot_identifier: snapname
+          })
+        end
       end
 
       yield "#{@mgr.timestamp()} Removing private DNS record #{fqdn}"

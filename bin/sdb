@@ -20,9 +20,6 @@ params = {}
 opts.on("-d", "--domain DOMAIN", "Use the given domain instead of the DefaultSDB from cloud config file (normally ConfigDB)") do |dom|
   params["sdbdomain"] = dom
 end
-opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
-  cfgfile = file
-end
 
 class UsageException < Exception
   def initialize(msg="Invalid command / option / argument")
@@ -48,12 +45,7 @@ end
 
 opts.parse!
 
-cfgfile = "cloudconfig.yaml" unless cfgfile
-
-raise UsageException.new("Missing configuration file: #{cfgfile}") unless File::exist?(cfgfile)
-raise UsageException.new("Not a regular file: #{cfgfile}") unless File::stat(cfgfile).file?
-
-cfg = RAWSTools::CloudManager.new(cfgfile)
+cfg = RAWSTools::CloudManager.new()
 cfg.setparams(params)
 
 case command

@@ -87,13 +87,28 @@ module RAWSTools
       # A number of config items need to be defined before using expand_strings
       @config = YAML::load(raw)
       search_dirs = ["#{@installdir}/templates"] + @config["SearchPath"] + ["."]
+
+      @loglevel = Log_Levels.index(:info)
       @config = {}
       search_dirs.each do |dir|
         log(:debug, "Looking for #{dir}/cloudconfig.yaml")
         if File::exist?("#{dir}/cloudconfig.yaml")
           log(:debug, "=> Loading #{dir}/cloudconfig.yaml")
           raw = File::read("#{dir}/cloudconfig.yaml")
-          merge_templates(YAML::load(raw), config)
+          merge_templates(YAML::load(raw), @config)
+        end
+      end
+
+      if @config["LogLevel"] != nil
+        ll = @config["LogLevel"].to_sym()
+        if Log_Levels.index(ll) != nil
+          @loglevel = Log_Levels.index(ll)
+        end
+      end
+      if ENV["RAWS_LOGLEVEL"] != nil
+        ll = ENV["RAWS_LOGLEVEL"].to_sym()
+        if Log_Levels.index(ll) != nil
+          @loglevel = Log_Levels.index(ll)
         end
       end
 
@@ -111,27 +126,13 @@ module RAWSTools
       if @config["StackFamily"] != nil
         @stack_family = expand_strings(@config["StackFamily"])
         unless @stack_family.end_with?("-")
-          stack_family += "-"
+          @stack_family += "-"
         end
       end
 
       [ "Region", "AvailabilityZones" ].each do |c|
         if ! @config[c]
           raise "Missing required top-level configuration item in #{@filename}: #{c}"
-        end
-      end
-
-      @loglevel = Log_Levels.index(:info)
-      if @config["LogLevel"] != nil
-        ll = @config["LogLevel"].to_sym()
-        if Log_Levels.index(ll) != nil
-          @loglevel = Log_Levels.index(ll)
-        end
-      end
-      if ENV["RAWS_LOGLEVEL"] != nil
-        ll = ENV["RAWS_LOGLEVEL"].to_sym()
-        if Log_Levels.index(ll) != nil
-          @loglevel = Log_Levels.index(ll)
         end
       end
 
@@ -292,7 +293,11 @@ module RAWSTools
         if ! dst.has_key?(key)
           dst[key] = src[key]
         else
-          dst[key] = dst[key].merge(src[key])
+          if dst[key].class.to_s() == "Hash"
+            dst[key] = dst[key].merge(src[key])
+          else
+            dst[key] = src[key]
+          end
         end
       end
     end

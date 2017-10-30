@@ -25,9 +25,6 @@ end
 opts.on("-w", "--wait", "Wait for records to sync before exiting") do
   wait = true
 end
-opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
-  cfgfile = file
-end
 
 class UsageException < Exception
   def initialize(msg="Invalid command / option / argument")
@@ -44,12 +41,7 @@ raise UsageException.new("Unknown command: #{command}") unless commands.include?
 
 opts.parse!
 
-cfgfile = "cloudconfig.yaml" unless cfgfile
-
-raise UsageException.new("Missing configuration file: #{cfgfile}") unless File::exist?(cfgfile)
-raise UsageException.new("Not a regular file: #{cfgfile}") unless File::stat(cfgfile).file?
-
-cfg = RAWSTools::CloudManager.new(cfgfile)
+cfg = RAWSTools::CloudManager.new()
 cfg.setparam("ttl", ttl) if ttl
 where = nil
 template = nil

@@ -20,19 +20,16 @@ Usage: route53 <command> (options) (args) - manage route53 records
  Options are:
 EOF
 opts.on("-t", "--ttl TTL", "Use TTY instead of configured default") do |value|
-	ttl = value
+  ttl = value
 end
 opts.on("-w", "--wait", "Wait for records to sync before exiting") do
-	wait = true
-end
-opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
-	cfgfile = file
+  wait = true
 end
 
 class UsageException < Exception
-	def initialize(msg="Invalid command / option / argument")
-		super(msg)
-	end
+  def initialize(msg="Invalid command / option / argument")
+    super(msg)
+  end
 end
 
 begin
@@ -44,97 +41,92 @@ raise UsageException.new("Unknown command: #{command}") unless commands.include?
 
 opts.parse!
 
-cfgfile = "cloudconfig.yaml" unless cfgfile
-
-raise UsageException.new("Missing configuration file: #{cfgfile}") unless File::exist?(cfgfile)
-raise UsageException.new("Not a regular file: #{cfgfile}") unless File::stat(cfgfile).file?
-
-cfg = RAWSTools::CloudManager.new(cfgfile)
+cfg = RAWSTools::CloudManager.new()
 cfg.setparam("ttl", ttl) if ttl
 where = nil
 template = nil
 
 case command
 when "lookup"
-	where, name = ARGV.shift(2)
-	raise UsageException.new("Missing required argument") unless name
-	cfg.setparam("name", name)
-	if where == "public"
-		zone = cfg["PublicDNSId"]
-	else
-		zone = cfg["PrivateDNSId"]
-	end
-	values = cfg.route53.lookup(zone)
-	if values.length() > 0
-		values.each() { |value| puts value }
-	else
-		puts
-	end
-	exit 0
+  where, name = ARGV.shift(2)
+  raise UsageException.new("Missing required argument") unless name
+  cfg.setparam("name", name)
+  if where == "public"
+    zone = cfg["PublicDNSId"]
+  else
+    zone = cfg["PrivateDNSId"]
+  end
+  values = cfg.route53.lookup(zone)
+  if values.length() > 0
+    values.each() { |value| puts value }
+  else
+    puts
+  end
+  exit 0
 when "delete"
-	where, name = ARGV.shift(2)
-	cfg.setparam("name", name)
-	raise UsageException.new("Missing required argument") unless name
+  where, name = ARGV.shift(2)
+  cfg.setparam("name", name)
+  raise UsageException.new("Missing required argument") unless name
 when "cname"
-	where, cname, name = ARGV.shift(3)
-	raise UsageException.new("Missing required argument") unless cname
-	cfg.setparam("name", name)
-	cfg.setparam("cname", cname)
-	template = "cname"
-	puts "Pointing #{cname} to #{name} using template cname"
+  where, cname, name = ARGV.shift(3)
+  raise UsageException.new("Missing required argument") unless cname
+  cfg.setparam("name", name)
+  cfg.setparam("cname", cname)
+  template = "cname"
+  puts "Pointing #{cname} to #{name} using template cname"
 when "arec"
-	where, name, ipaddr = ARGV.shift(3)
-	raise UsageException.new("Missing required argument") unless ipaddr
-	cfg.setparam("name", name)
-	cfg.setparam("ipaddr", ipaddr)
-	template = "arec"
-	puts "Pointing #{name} to #{ipaddr} using template arec"
+  where, name, ipaddr = ARGV.shift(3)
+  raise UsageException.new("Missing required argument") unless ipaddr
+  cfg.setparam("name", name)
+  cfg.setparam("ipaddr", ipaddr)
+  template = "arec"
+  puts "Pointing #{name} to #{ipaddr} using template arec"
 when "txt"
-	where, name, txtvalue = ARGV.shift(3)
-	raise UsageException.new("Missing required argument") unless txtvalue
-	cfg.setparam("name", name)
+  where, name, txtvalue = ARGV.shift(3)
+  raise UsageException.new("Missing required argument") unless txtvalue
+  cfg.setparam("name", name)
 
-	# Break long TXT records up into 255 byte strings
-	txtrecords = []
-	while txtvalue.length > 255
-		txtrecords << { :value => "\"#{txtvalue[0..254]}\"" }
-		txtvalue = txtvalue[255..-1]
-	end
-	txtrecords << { :value => "\"#{txtvalue}\"" }
+  # Break long TXT records up into 255 byte strings
+  txtrecords = []
+  while txtvalue.length > 255
+    txtrecords << { :value => "\"#{txtvalue[0..254]}\"" }
+    txtvalue = txtvalue[255..-1]
+  end
+  txtrecords << { :value => "\"#{txtvalue}\"" }
 
-	cfg.setparam("txtrecords", txtrecords)
-	template = "txt"
-	puts "Pointing #{name} to #{txtrecords} using template txt"
+  cfg.setparam("txtrecords", txtrecords)
+  template = "txt"
+  puts "Pointing #{name} to #{txtrecords} using template txt"
 end
 
 cfg.normalize_name_parameters()
 change_ids = []
 if where == "public" or where == "both"
-	puts "Updating public zone"
-	cfg.setparam("zone_id", cfg["PublicDNSId"])
-	if command == "delete"
-		change_ids << cfg.route53.delete(cfg["PublicDNSId"])
-	else
-		change_ids << cfg.route53.change_records(template)
-	end
+  puts "Updating public zone"
+  cfg.setparam("zone_id", cfg["PublicDNSId"])
+  if command == "delete"
+    change_ids << cfg.route53.delete(cfg["PublicDNSId"])
+  else
+    change_ids << cfg.route53.change_records(template)
+  end
 end
 if where == "private" or where == "both"
-	puts "Updating private zone"
-	cfg.setparam("zone_id", cfg["PrivateDNSId"])
-	if command == "delete"
-		change_ids << cfg.route53.delete(cfg["PrivateDNSId"])
-	else
-		change_ids << cfg.route53.change_records(template)
-	end
+  puts "Updating private zone"
+  cfg.setparam("zone_id", cfg["PrivateDNSId"])
+  if command == "delete"
+    change_ids << cfg.route53.delete(cfg["PrivateDNSId"])
+  else
+    change_ids << cfg.route53.change_records(template)
+  end
 end
 
 if wait
-	puts "... waiting for zone(s) to synchronize"
-	change_ids.each() { |id| cfg.route53.wait_sync(id) }
-	puts "synchronized"
+  puts "... waiting for zone(s) to synchronize"
+  change_ids.each() { |id| cfg.route53.wait_sync(id) }
+  puts "synchronized"
 end
 
 rescue UsageException => e
-	puts "\n#{e.message}\n\n"
-	puts opts.help()
+  puts "\n#{e.message}\n\n"
+  puts opts.help()
 end

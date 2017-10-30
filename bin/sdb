@@ -18,16 +18,13 @@ EOF
 params = {}
 
 opts.on("-d", "--domain DOMAIN", "Use the given domain instead of the DefaultSDB from cloud config file (normally ConfigDB)") do |dom|
-	params["sdbdomain"] = dom
-end
-opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
-	cfgfile = file
+  params["sdbdomain"] = dom
 end
 
 class UsageException < Exception
-	def initialize(msg="Invalid command / option / argument")
-		super(msg)
-	end
+  def initialize(msg="Invalid command / option / argument")
+    super(msg)
+  end
 end
 
 begin
@@ -41,39 +38,34 @@ replace = true
 
 case command
 when "store"
-	opts.on("-n", "--no-replace", "Add a value instead of replacing (the default)") do
-		replace = false
-	end
+  opts.on("-n", "--no-replace", "Add a value instead of replacing (the default)") do
+    replace = false
+  end
 end
 
 opts.parse!
 
-cfgfile = "cloudconfig.yaml" unless cfgfile
-
-raise UsageException.new("Missing configuration file: #{cfgfile}") unless File::exist?(cfgfile)
-raise UsageException.new("Not a regular file: #{cfgfile}") unless File::stat(cfgfile).file?
-
-cfg = RAWSTools::CloudManager.new(cfgfile)
+cfg = RAWSTools::CloudManager.new()
 cfg.setparams(params)
 
 case command
 when "store"
-	itemkey, value = ARGV.shift(2)
-	raise UsageException.new("Missing required argument") unless value
-	item, key = itemkey.split(":")
-	raise UsageException.new("Invalid <item>:<key> argument") unless key
-	cfg.sdb.store(item, key, value, replace)
-	puts "Stored attribute #{key} = #{value} for item #{item} in domain #{cfg.sdb.getdomain()}"
+  itemkey, value = ARGV.shift(2)
+  raise UsageException.new("Missing required argument") unless value
+  item, key = itemkey.split(":")
+  raise UsageException.new("Invalid <item>:<key> argument") unless key
+  cfg.sdb.store(item, key, value, replace)
+  puts "Stored attribute #{key} = #{value} for item #{item} in domain #{cfg.sdb.getdomain()}"
 when "retrieve"
-	itemkey = ARGV.shift()
-	raise UsageException.new("Missing required argument") unless itemkey
-	item, key = itemkey.split(":")
-	raise UsageException.new("Invalid <item>:<key> argument") unless key
-	values = cfg.sdb.retrieve(item, key)
-	puts values
+  itemkey = ARGV.shift()
+  raise UsageException.new("Missing required argument") unless itemkey
+  item, key = itemkey.split(":")
+  raise UsageException.new("Invalid <item>:<key> argument") unless key
+  values = cfg.sdb.retrieve(item, key)
+  puts values
 end
 
 rescue UsageException => e
-	puts "\n#{e.message}\n\n"
-	puts opts.help()
+  puts "\n#{e.message}\n\n"
+  puts opts.help()
 end

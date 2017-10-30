@@ -1,0 +1,3 @@
+---
+# For compatibility with older cloudconfig.yaml files
+StackFamily: ${&StackPrefix}

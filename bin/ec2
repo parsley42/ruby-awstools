@@ -29,13 +29,13 @@ Usage: ec2 <command> (options) (args) - manage a CloudFormation stack
  Options are:
 EOF
 opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
-	cfgfile = file
+  cfgfile = file
 end
 
 class UsageException < Exception
-	def initialize(msg="Invalid command / option / argument")
-		super(msg)
-	end
+  def initialize(msg="Invalid command / option / argument")
+    super(msg)
+  end
 end
 
 begin
@@ -55,79 +55,79 @@ deletevol = false
 case command
 when "delete"
   opts.on("-w", "--wait", "Wait for operation to complete before exiting (volume only)") do
-		wait = true
-	end
+    wait = true
+  end
 when "create"
-	opts.on("-a", "--ami AMIID", "Create with a specific AMI") do |ami|
-		params["ami"] = ami
-	end
-	opts.on("-d", "--data-vol SIZE", "Create with a new data volume of size SIZE") do |dsize|
-		params["datasize"] = dsize
-	end
-	opts.on("-D", "--dry-run", "Don't actually create anything, just verify parameters") do
-		params["dryrun"] = true
-	end
-	opts.on("-w", "--wait", "Wait for all operations to complete before exiting") do
-		wait = true
-	end
-	opts.on("-e", "--ebs-optimized", "Create ebs-optimized instances") do
-		params["ebsoptimized"] = true
-	end
-	opts.on("-i", "--iops IOPS", "Specify provisioned iops, only used with io1 volumes") do |iops|
-		params["iops"] = iops
-	end
-	opts.on("-m", "--monitoring", "Enable ec2 monitoring (CPU, disk/network, status checks)") do
-		params["monitor"] = true
-	end
-	opts.on("-s", "--snapshot-id SNAP", "Create data volume from snapshot SNAP") do |snap|
-		params["snapid"] = snap
-	end
-	opts.on("-v", "--volume VOL", "Attach the given data volume") do |vol|
-		params["volname"] = vol
-	end
-	opts.on("-V", "--volume-type TYPE", "Create a new volume of type TYPE (gp2, io1, etc.)") do |vtype|
-		params["volume_type"] = vtype
-	end
-	opts.on("-t", "--instance-type TYPE", "Use TYPE for instance type instead of template default") do |type|
-		params["type"] = type
-	end
-	opts.on("-r", "--root-size SIZE", "Increase root volume size to SIZE") do |size|
-		params["rootsize"] = size
-	end
-	opts.on("-z", "--availability-zone ZONE", "Create instance the given zone (letter only)") do |zone|
-		params["az"] = zone
-	end
-	opts.on("-T", "--tag KEYVAL", "Add tag where KEYVAL is of the form key=value") do |keyval|
-		e = keyval.index("=")
-		key = keyval[0..(e-1)]
-		value = keyval[(e+1)..-1]
-		tags[key] = value
-	end
-	opts.on("-p", "--parameter PARAMVAL", "Set an arbitrary parameter where PARAMVAL is of the form parameter=value") do |keyval|
-		e = keyval.index("=")
-		key = keyval[0..(e-1)]
-		value = keyval[(e+1)..-1]
-		params[key] = value
-	end
+  opts.on("-a", "--ami AMIID", "Create with a specific AMI") do |ami|
+    params["ami"] = ami
+  end
+  opts.on("-d", "--data-vol SIZE", "Create with a new data volume of size SIZE") do |dsize|
+    params["datasize"] = dsize
+  end
+  opts.on("-D", "--dry-run", "Don't actually create anything, just verify parameters") do
+    params["dryrun"] = true
+  end
+  opts.on("-w", "--wait", "Wait for all operations to complete before exiting") do
+    wait = true
+  end
+  opts.on("-e", "--ebs-optimized", "Create ebs-optimized instances") do
+    params["ebsoptimized"] = true
+  end
+  opts.on("-i", "--iops IOPS", "Specify provisioned iops, only used with io1 volumes") do |iops|
+    params["iops"] = iops
+  end
+  opts.on("-m", "--monitoring", "Enable ec2 monitoring (CPU, disk/network, status checks)") do
+    params["monitor"] = true
+  end
+  opts.on("-s", "--snapshot-id SNAP", "Create data volume from snapshot SNAP") do |snap|
+    params["snapid"] = snap
+  end
+  opts.on("-v", "--volume VOL", "Attach the given data volume") do |vol|
+    params["volname"] = vol
+  end
+  opts.on("-V", "--volume-type TYPE", "Create a new volume of type TYPE (gp2, io1, etc.)") do |vtype|
+    params["volume_type"] = vtype
+  end
+  opts.on("-t", "--instance-type TYPE", "Use TYPE for instance type instead of template default") do |type|
+    params["type"] = type
+  end
+  opts.on("-r", "--root-size SIZE", "Increase root volume size to SIZE") do |size|
+    params["rootsize"] = size
+  end
+  opts.on("-z", "--availability-zone ZONE", "Create instance the given zone (letter only)") do |zone|
+    params["az"] = zone
+  end
+  opts.on("-T", "--tag KEYVAL", "Add tag where KEYVAL is of the form key=value") do |keyval|
+    e = keyval.index("=")
+    key = keyval[0..(e-1)]
+    value = keyval[(e+1)..-1]
+    tags[key] = value
+  end
+  opts.on("-p", "--parameter PARAMVAL", "Set an arbitrary parameter where PARAMVAL is of the form parameter=value") do |keyval|
+    e = keyval.index("=")
+    key = keyval[0..(e-1)]
+    value = keyval[(e+1)..-1]
+    params[key] = value
+  end
 when "updatedns", "stop", "start", "terminate", "snapshot"
-	opts.on("-w", "--wait", "Wait for DNS records to sync") do
-		wait = true
-	end
-	if command == "stop"
-		opts.on("-d", "--detach", "Detach the data volume after stopping") do
-			params["detach"] = true
-		end
-	end
-	if command == "start"
-		opts.on("-N", "--no-dns", "Don't create DNS records for <name>.${DNSDomain}") do
-			params["nodns"] = true
-		end
-	end
-	if command == "terminate"
-		opts.on("-d", "--delete-volume", "Delete the data volume") do
-			deletevol = true
-		end
-	end
+  opts.on("-w", "--wait", "Wait for DNS records to sync") do
+    wait = true
+  end
+  if command == "stop"
+    opts.on("-d", "--detach", "Detach the data volume after stopping") do
+      params["detach"] = true
+    end
+  end
+  if command == "start"
+    opts.on("-N", "--no-dns", "Don't create DNS records for <name>.${DNSDomain}") do
+      params["nodns"] = true
+    end
+  end
+  if command == "terminate"
+    opts.on("-d", "--delete-volume", "Delete the data volume") do
+      deletevol = true
+    end
+  end
 end
 
 opts.parse!
@@ -165,13 +165,13 @@ when "metadata"
     puts("#{err}")
   end
 when "list"
-	type = ARGV.shift()
-	raise UsageException.new("Missing required type argument") unless type
-	case type
-	when "instances"
-		format = "%-15s %-14s %-19s %-10s %-8s %-8s %-8s %-8s"
-		puts format % [ "Name", "State", "Id", "Type", "RootSize", "RootType", "DataSize", "DataType" ]
-		cfg.ec2.list_instances().each() do |i|
+  type = ARGV.shift()
+  raise UsageException.new("Missing required type argument") unless type
+  case type
+  when "instances"
+    format = "%-15s %-14s %-19s %-10s %-8s %-8s %-8s %-8s"
+    puts format % [ "Name", "State", "Id", "Type", "RootSize", "RootType", "DataSize", "DataType" ]
+    cfg.ec2.list_instances().each() do |i|
       datasize = "n/a"
       datatype = "n/a"
       v, err = cfg.ec2.get_instance_data_volume(i)
@@ -183,34 +183,34 @@ when "list"
       rootsize = r.size
       roottype = r.volume_type
       #puts "Volume is #{v.id}, volsize is #{volsize}"
-			puts format % [ cfg.ec2.get_tag(i, "Name"), i.state.name(), i.id(), i.instance_type(), rootsize, roottype, datasize, datatype ]
-		end
+      puts format % [ cfg.ec2.get_tag(i, "Name"), i.state.name(), i.id(), i.instance_type(), rootsize, roottype, datasize, datatype ]
+    end
   when "servertypes"
     puts "#{cfg.ec2.list_types().join(", ")}"
-	when "snapshots"
+  when "snapshots"
     hformat = "%-15s %-14s %-7s %-6s %-16s %-24s"
-		format = "%-15s %-14s %-7s %6s %-16s %-24s"
-		puts hformat % [ "Name", "State", "Type", "Size", "Created", "Id" ]
-		cfg.ec2.list_snapshots(ARGV.shift()).each() do |s|
+    format = "%-15s %-14s %-7s %6s %-16s %-24s"
+    puts hformat % [ "Name", "State", "Type", "Size", "Created", "Id" ]
+    cfg.ec2.list_snapshots(ARGV.shift()).each() do |s|
       createstamp = s.start_time.getlocal.strftime("%F|%R")
       stype = cfg.ec2.get_tag(s, "SnapshotType")
       vsize = s.volume_size.to_s + "GB"
-			puts format % [ cfg.ec2.get_tag(s, "Name"), s.state(), stype, vsize, createstamp, s.id() ]
-		end
-	when "volumes"
-		format = "%-21s %-14s %-21s %-4s %-8s"
-		puts format % [ "Name", "State", "Id", "Size", "Type" ]
-		cfg.ec2.list_volumes().each() do |v|
-			puts format % [ cfg.ec2.get_tag(v, "Name"), v.state(), v.id(), v.size, v.volume_type ]
-		end
+      puts format % [ cfg.ec2.get_tag(s, "Name"), s.state(), stype, vsize, createstamp, s.id() ]
+    end
+  when "volumes"
+    format = "%-21s %-14s %-21s %-4s %-8s"
+    puts format % [ "Name", "State", "Id", "Size", "Type" ]
+    cfg.ec2.list_volumes().each() do |v|
+      puts format % [ cfg.ec2.get_tag(v, "Name"), v.state(), v.id(), v.size, v.volume_type ]
+    end
   else
     raise UsageException.new("Invalid type argument to list: #{type}")
-	end
+  end
 when "create"
-	name, key, template = ARGV.shift(3)
-	raise UsageException.new("Missing required argument") unless template
-	raise UsageException.new("Error: both snapshot and volume specified") if params["volname"] and ( params["snapname"] or params["datasize"] )
-	# one-liner to validate the key
+  name, key, template = ARGV.shift(3)
+  raise UsageException.new("Missing required argument") unless template
+  raise UsageException.new("Error: both snapshot and volume specified") if params["volname"] and ( params["snapname"] or params["datasize"] )
+  # one-liner to validate the key
   begin
     cfg.ec2.resource.key_pair(key).key_name()
   rescue => e
@@ -218,62 +218,62 @@ when "create"
     exit 1
   end
   cfg.tags["Servertype"] = template
-	instance, err = cfg.ec2.create_instance(name, key, template, wait) { |status| puts status }
+  instance, err = cfg.ec2.create_instance(name, key, template, wait) { |status| puts status }
   unless instance
     puts "Failed to create instance: #{err}"
     exit 1
   end
 when "updatedns"
-	name = ARGV.shift()
-	raise UsageException.new("Missing required argument") unless name
-	cfg.ec2.update_dns(name, wait) { |status| puts status }
+  name = ARGV.shift()
+  raise UsageException.new("Missing required argument") unless name
+  cfg.ec2.update_dns(name, wait) { |status| puts status }
 when "reboot"
-	name = ARGV.shift()
-	raise UsageException.new("Missing <name> argument") unless name
-	cfg.ec2.reboot_instance(name) { |status| puts status }
+  name = ARGV.shift()
+  raise UsageException.new("Missing <name> argument") unless name
+  cfg.ec2.reboot_instance(name) { |status| puts status }
 when "start"
-	name = ARGV.shift()
-	raise UsageException.new("Missing <name> argument") unless name
-	cfg.ec2.start_instance(name, wait) { |status| puts status }
+  name = ARGV.shift()
+  raise UsageException.new("Missing <name> argument") unless name
+  cfg.ec2.start_instance(name, wait) { |status| puts status }
 when "stop"
-	name = ARGV.shift()
-	raise UsageException.new("Missing <name> argument") unless name
-	cfg.ec2.stop_instance(name, wait) { |status| puts status }
+  name = ARGV.shift()
+  raise UsageException.new("Missing <name> argument") unless name
+  cfg.ec2.stop_instance(name, wait) { |status| puts status }
 when "template"
-	cfg.ec2.dump_template()
+  cfg.ec2.dump_template()
 when "snapshot"
-	name = ARGV.shift()
-	raise UsageException.new("Missing <name> argument") unless name
-	cfg.ec2.create_snapshot(name, wait) { |status| puts status }
+  name = ARGV.shift()
+  raise UsageException.new("Missing <name> argument") unless name
+  cfg.ec2.create_snapshot(name, wait) { |status| puts status }
 when "terminate"
-	name = ARGV.shift()
-	raise UsageException.new("Missing <name> argument") unless name
-	cfg.ec2.terminate_instance(name, wait, deletevol) { |status| puts status }
+  name = ARGV.shift()
+  raise UsageException.new("Missing <name> argument") unless name
+  cfg.ec2.terminate_instance(name, wait, deletevol) { |status| puts status }
 when "genkeypair"
-	keyname = ARGV.shift()
-	raise UsageException.new("Missing <keyname> argument") unless keyname
-	outputdir = ARGV.shift()
-	if outputdir
-		raise UsageException.new("Not a directory: #{outputdir}") unless File::stat(outputdir).directory?
-		outputdir += "/" unless outputdir.end_with?("/")
-		keyfilename = "#{outputdir}#{keyname}.pem"
-	else
-		keyfilename = "#{keyname}.pem"
-	end
-	raise UsageException.new("File already exists: #{keyfilename}") if File::exist?(keyfilename)
-	puts "Creating keypair #{keyname} and storing in #{keyfilename}"
-	key = cfg.ec2.client.create_key_pair({key_name: keyname})
-	keyfile = File.open(keyfilename, "w")
-	keyfile.write(key.key_material())
-	keyfile.close()
+  keyname = ARGV.shift()
+  raise UsageException.new("Missing <keyname> argument") unless keyname
+  outputdir = ARGV.shift()
+  if outputdir
+    raise UsageException.new("Not a directory: #{outputdir}") unless File::stat(outputdir).directory?
+    outputdir += "/" unless outputdir.end_with?("/")
+    keyfilename = "#{outputdir}#{keyname}.pem"
+  else
+    keyfilename = "#{keyname}.pem"
+  end
+  raise UsageException.new("File already exists: #{keyfilename}") if File::exist?(keyfilename)
+  puts "Creating keypair #{keyname} and storing in #{keyfilename}"
+  key = cfg.ec2.client.create_key_pair({key_name: keyname})
+  keyfile = File.open(keyfilename, "w")
+  keyfile.write(key.key_material())
+  keyfile.close()
 when "deletekeypair"
-	keyname = ARGV.shift()
-	raise UsageException.new("Missing <keyname> argument") unless keyname
-	cfg.ec2.delete_key_pair({key_name: keyname})
-	puts "Deleted"
+  keyname = ARGV.shift()
+  raise UsageException.new("Missing <keyname> argument") unless keyname
+  cfg.ec2.delete_key_pair({key_name: keyname})
+  puts "Deleted"
 end
 
 rescue UsageException => e
-	puts "\n#{e.message}\n\n"
-	puts opts.help()
+  puts "\n#{e.message}\n\n"
+  puts opts.help()
 end

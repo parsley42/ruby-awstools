@@ -25,19 +25,19 @@ Usage: cfn <command> (options) <templatename|templatedir> - manage a CloudFormat
  Options are:
 EOF
 opts.on("-t", "--jsondir DIRECTORY", "Use <templatedir>/DIRECTORY instead of <templatedir>/output for JSON files") do |dir|
-	outputdir = dir
+  outputdir = dir
 end
 opts.on("-c", "--configfile FILE", "Use FILE for cloud configuration instead of ./cloudconfig.yaml") do |file|
-	cfgfile = file
+  cfgfile = file
 end
 opts.on("-d", "--disable-rollback", "Disable rollback when a create or update fails") do |disable|
-	disable_rollback = true
+  disable_rollback = true
 end
 
 class UsageException < Exception
-	def initialize(msg="Invalid command / option / argument")
-		super(msg)
-	end
+  def initialize(msg="Invalid command / option / argument")
+    super(msg)
+  end
 end
 
 begin
@@ -58,37 +58,37 @@ cfg = RAWSTools::CloudManager.new(cfgfile)
 
 case command
 when "list"
-	stacklist = cfg.cfn.list_stacks()
-	if stacklist.length() > 0
-		puts "Stacks:"
-		puts stacklist
-	else
-		puts "No stacks found"
-	end
-	exit 0
+  stacklist = cfg.cfn.list_stacks()
+  if stacklist.length() > 0
+    puts "Stacks:"
+    puts stacklist
+  else
+    puts "No stacks found"
+  end
+  exit 0
 when "outputs"
-	stack = ARGV.shift()
-	raise UsageException.new("Missing required argument") unless stack
-	outputs = cfg.cfn.getoutputs(stack)
-	if outputs.length() > 0
-		puts "Outputs:"
-		outputs.each_key() do |key|
-			puts "#{key} => #{outputs[key]}"
-		end
-	else
-		puts "No outputs found for #{stack}"
-	end
-	exit 0
+  stack = ARGV.shift()
+  raise UsageException.new("Missing required argument") unless stack
+  outputs = cfg.cfn.getoutputs(stack)
+  if outputs.length() > 0
+    puts "Outputs:"
+    outputs.each_key() do |key|
+      puts "#{key} => #{outputs[key]}"
+    end
+  else
+    puts "No outputs found for #{stack}"
+  end
+  exit 0
 when "output"
-	output = ARGV.shift()
-	raise UsageException.new("Missing required argument") unless output
-	value = cfg.cfn.getoutput(output)
-	if value
-		puts value
-	else
-		puts
-	end
-	exit 0
+  output = ARGV.shift()
+  raise UsageException.new("Missing required argument") unless output
+  value = cfg.cfn.getoutput(output)
+  if value
+    puts value
+  else
+    puts
+  end
+  exit 0
 end
 
 template_arg = ARGV.shift()
@@ -96,11 +96,11 @@ raise UsageException.new("Missing <templatename|templatedir>") unless template_a
 
 template_arg = template_arg.chomp("/")
 if template_arg.include?("/")
-	templatename = File::basename(template_arg)
-	templatedir = template_arg
+  templatename = File::basename(template_arg)
+  templatedir = template_arg
 else
-	templatename = template_arg
-	templatedir = "cfn/#{templatename}"
+  templatename = template_arg
+  templatedir = "cfn/#{templatename}"
 end
 
 raise UsageException.new("Directory not found: #{templatedir}") unless File::exist?(templatedir)
@@ -109,13 +109,13 @@ raise UsageException.new("Not a directory: #{templatedir}") unless File::stat(te
 outputdir = templatedir + "/" + outputdir
 
 if File::exist?(outputdir)
-	raise UsageException.new("Not a directory: #{outputdir}") unless File::stat(outputdir).directory?
+  raise UsageException.new("Not a directory: #{outputdir}") unless File::stat(outputdir).directory?
 else
-	if command == "generate"
-		Dir::mkdir(outputdir)
-	else
-		raise UsageException.new("No such file or directory: #{outputdir}")
-	end
+  if command == "generate"
+    Dir::mkdir(outputdir)
+  else
+    raise UsageException.new("No such file or directory: #{outputdir}")
+  end
 end
 
 # Generate the hub template that owns other templates
@@ -126,77 +126,77 @@ puts # blank line after 'Loading ...'
 filenames = [ "main" ] + maincfg.children.map { |child| child.name().downcase() }
 upload = false if filenames.length() == 1
 
-stackprefix = (cfg["StackPrefix"]?cfg["StackPrefix"]:"")
+stackprefix = cfg.stack_family
 stackname = stackprefix + templatename
 stack_required_capabilities = []
 stack_tags = cfg.tags.apitags()
 
 case command
 when "generate"
-	maincfg.process_children()
-	maincfg.write_all(outputdir)
+  maincfg.process_children()
+  maincfg.write_all(outputdir)
 when "create", "update", "validate"
-	filenames.each() do |tfile|
-		json = File::read(outputdir + "/" + tfile + ".json")
-		case command
-		when "validate"
-			puts "Validating #{tfile}"
-			cfg.cfn.validate(json)
-		when "create", "update"
+  filenames.each() do |tfile|
+    json = File::read(outputdir + "/" + tfile + ".json")
+    case command
+    when "validate"
       puts "Validating #{tfile}"
-			required_capabilities = cfg.cfn.validate(json, false)
-			if ! upload
-				json = File::read(outputdir + "/" + tfile + ".json")
-				params = {
-					stack_name: stackname,
-					tags: stack_tags,
-					capabilities: required_capabilities,
-					disable_rollback: disable_rollback,
-					template_body: json,
-				}
-				if command == "create"
-					puts "Creating #{stackname}"
-					stackout = cfg.cfn.client.create_stack(params)
-				else
-					puts "Updating #{stackname}"
-					params.delete(:disable_rollback)
-					stackout = cfg.cfn.client.update_stack(params)
-				end
-				puts "Stack ID: #{stackout.stack_id}"
-			else
-				obj = cfg.s3res.bucket(cfg["Bucket"]).object("#{cfg["Prefix"]}/#{templatename}/#{tfile}.json")
-				puts "Uploading #{tfile}"
-				obj.upload_file("#{outputdir}/#{tfile}.json")
-				stack_required_capabilities = (stack_required_capabilities + required_capabilities).uniq()
-			end
-		end
-	end
-	if upload && [ "create", "update" ].include?(command)
-		json = File::read(outputdir + "/main.json")
-		template_url = "https://s3.amazonaws.com/#{cfg["Bucket"]}/#{cfg["Prefix"]}/#{templatename}/main.json"
-		params = {
-			stack_name: stackname,
-			tags: stack_tags,
-			capabilities: stack_required_capabilities,
-			disable_rollback: disable_rollback,
-			template_url: template_url,
-		}
-		if command == "create"
-			puts "Creating #{stackname} from #{template_url}"
-			stackout = cfg.cfn.client.create_stack(params)
-		else
-			puts "Updating #{stackname}"
-			params.delete(:disable_rollback)
-			stackout = cfg.cfn.client.update_stack(params)
-		end
-		puts "Stack ID: #{stackout.stack_id}"
-	end
+      cfg.cfn.validate(json)
+    when "create", "update"
+      puts "Validating #{tfile}"
+      required_capabilities = cfg.cfn.validate(json, false)
+      if ! upload
+        json = File::read(outputdir + "/" + tfile + ".json")
+        params = {
+          stack_name: stackname,
+          tags: stack_tags,
+          capabilities: required_capabilities,
+          disable_rollback: disable_rollback,
+          template_body: json,
+        }
+        if command == "create"
+          puts "Creating #{stackname}"
+          stackout = cfg.cfn.client.create_stack(params)
+        else
+          puts "Updating #{stackname}"
+          params.delete(:disable_rollback)
+          stackout = cfg.cfn.client.update_stack(params)
+        end
+        puts "Stack ID: #{stackout.stack_id}"
+      else
+        obj = cfg.s3res.bucket(cfg["Bucket"]).object("#{cfg["Prefix"]}/#{templatename}/#{tfile}.json")
+        puts "Uploading #{tfile}"
+        obj.upload_file("#{outputdir}/#{tfile}.json")
+        stack_required_capabilities = (stack_required_capabilities + required_capabilities).uniq()
+      end
+    end
+  end
+  if upload && [ "create", "update" ].include?(command)
+    json = File::read(outputdir + "/main.json")
+    template_url = "https://s3.amazonaws.com/#{cfg["Bucket"]}/#{cfg["Prefix"]}/#{templatename}/main.json"
+    params = {
+      stack_name: stackname,
+      tags: stack_tags,
+      capabilities: stack_required_capabilities,
+      disable_rollback: disable_rollback,
+      template_url: template_url,
+    }
+    if command == "create"
+      puts "Creating #{stackname} from #{template_url}"
+      stackout = cfg.cfn.client.create_stack(params)
+    else
+      puts "Updating #{stackname}"
+      params.delete(:disable_rollback)
+      stackout = cfg.cfn.client.update_stack(params)
+    end
+    puts "Stack ID: #{stackout.stack_id}"
+  end
 when "delete"
-	puts "Deleting #{stackname}"
-	cfg.cfn.client.delete_stack({ stack_name: stackname })
+  puts "Deleting #{stackname}"
+  cfg.cfn.client.delete_stack({ stack_name: stackname })
 end
 
 rescue UsageException => e
-	puts "\n#{e.message}\n\n"
-	puts opts.help()
+  puts "\n#{e.message}\n\n"
+  puts opts.help()
 end

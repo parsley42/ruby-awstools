@@ -35,7 +35,7 @@ module RAWSTools
 
     def getoutputs(outputsspec)
       parent, child = outputsspec.split(':')
-      prefix = @mgr["StackPrefix"]
+      prefix = @mgr.stack_family
       if prefix
         parent = prefix + parent unless parent.start_with?(prefix)
       end
@@ -98,6 +98,7 @@ module RAWSTools
       end
       return outputs[output]
     end
+
   end
 
   # Classes for processing yaml templates into AWS JSON templates

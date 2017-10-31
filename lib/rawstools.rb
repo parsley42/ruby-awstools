@@ -123,7 +123,7 @@ module RAWSTools
       @sts = Aws::STS::Client.new( region: @config["Region"] )
       info = @sts.get_caller_identity()
       if info.account != @config["AccountID"]
-        raise "AccountID for credentials don't match configured AccountID"
+        raise "AccountID for credentials don't match configured AccountID, the current site repository is configured for a different AWS account."
       end
       @params = {}
       @subdom = nil

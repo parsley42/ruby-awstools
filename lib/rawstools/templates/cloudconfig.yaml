@@ -1,3 +1,76 @@
 ---
-# For compatibility with older cloudconfig.yaml files
+# cloudconfig.yaml - configuration file for ruby-awstools, with library
+# configuration information and variables that can be referenced in
+# templates.
+
+###
+# Library configuration - used or required by the library, can also be
+# referenced in templates.
+# Account ID number managed by this site/repository.
+#AccountID: 012345678901
+# Common tags to be applied to any resources created, used but not required
+# by the library. Normally used to apply different billing tags to different
+# sites in a heirarchical structure.
+#Tags:
+#  Project: ProdEnv
+# The region for assets managed by this repository.
+#Region: us-east-1
+
+## CloudFormation configuration items
+# S3 bucket where CloudFormation templates will be stored, for parent/child
+# stacks.
+#Bucket: my.cloudformation.bucket
+# S3 prefix for the templates, templates will go in
+# s3://<bucket>/<prefix>/<stackname>/<template>
+#Prefix: prodstacks
+# All CloudFormation stacks created by this repository will be named
+# <StackFamily>-<stackname>, and all CloudFormation variable lookups
+#StackFamily: ProdEnv
+# For compatibility with older cloudconfig.yaml files. TODO: remove after all
+# using repositories are upgraded.
 StackFamily: ${&StackPrefix}
+# CIDRLists are treated specially; when referenced in a template
+# using $$ {listname}, they will be intelligently expanded depending
+# on the type of resource being defined, and may duplicate the resource or
+# add items to an array.
+#CIDRLists:
+#  OfficeCIDRs:
+#  - 192.168.0.0/16
+#  - 10.20.30.0/24
+
+## EC2 / RDS / Route53 config items. Library methods will automatically
+# create or remove DNS records when items are created / destroyed / started
+# / stopped.
+# Base of hosted zone, normally the parent domain in a heirarchical collection
+# of sites. This should generally be set in a common repository, and child
+# repositories will inherit this value by adding the common repository in
+# it's SearchPath.
+#DNSBase: mycompany.com
+# Resources created with this repository will get DNS records
+# of the form <name>.prod.mycompany.com, and will get a "Name" tag
+# of <name>.prod.
+#DNSDomain: prod.mycompany.com
+# The route53 tool needs zone IDs; these are normally the CloudFormation
+# addresses of the required public & private zone IDs.
+#PrivateDNSId: ${=dnsstack:PrivateZone}
+#PublicDNSId: ${=dnsstack:PublicZone}
+# SimpleDB domain for storing configuration type data, e.g.
+# ${ami:c7stdcis}. Value for DefaultSDB is required to resolve $ {%...}
+# references.
+# TTL to use when creating A records
+#ARecTTL: 300
+#CNAMERecTTL: 600
+#TXTRecTTL: 120
+# Not all availability zones are available for a given account, so check
+# first with 'aws ec2 describe-availability-zones', then list the ones
+# you want to use here.
+#AvailabilityZones: [ "a", "b", "c", "d" ]
+
+## SimpleDB
+# Ephemeral values like AMI IDs can be stored in a SimpleDB domain and
+# retrieved in templates with the ${%...} syntax.
+#ConfigDB: ${=simpledbstack:ConfigDBDomain}
+# SimpleDB domain for billing data
+#BillingDB: ${=common:BillingDBDomain|none}
+# If no specific domain is given, use the DefaultSDB
+#DefaultSDB: ConfigDB

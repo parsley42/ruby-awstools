@@ -101,26 +101,16 @@ module RAWSTools
 
   end
 
-  # Classes for processing yaml templates into AWS JSON templates
-  # Convenience class for creating an AWS Outputs hash
-  class Output
-    attr_reader :output
-
-    def initialize(desc, ref, lookup="Ref")
-      @output = { "Description" => desc, "Value" => { "#{lookup}" => ref } }
-    end
-  end
+  # Classes for processing yaml/json templates
 
   class CFTemplate
     attr_reader :name, :outputs, :param_includes
 
     def initialize(cloudcfg, stack, stack_config, cfg_name, parent = nil)
       @cloudcfg = cloudcfg
-      if parent
-        @parent = parent
-      else
-        @parent = self
-      end
+      raise "stackconfig.yaml has no stanza for #{cfg_name}" unless stack_config[cfg_name]
+      @stackcfg = stack_config[cfg_name]
+      @cfg = @cloudcfg.load_stack_definition(stack, stack_config, cfg_name)
       raw = File::read(directory + "/" + @name.downcase() + ".yaml")
       raw = @cloudcfg.expand_strings(raw)
       puts "Loading #{@name}"
@@ -146,11 +136,6 @@ module RAWSTools
     # Returns an Array of string CIDRs, even if it's only 1 long
     def resolve_cidr(ref)
       clists = @cloudcfg["CIDRLists"]
-      if @cloudcfg["SubnetTypes"]
-        if @cloudcfg["SubnetTypes"][@parent.templatename][ref] != nil
-          return [ @cloudcfg["SubnetTypes"][@parent.templatename][ref].cidr ]
-        end
-      end
       if clists[ref] != nil
         if clists[ref].class == Array
           return clists[ref]
@@ -162,22 +147,11 @@ module RAWSTools
       end
     end
 
-    # Only called by a parent
+    # process a template, including:
+    # - Expand CIDRList references
+    # - Handle child templates
+    # - Apply common tags to all resources that take tags
     def process()
-      if @param_includes
-        @cfg["Parameters"] ||= {}
-        params = @cfg["Parameters"]
-        @param_includes.each() do |childname|
-          other = @parent.find_child(childname)
-          other.outputs().each_key() do |output|
-            if params[output]
-              STDERR.puts "WARNING: Duplicate input parameter (resource name) while processing includes for #{@name}: #{output}" if params[output]
-            else
-              params[output] = {"Type" => "String"}
-            end
-          end
-        end
-      end
       reskeys = @res.keys()
       reskeys.each do |reskey|
         @res[reskey]["Properties"] ||= {}
@@ -326,25 +300,15 @@ module RAWSTools
       @children = []
       @directory = "cfn/#{stack}"
       raise "Stack directory not found: cfn/#{stack}" unless File::stat(directory).directory?
+      stack_config["MainTemplate"]["StackName"] = stack unless stack_config["MainTemplate"]["StackName"]
       super(cfg, stack, stack_config, "MainTemplate")
+      self.process()
     end
 
     def process_children()
       # If one child lists another in it's parameter_includes, it sorts higher
-      @children.sort!()
       @children.each() do |child|
         child.process()
-        if child.param_includes
-          @res[child.name()+"Stack"]["Properties"]["Parameters"] ||= {}
-          params = @res[child.name()+"Stack"]["Properties"]["Parameters"]
-          child.param_includes.each() do |param_include|
-            param_child = find_child(param_include)
-            param_child.outputs.each_key() do |output|
-              raise "Duplicate parameter: #{output}" if params[output]
-              params[output] = { "Fn::GetAtt" => [ "#{param_include}Stack", "Outputs.#{output}" ] }
-            end
-          end
-        end
       end
     end
 

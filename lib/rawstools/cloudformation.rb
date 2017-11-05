@@ -114,41 +114,19 @@ module RAWSTools
   class CFTemplate
     attr_reader :name, :outputs, :param_includes
 
-    def initialize(directory, name, cloudcfg, param_includes, parent)
-      @name = name
+    def initialize(cloudcfg, stack, stack_config, cfg_name, parent = nil)
       @cloudcfg = cloudcfg
-      @param_includes = param_includes
       if parent
         @parent = parent
       else
         @parent = self
       end
-      @st = {}
-      @st = @cloudcfg["SubnetTypes"][@parent.templatename] if @cloudcfg["SubnetTypes"]
-      @az = @cloudcfg["AvailabilityZones"]
       raw = File::read(directory + "/" + @name.downcase() + ".yaml")
       raw = @cloudcfg.expand_strings(raw)
       puts "Loading #{@name}"
       @cfg = YAML::load(raw)
       @cloudcfg.resolve_vars({ "child" => @cfg }, "child")
       @res = @cfg["Resources"]
-      @cfg["Outputs"] ||= {}
-      @outputs = @cfg["Outputs"]
-    end
-
-    def <=>(other)
-      return 0 if ( ! self.param_includes && ! other.param_includes )
-      return 1 if  ( self.param_includes && ! other.param_includes )
-      return -1 if  ( other.param_includes && ! self.param_includes )
-      if other.param_includes.include?(self.name)
-        raise "Circular param includes" if self.param_includes.include?(other.name)
-        return -1
-      elsif self.param_includes.include?(other.name)
-        raise "Circular param includes" if other.param_includes.include?(self.name)
-        return 1
-      else
-        return 0
-      end
     end
 
     def write(directory)
@@ -204,6 +182,20 @@ module RAWSTools
       reskeys.each do |reskey|
         @res[reskey]["Properties"] ||= {}
         case @res[reskey]["Type"]
+        when "AWS::CloudFormation::Stack"
+          if @name != "main"
+            raise "Child stacks must be in main.json"
+          end
+          @res[reskey]["Properties"] ||= {}
+          if @res[reskey]["Properties"]["Parameters"]
+            param_includes = @res[reskey]["Properties"]["Parameters"]["Includes"]
+            @res[reskey]["Properties"]["Parameters"].delete("Includes") if param_includes
+          end
+          update_tags(@res[reskey], reskey)
+          childname = reskey.chomp("Stack")
+          @res[reskey]["Properties"]["TemplateURL"] = [ "https://s3.amazonaws.com", @cloudcfg["Bucket"], @cloudcfg["Prefix"], @templatename, childname.downcase() + ".json" ].join("/")
+          @outputs[reskey] = Output.new("#{reskey} child stack", reskey).output
+          @children.push(CFTemplate.new(@directory, childname, @cloudcfg, param_includes, self))
         # Just tag these
         when "AWS::EC2::InternetGateway", "AWS::EC2::NetworkAcl", "AWS::EC2::Instance", "AWS::EC2::Volume", "AWS::EC2::VPC", "AWS::S3::Bucket"
           update_tags(@res[reskey], reskey)
@@ -321,20 +313,6 @@ module RAWSTools
               end
             end
           end
-        when "AWS::CloudFormation::Stack"
-          if @name != "main"
-            raise "Child stacks must be in main.json"
-          end
-          @res[reskey]["Properties"] ||= {}
-          if @res[reskey]["Properties"]["Parameters"]
-            param_includes = @res[reskey]["Properties"]["Parameters"]["Includes"]
-            @res[reskey]["Properties"]["Parameters"].delete("Includes") if param_includes
-          end
-          update_tags(@res[reskey], reskey)
-          childname = reskey.chomp("Stack")
-          @res[reskey]["Properties"]["TemplateURL"] = [ "https://s3.amazonaws.com", @cloudcfg["Bucket"], @cloudcfg["Prefix"], @templatename, childname.downcase() + ".json" ].join("/")
-          @outputs[reskey] = Output.new("#{reskey} child stack", reskey).output
-          @children.push(CFTemplate.new(@directory, childname, @cloudcfg, param_includes, self))
         end # case
       end
     end
@@ -343,11 +321,12 @@ module RAWSTools
   class MainTemplate < CFTemplate
     attr_reader :children, :templatename
 
-    def initialize(directory, templatename, cloudcfg)
-      @templatename = templatename
+    def initialize(cfg, stack)
+      stack_config = cfg.load_stack_config(stack)
       @children = []
-      @directory = directory
-      super(directory, "main", cloudcfg, nil, nil)
+      @directory = "cfn/#{stack}"
+      raise "Stack directory not found: cfn/#{stack}" unless File::stat(directory).directory?
+      super(cfg, stack, stack_config, "MainTemplate")
     end
 
     def process_children()

@@ -27,16 +27,6 @@ module RAWSTools
   Expand_Regex = /\${([@=%&][:|.\-\/\w<>]+)}/
   Log_Levels = [:trace, :debug, :info, :warn, :error]
 
-  # Classes for loading and processing the configuration file
-  class SubnetDefinition
-    attr_reader :cidr, :subnets
-
-    def initialize(cidr, subnets)
-      @cidr = cidr
-      @subnets = subnets
-    end
-  end
-
   # Class to convert from configuration file format to AWS expected format
   # for tags
   class Tags
@@ -166,16 +156,6 @@ module RAWSTools
         @subdom = @config["DNSDomain"][0..(i-2)]
       end
 
-      subnet_types = {}
-      if @config["SubnetTypes"]
-        @config["SubnetTypes"].each_key do |stack|
-          subnet_types[stack] = {}
-          @config["SubnetTypes"][stack].each_key do |st|
-            subnet_types[stack][st] = SubnetDefinition.new(@config["SubnetTypes"][stack][st]["CIDR"], @config["SubnetTypes"][stack][st]["Subnets"])
-          end
-        end
-        @config["SubnetTypes"] = subnet_types
-      end
     end
 
     # Log events, takes a symbol log level (see Log_Levels) and a message.
@@ -338,6 +318,27 @@ module RAWSTools
       end
       unless found
         raise "Couldn't find a #{facility} template for #{type}"
+      end
+      return template
+    end
+
+    # Load CloudFormation stackconfig.yaml, first from SearchPath, then from
+    # stack path. Raise exception if no stackconfig.yaml found.
+    def load_stack_config(stack)
+      search_dirs = ["#{@installdir}/templates"] + @config["SearchPath"] + ["."]
+      template = {}
+      found = false
+      search_dirs.each do |dir|
+        log(:debug, "Looking for #{dir}/cfn/#{stack}/stackconfig.yaml")
+        if File::exist?("#{dir}/cfn/#{stack}/stackconfig.yaml")
+          log(:debug, "=> Loading #{dir}/cfn/#{stack}/stackconfig.yaml")
+          raw = File::read("#{dir}/cfn/#{stack}/stackconfig.yaml")
+          merge_templates(YAML::load(raw), template)
+          found = true
+        end
+      end
+      unless found
+        raise "Couldn't find a stackconfig.yaml for #{stack}"
       end
       return template
     end

@@ -1,12 +1,19 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: AWS S3 Buckets
+Description: AWS S3 Bucket where ruby-awstools stores library resources
+Parameters:
+  BucketName:
+    Description: The name of the bucket where library resources are kept
+    Type: String
+    MinLength: 3
+    MaxLength: 63
+    AllowedPattern: ^[a-z0-9][a-z0-9.-]*[a-z0-9]$
 Resources:
 
-  CloudFormationBucket:
+  RAWSBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: { "Ref": "$Bucket" }
+      BucketName: !Ref BucketName
       VersioningConfiguration:
         Status: Enabled
       # Cloudformation stuff should be stored in a git repo,

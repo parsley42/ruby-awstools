@@ -593,24 +593,27 @@ Outputs:
     Value: Standard Multi-Tier Web Application
   TemplateVersion:
     Value: 2.0
-  BastionIP:
-    Description: Use this IP via SSH to connect to Bastion Instance
-    Value:
-      !GetAtt
-      - ManagementVpcTemplate
-      - Outputs.rBastionInstanceIP
-  LandingPageURL:
-    Value:
-      !GetAtt
-      - ApplicationTemplate
-      - Outputs.LandingPageURL
-  WebsiteURL:
-    Value:
-      !GetAtt
-      - ApplicationTemplate
-      - Outputs.WebsiteURL
-  Help:
-    Description: For assistance or questions regarding this quickstart please email
-      compliance-accelerator@amazon.com
-    Value: ''
+  # NOTE: Outputs removed for stacks not launched as part of this template
+  # family
+
+  # BastionIP:
+  #   Description: Use this IP via SSH to connect to Bastion Instance
+  #   Value:
+  #     !GetAtt
+  #     - ManagementVpcTemplate
+  #     - Outputs.rBastionInstanceIP
+  # LandingPageURL:
+  #   Value:
+  #     !GetAtt
+  #     - ApplicationTemplate
+  #     - Outputs.LandingPageURL
+  # WebsiteURL:
+  #   Value:
+  #     !GetAtt
+  #     - ApplicationTemplate
+  #     - Outputs.WebsiteURL
+  # Help:
+  #   Description: For assistance or questions regarding this quickstart please email
+  #     compliance-accelerator@amazon.com
+  #   Value: ''
 ...

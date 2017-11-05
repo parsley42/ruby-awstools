@@ -17,8 +17,8 @@
 #Region: us-east-1
 
 ## CloudFormation configuration items
-# S3 bucket where CloudFormation templates will be stored, for parent/child
-# stacks.
+# S3 bucket where library resources such as CloudFormation templates will be
+# stored, for parent/child stacks.
 #Bucket: my.cloudformation.bucket
 # S3 prefix for the templates, templates will go in
 # s3://<bucket>/<prefix>/<stackname>/<template>

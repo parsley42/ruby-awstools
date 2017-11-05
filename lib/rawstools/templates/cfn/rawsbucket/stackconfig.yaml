@@ -1,0 +1,9 @@
+---
+# Common stack for creating the ruby-awstools library bucket
+MainTemplate:
+  File: main.yaml
+  Format: yaml
+  AutoOutputs: false
+StackName: RAWSBucket
+Parameters:
+  BucketName: $Bucket

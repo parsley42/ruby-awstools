@@ -6,21 +6,26 @@ require 'optparse'
 outputdir = "output"
 upload = true
 disable_rollback = false
-cfgfile = ENV["RAWS_CLOUDCFG"]
+params = {}
 
 opts = OptionParser.new
 
 opts.banner = <<-EOF
-Usage: cfn <command> (options) <templatename|templatedir> - manage a CloudFormation stack
+Usage: cfn <command> (options) <stack|templatedir> - manage a CloudFormation stack
  Where <command> is one of:
   list - list all stacks for the account
   outputs <stackname>(:childstack) - list all the outputs of a given stack
   output <stackname>(:childstack):<outputname> - get a specific output
-  create <stackname> - create a new stack
-  delete <stackname> - delete a stack (warning: without confirmation, no resources retained)
-  update <stackname> - update a stack
-  validate <stackname> - run templates through validation
- <stackname> corresponds to a directory under cfn/
+  create <stack> - create a new stack
+  delete <stack> - delete a stack (warning: without confirmation, no resources retained)
+  update <stack> - update a stack
+  validate <stack> - run templates through validation
+
+ <stack> corresponds to a directory under cfn/, or in <SearchPath>/cfn
+
+ <stackname> refers the actual name of the created stack, from
+   stackconfig.yaml: StackName
+
  Options are:
 EOF
 opts.on("-d", "--disable-rollback", "Disable rollback when a create or update fails") do |disable|
@@ -28,6 +33,12 @@ opts.on("-d", "--disable-rollback", "Disable rollback when a create or update fa
 end
 opts.on("-g", "--generate-only", "Generate expanded templates without creating or updating the stack") do |generate_only|
   generate_only = true
+end
+opts.on("-p", "--parameter PARAMVAL", "Set an arbitrary parameter where PARAMVAL is of the form parameter=value") do |keyval|
+  e = keyval.index("=")
+  key = keyval[0..(e-1)]
+  value = keyval[(e+1)..-1]
+  params[key] = value
 end
 
 class UsageException < Exception
@@ -82,10 +93,52 @@ when "output"
   exit 0
 end
 
-templatename = ARGV.shift()
-raise UsageException.new("Missing <templatename>") unless templatename
+# From here on down we process create, delete, update and validate
+stack_id = ARGV.shift()
+raise UsageException.new("Missing <stack>") unless stack_id
 
-templatedir = "cfn/#{templatename}"
+begin
+  stack = RAWSTools::MainTemplate.new(cfg, stack_id)
+rescue => e
+  $stderr.puts("Error initializing #{stack_id}: #{e.message}")
+  exit 1
+end
+
+exit 0
+
+case command
+when "create"
+  begin
+    stack.Create()
+  rescue => e
+    $stderr.puts("Error creating #{stack_id}: #{e.message}")
+    exit 1
+  end
+when "delete"
+  begin
+    stack.Delete()
+  rescue => e
+    $stderr.puts("Error deleting #{stack_id}: #{e.message}")
+    exit 1
+  end
+when "update"
+  begin
+    stack.Update()
+  rescue => e
+    $stderr.puts("Error updating #{stack_id}: #{e.message}")
+    exit 1
+  end
+when "validate"
+  begin
+    stack.Validate()
+  rescue => e
+    $stderr.puts("Error validating #{stack_id}: #{e.message}")
+    exit 1
+  end
+end
+
+### OLD CODE
+templatedir = "cfn/#{stack}"
 
 raise UsageException.new("Directory not found: #{templatedir}") unless File::exist?(templatedir)
 raise UsageException.new("Not a directory: #{templatedir}") unless File::stat(templatedir).directory?
@@ -103,7 +156,7 @@ else
 end
 
 # Generate the hub template that owns other templates
-maincfg = RAWSTools::MainTemplate.new(templatedir, templatename, cfg)
+maincfg = RAWSTools::MainTemplate.new(templatedir, stack, cfg)
 maincfg.process()
 puts # blank line after 'Loading ...'
 
@@ -111,7 +164,7 @@ filenames = [ "main" ] + maincfg.children.map { |child| child.name().downcase() 
 upload = false if filenames.length() == 1
 
 stackprefix = cfg.stack_family
-stackname = stackprefix + templatename
+stackname = stackprefix + stack
 stack_required_capabilities = []
 stack_tags = cfg.tags.apitags()
 
@@ -148,7 +201,7 @@ when "create", "update", "validate"
         end
         puts "Stack ID: #{stackout.stack_id}"
       else
-        obj = cfg.s3res.bucket(cfg["Bucket"]).object("#{cfg["Prefix"]}/#{templatename}/#{tfile}.json")
+        obj = cfg.s3res.bucket(cfg["Bucket"]).object("#{cfg["Prefix"]}/#{stack}/#{tfile}.json")
         puts "Uploading #{tfile}"
         obj.upload_file("#{outputdir}/#{tfile}.json")
         stack_required_capabilities = (stack_required_capabilities + required_capabilities).uniq()
@@ -157,7 +210,7 @@ when "create", "update", "validate"
   end
   if upload && [ "create", "update" ].include?(command)
     json = File::read(outputdir + "/main.json")
-    template_url = "https://s3.amazonaws.com/#{cfg["Bucket"]}/#{cfg["Prefix"]}/#{templatename}/main.json"
+    template_url = "https://s3.amazonaws.com/#{cfg["Bucket"]}/#{cfg["Prefix"]}/#{stack}/main.json"
     params = {
       stack_name: stackname,
       tags: stack_tags,

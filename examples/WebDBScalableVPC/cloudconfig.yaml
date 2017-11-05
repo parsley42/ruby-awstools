@@ -46,7 +46,9 @@ PrivateDNS: "linuxjedi.org"
 # zones, so you'll need to provide a number of subnets equal to the
 # availability zones, all within the overall CIDR for the type.
 SubnetTypes:
-  vpc-one:
+  # The CIDRs and Subnets under 'vpc' will be used for expanding CloudFormation
+  # VPC related elements in the 'vpc' templates.
+  vpc:
     # Public subnets for providing services to the Whole Wide World
     PublicSubnet:
       CIDR: 10.20.128.0/17

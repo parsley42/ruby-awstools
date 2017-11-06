@@ -109,8 +109,9 @@ module RAWSTools
     def initialize(cloudcfg, stack, stack_config, cfg_name, parent = nil)
       @cloudcfg = cloudcfg
       raise "stackconfig.yaml has no stanza for #{cfg_name}" unless stack_config[cfg_name]
+      @cloudcfg.resolve_vars(stack_config, cfg_name)
       @stackcfg = stack_config[cfg_name]
-      @cfg = @cloudcfg.load_stack_definition(stack, stack_config, cfg_name)
+      @cfg = @cloudcfg.load_stack_definition(stack, @stackcfg)
       raw = File::read(directory + "/" + @name.downcase() + ".yaml")
       raw = @cloudcfg.expand_strings(raw)
       puts "Loading #{@name}"

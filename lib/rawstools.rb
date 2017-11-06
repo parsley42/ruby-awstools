@@ -350,6 +350,7 @@ module RAWSTools
     # - If it's yaml, replace !Ref with BangRef, !GetAtt with BangGetAtt, etc.
     def load_stack_definition(stack)
       search_dirs = ["#{@installdir}/templates"] + @config["SearchPath"] + ["."]
+      search_dirs.reverse!
       template = {}
       found = false
       search_dirs.each do |dir|

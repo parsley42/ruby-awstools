@@ -297,6 +297,14 @@ module RAWSTools
     attr_reader :children, :templatename
 
     def initialize(cfg, stack)
+      @sourcestack = nil
+      if File::exist?("cfn/#{stack}/stackconfig.yaml")
+        raw = File::read("cfn/#{stack}/stackconfig.yaml")
+        c = YAML::load(raw)
+        if c["SourceStack"]
+          @sourcestack = c["SourceStack"]
+        end
+      end
       stack_config = cfg.load_stack_config(stack)
       @children = []
       @directory = "cfn/#{stack}"

@@ -8,12 +8,10 @@ MainTemplate:
 IamTemplate:
   File: iam.template
   Format: yaml
-  StackName: IAM
   # ... final stack name will be <StackFamily>-NISTcore-IAMStack-<random>
 LoggingTemplate:
   File: logging.template
   Format: yaml
-  StackName: Logging
 Parameters:
   pNotifyEmail: <REQUIRED> # Raise exception if no override
   pAvailabilityZoneA: <REQUIRED> # e.g. us-east-1c

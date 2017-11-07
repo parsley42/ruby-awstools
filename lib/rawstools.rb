@@ -1,5 +1,7 @@
 require 'base64'
 require 'yaml'
+require 'json'
+require 'fileutils'
 require 'pathname'
 require 'aws-sdk'
 require 'rawstools/cloudformation'
@@ -26,7 +28,6 @@ module RAWSTools
   Valid_Classes = [ "String", "Fixnum", "Integer", "TrueClass", "FalseClass" ]
   Expand_Regex = /\${([@=%&][:|.\-\/\w<>]+)}/
   Log_Levels = [:trace, :debug, :info, :warn, :error]
-  YAML_ShortFuncs = [ "Ref", "GetAtt", "Base64", "FindInMap" ]
 
   # Class to convert from configuration file format to AWS expected format
   # for tags
@@ -60,7 +61,15 @@ module RAWSTools
       @tags[key] = value
     end
 
-    def add(hash)
+    def add(tags)
+      if tags.class().to_s() == "Hash"
+        hash = tags
+      else
+        hash = {}
+        tags.each do |tag|
+          hash[tag["Key"]] = tag["Value"]
+        end
+      end
       @tags = @tags.merge(hash)
     end
   end
@@ -319,51 +328,6 @@ module RAWSTools
       end
       unless found
         raise "Couldn't find a #{facility} template for #{type}"
-      end
-      return template
-    end
-
-    # Load CloudFormation stackconfig.yaml, first from SearchPath, then from
-    # stack path. Raise exception if no stackconfig.yaml found.
-    def load_stack_config(stack)
-      search_dirs = ["#{@installdir}/templates"] + @config["SearchPath"] + ["."]
-      template = {}
-      found = false
-      search_dirs.each do |dir|
-        log(:debug, "Looking for #{dir}/cfn/#{stack}/stackconfig.yaml")
-        if File::exist?("#{dir}/cfn/#{stack}/stackconfig.yaml")
-          log(:debug, "=> Loading #{dir}/cfn/#{stack}/stackconfig.yaml")
-          raw = File::read("#{dir}/cfn/#{stack}/stackconfig.yaml")
-          merge_templates(YAML::load(raw), template)
-          found = true
-        end
-      end
-      unless found
-        raise "Couldn't find a stackconfig.yaml for #{stack}"
-      end
-      return template
-    end
-
-    # Load the first CloudFormation stack definition found, looking in the local
-    # directory first, then reverse order of the SearchPath, and finally the
-    # library templates. When found:
-    # - If it's yaml, replace !Ref with BangRef, !GetAtt with BangGetAtt, etc.
-    def load_stack_definition(stack)
-      search_dirs = ["#{@installdir}/templates"] + @config["SearchPath"] + ["."]
-      search_dirs.reverse!
-      template = {}
-      found = false
-      search_dirs.each do |dir|
-        log(:debug, "Looking for #{dir}/cfn/#{stack}/stackconfig.yaml")
-        if File::exist?("#{dir}/cfn/#{stack}/stackconfig.yaml")
-          log(:debug, "=> Loading #{dir}/cfn/#{stack}/stackconfig.yaml")
-          raw = File::read("#{dir}/cfn/#{stack}/stackconfig.yaml")
-          merge_templates(YAML::load(raw), template)
-          found = true
-        end
-      end
-      unless found
-        raise "Couldn't find a stackconfig.yaml for #{stack}"
       end
       return template
     end

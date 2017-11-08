@@ -18,19 +18,6 @@ module RAWSTools
       @outputs = {}
     end
 
-    def validate(template, verbose=true)
-      resp = @client.validate_template({ template_body: template })
-      if verbose
-        puts "Description: #{resp.description}"
-        if resp.capabilities.length > 0
-          puts "Capabilities: #{resp.capabilities.join(",")}"
-          puts "Reason: #{resp.capabilities_reason}"
-        end
-        puts
-      end
-      return resp.capabilities
-    end
-
     def list_stacks()
       stacklist = []
       stack_states = [ "CREATE_IN_PROGRESS", "CREATE_FAILED", "CREATE_COMPLETE", "ROLLBACK_IN_PROGRESS", "ROLLBACK_FAILED", "ROLLBACK_COMPLETE", "DELETE_IN_PROGRESS", "DELETE_FAILED", "UPDATE_IN_PROGRESS", "UPDATE_COMPLETE_CLEANUP_IN_PROGRESS", "UPDATE_COMPLETE", "UPDATE_ROLLBACK_IN_PROGRESS", "UPDATE_ROLLBACK_FAILED", "UPDATE_ROLLBACK_COMPLETE_CLEANUP_IN_PROGRESS", "UPDATE_ROLLBACK_COMPLETE" ]
@@ -113,7 +100,7 @@ module RAWSTools
   # Classes for processing yaml/json templates
 
   class CFTemplate
-    attr_reader :name, :outputs, :s3url
+    attr_reader :name, :outputs, :s3url, :noupload
 
     def initialize(cloudcfg, stack, sourcestack, stack_config, cfg_name)
       @cloudcfg = cloudcfg
@@ -123,20 +110,19 @@ module RAWSTools
       @sourcestack = sourcestack
       @name = cfg_name
       @cloudcfg.resolve_vars(stack_config, cfg_name)
+      @client = @cloudcfg.cfn.client
       scfg = stack_config[cfg_name]
       @filename = scfg["File"]
       @format = scfg["Format"]
-      if scfg["AutoOutputs"]
-        @autoutputs = scfg["AutoOutputs"]
-      else
-        @autoutputs = false
-      end
+      @noupload = scfg["DisableUpload"] # note nil is also false
+      @autoutputs = scfg["AutoOutputs"] # note nil is also false
       if stack_config["MainTemplate"]["S3URL"]
         @s3urlprefix = stack_config["MainTemplate"]["S3URL"]
       else
         @s3urlprefix = "https://s3.amazonaws.com"
       end
       @s3url = "#{@s3urlprefix}/#{cloudcfg["Bucket"]}/#{@cloudcfg["Prefix"]}/#{@stack}/#{@filename}"
+      @s3key = "#{@cloudcfg["Prefix"]}/#{@stack}/#{@filename}"
       # Load the first CloudFormation stack definition found, looking in the local
       # directory first, then reverse order of the SearchPath, and finally the
       # library templates. When found:
@@ -204,8 +190,28 @@ module RAWSTools
       end
     end
 
+    # Validate the template
+    def validate()
+      @cloudcfg.log(:debug,"Validating #{@stack}:#{@name}")
+      resp = @client.validate_template({ template_body: render() })
+      @cloudcfg.log(:info,"Validated #{@stack}:#{@name}: #{resp.description}")
+      if resp.capabilities.length > 0
+        @cloudcfg.log(:info, "Capabilities: #{resp.capabilities.join(",")}")
+        @cloudcfg.log(:info, "Reason: #{resp.capabilities_reason}")
+      end
+      return resp.capabilities
+    end
+
     # Upload the template to the proper S3 location
     def upload()
+      obj = @cloudcfg.s3res.bucket(@cloudcfg["Bucket"]).object(@s3key)
+      @cloudcfg.log(:info,"Uploading cloudformation stack template #{@stack}:#{@name} to #{@s3url}")
+      template = @cloudcfg.load_template("s3", "cfnput")
+      @cloudcfg.symbol_keys(template)
+      @cloudcfg.resolve_vars(template, :api_template)
+      params = template[:api_template]
+      params[:body] = render()
+      obj.put(params)
     end
 
     # Write the template out to a file
@@ -341,11 +347,14 @@ module RAWSTools
     # NOTE: only the MainTemplate has @children and @stackconfig
     def initialize(cfg, stack)
       @children = []
+      @disable_rollback, @generate_only = cfg.getparams("disable_rollback", "generate_only")
+      @disable_rollback = false unless @disable_rollback
+      @stackname = cfg.stack_family + stack
       sourcestack = stack
       if File::exist?("cfn/#{stack}/stackconfig.yaml")
         raw = File::read("cfn/#{stack}/stackconfig.yaml")
         c = YAML::load(raw)
-        if c["SourceStack"]
+        if c && c["SourceStack"]
           # NOTE: the value for SourceStack Currently doesn't get expanded.
           sourcestack = c["SourceStack"]
         end
@@ -382,9 +391,70 @@ module RAWSTools
     end
 
     def write_all()
-      self.write()
-      @children.each() {|child| child.write() }
+      write()
+      @children.each() { |child| child.write() }
     end
+
+    def upload_all_conditional()
+      upload() unless @noupload
+      @children.each() { |child| child.upload() unless child.noupload }
+    end
+
+    def get_stack_parameters()
+      parameters = []
+      @cloudcfg.resolve_vars(@stackconfig, "Parameters")
+      @stackconfig["Parameters"].each_key() do |key|
+        value = @stackconfig["Parameters"][key]
+        parameters.push({ parameter_key: key, parameter_value: value})
+      end
+      return parameters
+    end
+
+    def get_stack_required_capabilities()
+      stack_required_capabilities = validate()
+      @children.each() do |child|
+        stack_required_capabilities += child.validate()
+      end
+      stack_required_capabilities.uniq!()
+      return stack_required_capabilities
+    end
+
+    # Create or Update a cloudformation stack
+    def create_or_update(op)
+      write_all()
+      upload_all_conditional()
+      required_capabilities = get_stack_required_capabilities()
+      parameters = get_stack_parameters()
+      tags = @cloudcfg.tags.apitags()
+      template = render()
+      params = {
+        stack_name: @stackname,
+        tags: tags,
+        parameters: parameters,
+        capabilities: required_capabilities,
+        disable_rollback: @disable_rollback,
+        template_body: template,
+      }
+      if op == :create
+        stackout = @client.create_stack(params)
+        @cloudcfg.log(:info, "Created stack #{@stack}:#{@name}: #{stackout.stack_id}")
+      else
+        params.delete(:disable_rollback)
+        stackout = @client.create_stack(params)
+        @cloudcfg.log(:info, "Updated stack #{@stack}:#{@name}: #{stackout.stack_id}")
+      end
+      return stackout
+    end
+
+    def Create()
+      return create_or_update(:create)
+    end
+
+    def Delete()
+      @cloudcfg.log(:warn, "Deleting stack #{@stack}:#{@name}")
+      @client.delete_stack({ stack_name: @stackname })
+    end
+
   end
 
 end

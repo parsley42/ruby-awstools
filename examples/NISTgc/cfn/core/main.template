@@ -7,10 +7,10 @@
         - Label:
             default: "Please provide the following parameter values:"
           Parameters:
-            - "pDBPassword"
+            # - "pDBPassword"
             - "pNotifyEmail"
-            - "pEC2KeyPairBastion"
-            - "pEC2KeyPair"
+            # - "pEC2KeyPairBastion"
+            # - "pEC2KeyPair"
             - "pSupportsConfig"
             - "pAvailabilityZoneA"
             - "pAvailabilityZoneB"
@@ -20,14 +20,14 @@
           - "QSS3BucketName"
           - "QSS3KeyPrefix"
       ParameterLabels:
-        pDBPassword:
-          default: "Database Password"
+        # pDBPassword:
+        #   default: "Database Password"
         pNotifyEmail:
           default: "Notification Email Address"
-        pEC2KeyPairBastion:
-          default: "Existing SSH Key for the Bastion Instance"
-        pEC2KeyPair:
-          default: "Existing SSH Key for Other Instances"
+        # pEC2KeyPairBastion:
+        #   default: "Existing SSH Key for the Bastion Instance"
+        # pEC2KeyPair:
+        #   default: "Existing SSH Key for Other Instances"
         pSupportsConfig:
           default: "Support Config"
         pAvailabilityZoneA:
@@ -52,24 +52,24 @@
       Description: "N/A"
 
   Parameters:
-    pDBPassword:
-      Description: "Mixed alphanumeric and must be between 8 and 28 characters and contain at least one capital letter"
-      NoEcho: true
-      Type: "String"
-      MinLength: 8
-      MaxLength: 28
-      AllowedPattern: "[a-zA-Z0-9!^*\\-_+]*"
-      ConstraintDescription: "Can only contain alphanumeric characters or the following special characters !^*-_+, between 8 and 28 characters"
+    # pDBPassword:
+    #   Description: "Mixed alphanumeric and must be between 8 and 28 characters and contain at least one capital letter"
+    #   NoEcho: true
+    #   Type: "String"
+    #   MinLength: 8
+    #   MaxLength: 28
+    #   AllowedPattern: "[a-zA-Z0-9!^*\\-_+]*"
+    #   ConstraintDescription: "Can only contain alphanumeric characters or the following special characters !^*-_+, between 8 and 28 characters"
     pNotifyEmail:
       Description: "Notification email address for security events (you will receive a confirmation email)"
       Type: "String"
       Default: "distlist@example.org"
-    pEC2KeyPairBastion:
-      Description: "The SSH key pair in your account to use for the bastion host login"
-      Type: "AWS::EC2::KeyPair::KeyName"
-    pEC2KeyPair:
-      Description: "The SSH key pair in your account to use for all other EC2 instance logins"
-      Type: "AWS::EC2::KeyPair::KeyName"
+    # pEC2KeyPairBastion:
+    #   Description: "The SSH key pair in your account to use for the bastion host login"
+    #   Type: "AWS::EC2::KeyPair::KeyName"
+    # pEC2KeyPair:
+    #   Description: "The SSH key pair in your account to use for all other EC2 instance logins"
+    #   Type: "AWS::EC2::KeyPair::KeyName"
     pSupportsConfig:
       Description: "Is AWS Config Rules already configured for this region? Use \"No\" if you are uncertain. AWS Config Rules is available in these regions: US East (Virginia), US West (Oregon), EU West (Ireland), and EU Central (Frankfurt). See AWS Config Management Console or Deployment Guide for details."
       AllowedValues:
@@ -620,9 +620,10 @@
       Value: "Standard Multi-Tier Web Application"
     TemplateVersion:
       Value: "2.0"
+
     # The referenced resources are not included in the rawstools example
-    # core template
-    
+    # core template.
+
     # BastionIP:
     #   Description: "Use this IP via SSH to connect to Bastion Instance"
     #   Value:

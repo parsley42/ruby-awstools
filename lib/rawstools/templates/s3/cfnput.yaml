@@ -1,0 +1,5 @@
+---
+api_template:
+  acl: "private" # accepts private, public-read, public-read-write, authenticated-read, aws-exec-read, bucket-owner-read, bucket-owner-full-control
+  server_side_encryption: "AES256" # accepts AES256, aws:kms
+  storage_class: "STANDARD" # accepts STANDARD, REDUCED_REDUNDANCY, STANDARD_IA

@@ -4,6 +4,8 @@ MainTemplate:
   File: main.yaml
   Format: yaml
   AutoOutputs: false
+  # We don't send this to S3 because this stack creates the S3 bucket.
+  DisableUpload: true
 StackName: RAWSBucket
 Parameters:
   BucketName: $Bucket

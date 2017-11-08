@@ -6,6 +6,7 @@ require 'optparse'
 outputdir = "output"
 upload = true
 disable_rollback = false
+generate_only = false
 params = {}
 
 opts = OptionParser.new
@@ -58,6 +59,9 @@ opts.parse!
 
 cfg = RAWSTools::CloudManager.new()
 
+cfg.setparam("generate_only", generate_only)
+cfg.setparam("disable_rollback", disable_rollback)
+
 case command
 when "list"
   stacklist = cfg.cfn.list_stacks()
@@ -101,10 +105,9 @@ begin
   stack = RAWSTools::MainTemplate.new(cfg, stack_id)
 rescue => e
   $stderr.puts("Error initializing #{stack_id}: #{e.message}")
+  $stderr.puts(e.backtrace)
   exit 1
 end
-
-exit 0
 
 case command
 when "create"
@@ -112,6 +115,7 @@ when "create"
     stack.Create()
   rescue => e
     $stderr.puts("Error creating #{stack_id}: #{e.message}")
+    $stderr.puts(e.backtrace)
     exit 1
   end
 when "delete"
@@ -119,6 +123,7 @@ when "delete"
     stack.Delete()
   rescue => e
     $stderr.puts("Error deleting #{stack_id}: #{e.message}")
+    $stderr.puts(e.backtrace)
     exit 1
   end
 when "update"
@@ -133,9 +138,12 @@ when "validate"
     stack.Validate()
   rescue => e
     $stderr.puts("Error validating #{stack_id}: #{e.message}")
+    $stderr.puts(e.backtrace)
     exit 1
   end
 end
+
+exit 0
 
 ### OLD CODE
 templatedir = "cfn/#{stack}"

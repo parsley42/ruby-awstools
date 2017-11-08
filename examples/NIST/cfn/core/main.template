@@ -9,10 +9,10 @@ Metadata:
     - Label:
         default: 'Please provide the following parameter values:'
       Parameters:
-      - pDBPassword
+      # - pDBPassword
       - pNotifyEmail
-      - pEC2KeyPairBastion
-      - pEC2KeyPair
+      # - pEC2KeyPairBastion
+      # - pEC2KeyPair
       - pSupportsConfig
       - pAvailabilityZoneA
       - pAvailabilityZoneB
@@ -22,14 +22,14 @@ Metadata:
       - QSS3BucketName
       - QSS3KeyPrefix
     ParameterLabels:
-      pDBPassword:
-        default: Database Password
+      # pDBPassword:
+      #   default: Database Password
       pNotifyEmail:
         default: Notification Email Address
-      pEC2KeyPairBastion:
-        default: Existing SSH Key for the Bastion Instance
-      pEC2KeyPair:
-        default: Existing SSH Key for Other Instances
+      # pEC2KeyPairBastion:
+      #   default: Existing SSH Key for the Bastion Instance
+      # pEC2KeyPair:
+      #   default: Existing SSH Key for Other Instances
       pSupportsConfig:
         default: Support Config
       pAvailabilityZoneA:
@@ -593,8 +593,9 @@ Outputs:
     Value: Standard Multi-Tier Web Application
   TemplateVersion:
     Value: 2.0
-  # NOTE: Outputs removed for stacks not launched as part of this template
-  # family
+
+  # The referenced resources are not included in the rawstools example
+  # core template.
 
   # BastionIP:
   #   Description: Use this IP via SSH to connect to Bastion Instance

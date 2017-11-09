@@ -17,7 +17,7 @@ Parameters:
         Type: String
         Default: ''
     pSupportsGlacier:
-        Description: Determines hether this region supports Glacier (passed in from Main template)
+        Description: Determines whether this region supports Glacier (passed in from Main template)
         Type: String
         Default: true
 Conditions:

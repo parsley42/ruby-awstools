@@ -1,12 +1,14 @@
 module RAWSTools
 
-  YAML_ShortFuncs = [ "Ref", "GetAtt", "Base64", "FindInMap", "Equals" ]
   Tag_Resources = [ "AWS::EC2::InternetGateway", "AWS::EC2::NetworkAcl",
     "AWS::EC2::Instance", "AWS::EC2::Volume", "AWS::EC2::VPC",
     "AWS::S3::Bucket", "AWS::EC2::RouteTable", "AWS::RDS::DBInstance",
     "AWS::RDS::DBSubnetGroup", "AWS::EC2::SecurityGroup",
     "AWS::EC2::Subnet", "AWS::CloudFormation::Stack"
   ]
+
+  YAML_ShortFuncs = [ "Ref", "GetAtt", "Base64", "FindInMap", "Equals",
+    "If", "And", "Or", "Not", "Sub" ]
 
   class CloudFormation
     attr_reader :client, :resource
@@ -130,9 +132,9 @@ module RAWSTools
       found = false
       @cloudcfg.log(:debug, "Looking for ./cfn/#{@stack}/#{@filename}")
       if File::exist?("./cfn/#{@stack}/#{@filename}")
-       @cloudcfg.log(:debug, "=> Loading ./cfn/#{@stack}/#{@filename}")
-       raw = File::read("./cfn/#{@stack}/#{@filename}")
-       found = true
+        @cloudcfg.log(:debug, "=> Loading ./cfn/#{@stack}/#{@filename}")
+        @raw = File::read("./cfn/#{@stack}/#{@filename}")
+        found = true
       end
       unless found
         search_dirs = ["#{@cloudcfg.installdir}/templates"]
@@ -144,7 +146,7 @@ module RAWSTools
           @cloudcfg.log(:debug, "Looking for #{dir}/cfn/#{@sourcestack}/#{@filename}")
           if File::exist?("#{dir}/cfn/#{@sourcestack}/#{@filename}")
             @cloudcfg.log(:debug, "=> Loading #{dir}/cfn/#{@sourcestack}/#{@filename}")
-            raw = File::read("#{dir}/cfn/#{@sourcestack}/#{@filename}")
+            @raw = File::read("#{dir}/cfn/#{@sourcestack}/#{@filename}")
             found = true
             break
           end
@@ -153,14 +155,40 @@ module RAWSTools
       unless found
         raise "Couldn't find #{@filename} for stack: #{@stack}, source stack: #{@sourcestack}"
       end
+      # AWS CloudFormation yaml needs pre-processing to be read in to a data
+      # structure.
       if @format.casecmp?("yaml")
-        # Replace "!<shortfunc>" with "Bang<shortfunc>" for yaml
-        YAML_ShortFuncs.each do |sfunc|
-          raw.gsub!(/!#{sfunc}/, "Bang#{sfunc}")
+        write_raw("-orig")
+        # Note: render() needs to undo this by replacing <LB>, <RB>, and <CMA>
+        # with '[', ']',  and ','
+        bfunc_re = /!(Equals|If|And|Or|Not|GetAtt)(\s+\[([^\[\]]+)\])/
+        while @raw.match(bfunc_re)
+          @raw = @raw.gsub(bfunc_re) do
+            func = $1
+            brack = $2.gsub('[', "<LB>")
+            brack = brack.gsub(']', "<RB>")
+            brack = brack.gsub(',', "<CMA>")
+            "!#{func}#{brack}"
+          end
         end
-        @template = YAML::load(raw)
+        write_raw("-bfunc")
+        # Replace "!<shortfunc>" with "Bang<shortfunc>" for yaml; render()
+        # needs to undo this.
+        YAML_ShortFuncs.each do |sfunc|
+          @raw = @raw.gsub(/!#{sfunc}/, "Bang#{sfunc}")
+        end
+        write_raw("-sfunc")
+        # Note: render() needs to remove the trailing ':'
+        oneline_re = /^(\s+)(\w+:\s+)(Bang\w+)$/
+        @raw = @raw.gsub(oneline_re) do
+          indent = ' ' * ($1.length() + 2)
+          "#{$1}#{$2}\n#{indent}#{$3}:"
+        end
+        # For troubleshooting, write the file out before trying to load it
+        write_raw("-oneline")
+        @template = YAML::load(@raw)
       else
-        @template = JSON::load(raw)
+        @template = JSON::load(@raw)
       end
       # NOTE: best practices would be NOT using rawstools vars, but setting
       # all vars as stack parameters in the stackconfig.yaml
@@ -171,20 +199,24 @@ module RAWSTools
       process_template()
     end
 
-    # def write(directory)
-    #   f = File.open(directory + "/" + @name.downcase() + ".json", "w")
-    #   f.write(JSON::pretty_generate(@template))
-    #   f.close()
-    # end
-
     # Render a template to text
     def render()
       if @format.casecmp?("yaml")
-        raw = YAML::dump(@template)
+        @raw = YAML::dump(@template, line_width: -1)
+        write_raw("-fresh")
+        @raw = @raw.gsub("<LB>", '[')
+        @raw = @raw.gsub("<RB>", ']')
+        @raw = @raw.gsub("<CMA>", ',')
+        write_raw("-brack")
+        # oneline_re = /^(\s+Bang\w+):$/
+        # @raw = @raw.gsub(oneline_re) do
+        #   "#{$1}"
+        # end
         YAML_ShortFuncs.each do |sfunc|
-          raw.gsub!(/Bang#{sfunc}/, "!#{sfunc}")
+          @raw = @raw.gsub(/Bang#{sfunc}/, "!#{sfunc}")
         end
-        return raw
+        write_raw("-rsfunc")
+        return @raw
       else
         return JSON::pretty_generate(@template)
       end
@@ -218,6 +250,16 @@ module RAWSTools
     def write()
       f = File.open("#{@directory}/output/#{@filename}", "w")
       f.write(render())
+      f.close()
+    end
+
+    # Write the template out to a file
+    def write_raw(suffix)
+      # To debug yaml loading and rendering, comment out the return
+      # to dump the proceessed text at every stage.
+      return
+      f = File.open("#{@directory}/output/#{@filename}#{suffix}", "w")
+      f.write(@raw)
       f.close()
     end
 

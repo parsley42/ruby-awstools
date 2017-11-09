@@ -158,7 +158,7 @@ module RAWSTools
       # AWS CloudFormation yaml needs pre-processing to be read in to a data
       # structure.
       if @format.casecmp?("yaml")
-        write_raw("-orig")
+        write_raw("-0-orig")
         # Note: render() needs to undo this by replacing <LB>, <RB>, and <CMA>
         # with '[', ']',  and ','
         bfunc_re = /!(Equals|If|And|Or|Not|GetAtt)(\s+\[([^\[\]]+)\])/
@@ -171,13 +171,17 @@ module RAWSTools
             "!#{func}#{brack}"
           end
         end
-        write_raw("-bfunc")
+        write_raw("-1-bfunc")
+        # Replace '{', '}' with '<LBC>', '<RBC>'
+        @raw = @raw.gsub('{', "<LBC>")
+        @raw = @raw.gsub('}', "<RBC>")
+        write_raw("-2-braces")
         # Replace "!<shortfunc>" with "Bang<shortfunc>" for yaml; render()
         # needs to undo this.
         YAML_ShortFuncs.each do |sfunc|
           @raw = @raw.gsub(/!#{sfunc}/, "Bang#{sfunc}")
         end
-        write_raw("-sfunc")
+        write_raw("-3-sfunc")
         # Note: render() needs to remove the trailing ':'
         oneline_re = /^(\s+)(\w+:\s+)(Bang\w+)$/
         @raw = @raw.gsub(oneline_re) do
@@ -185,7 +189,7 @@ module RAWSTools
           "#{$1}#{$2}\n#{indent}#{$3}:"
         end
         # For troubleshooting, write the file out before trying to load it
-        write_raw("-oneline")
+        write_raw("-4-oneline")
         @template = YAML::load(@raw)
       else
         @template = JSON::load(@raw)
@@ -202,20 +206,23 @@ module RAWSTools
     # Render a template to text
     def render()
       if @format.casecmp?("yaml")
-        @raw = YAML::dump(@template, line_width: -1)
-        write_raw("-fresh")
+        @raw = YAML::dump(@template, { line_width: -1, indentation: 4 })
+        write_raw("-5-fresh")
         @raw = @raw.gsub("<LB>", '[')
         @raw = @raw.gsub("<RB>", ']')
+        @raw = @raw.gsub("<LBC>", '{')
+        @raw = @raw.gsub("<RBC>", '}')
         @raw = @raw.gsub("<CMA>", ',')
-        write_raw("-brack")
-        # oneline_re = /^(\s+Bang\w+):$/
-        # @raw = @raw.gsub(oneline_re) do
-        #   "#{$1}"
-        # end
+        write_raw("-6-brack")
+        oneline_re = /^(\s+Bang\w+):$/
+        @raw = @raw.gsub(oneline_re) do
+          "#{$1}"
+        end
+        write_raw("-7-oneline")
         YAML_ShortFuncs.each do |sfunc|
           @raw = @raw.gsub(/Bang#{sfunc}/, "!#{sfunc}")
         end
-        write_raw("-rsfunc")
+        write_raw("-8-rsfunc")
         return @raw
       else
         return JSON::pretty_generate(@template)
@@ -257,7 +264,7 @@ module RAWSTools
     def write_raw(suffix)
       # To debug yaml loading and rendering, comment out the return
       # to dump the proceessed text at every stage.
-      return
+      #return
       f = File.open("#{@directory}/output/#{@filename}#{suffix}", "w")
       f.write(@raw)
       f.close()

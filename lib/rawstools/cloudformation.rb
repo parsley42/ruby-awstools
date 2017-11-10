@@ -269,7 +269,7 @@ module RAWSTools
     def write_raw(suffix)
       # To debug yaml loading and rendering, comment out the return
       # to dump the proceessed text at every stage.
-      #return
+      return
       f = File.open("#{@directory}/output/#{@filename}#{suffix}", "w")
       f.write(@raw)
       f.close()
@@ -494,7 +494,7 @@ module RAWSTools
         @cloudcfg.log(:info, "Created stack #{@stack}:#{@name}: #{stackout.stack_id}")
       else
         params.delete(:disable_rollback)
-        stackout = @client.create_stack(params)
+        stackout = @client.update_stack(params)
         @cloudcfg.log(:info, "Updated stack #{@stack}:#{@name}: #{stackout.stack_id}")
       end
       return stackout
@@ -502,6 +502,10 @@ module RAWSTools
 
     def Create()
       return create_or_update(:create)
+    end
+
+    def Update()
+      return create_or_update(:update)
     end
 
     def Delete()

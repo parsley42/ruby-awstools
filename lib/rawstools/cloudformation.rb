@@ -186,10 +186,10 @@ module RAWSTools
         end
         write_raw("-3-sfunc")
         # Note: render() needs to remove the trailing ':'
-        oneline_re = /^(\s+)(\w+:\s+)(Bang\w+)$/
+        oneline_re = /^(\s+)(\w+:\s+)(Bang\w+)(\s+\|\s*)?$/
         @raw = @raw.gsub(oneline_re) do
           indent = ' ' * ($1.length() + 2)
-          "#{$1}#{$2}\n#{indent}#{$3}:"
+          "#{$1}#{$2}\n#{indent}#{$3}:#{$4}"
         end
         # For troubleshooting, write the file out before trying to load it
         write_raw("-4-oneline")
@@ -219,9 +219,9 @@ module RAWSTools
         @raw = @raw.gsub("<CMA>", ',')
         @raw = @raw.gsub("<CLN>", ':')
         write_raw("-6-brack")
-        oneline_re = /^(\s+Bang\w+):$/
+        oneline_re = /^(\s+Bang\w+):(\s+\|\s*)?$/
         @raw = @raw.gsub(oneline_re) do
-          "#{$1}"
+          "#{$1}#{$2}"
         end
         write_raw("-7-oneline")
         YAML_ShortFuncs.each do |sfunc|
@@ -269,7 +269,7 @@ module RAWSTools
     def write_raw(suffix)
       # To debug yaml loading and rendering, comment out the return
       # to dump the proceessed text at every stage.
-      return
+      #return
       f = File.open("#{@directory}/output/#{@filename}#{suffix}", "w")
       f.write(@raw)
       f.close()
@@ -317,9 +317,10 @@ module RAWSTools
         end
         case @res[reskey]["Type"]
         when "AWS::CloudFormation::Stack"
-          if @name != "MainTemplate"
-            raise "Child stacks must be defined in the \"MainTemplate\" file"
-          end
+          # NOTE: There's really no reason for this ... ?
+          # if @name != "MainTemplate"
+          #   raise "Child stacks must be defined in the \"MainTemplate\" file"
+          # end
           unless @stackconfig[reskey]
             @cloudcfg.log(:debug, "Deleting orphan child stack resource #{reskey} (not listed in stackconfig.yaml)")
             @res.delete(reskey)
@@ -351,7 +352,7 @@ module RAWSTools
         when "AWS::EC2::Subnet"
           @outputs[reskey] = gen_output("SubnetId of #{reskey} subnet", reskey) if @autoutputs
         when "AWS::EC2::SecurityGroup"
-          @outputs[reskey] = gen_output("#{reskey} security group", reskey)
+          @outputs[reskey] = gen_output("#{reskey} security group", reskey) if @autoutputs
           [ "SecurityGroupIngress", "SecurityGroupEgress" ].each() do |sgtype|
             sglist = @res[reskey]["Properties"][sgtype]
             next if sglist == nil
@@ -455,6 +456,7 @@ module RAWSTools
     end
 
     def get_stack_parameters()
+      return nil unless @stackconfig["Parameters"]
       parameters = []
       @cloudcfg.resolve_vars(@stackconfig, "Parameters")
       @stackconfig["Parameters"].each_key() do |key|
@@ -478,17 +480,19 @@ module RAWSTools
       write_all()
       upload_all_conditional()
       required_capabilities = get_stack_required_capabilities()
-      parameters = get_stack_parameters()
       tags = @cloudcfg.tags.apitags()
       template = render()
       params = {
         stack_name: @stackname,
         tags: tags,
-        parameters: parameters,
         capabilities: required_capabilities,
         disable_rollback: @disable_rollback,
         template_body: template,
       }
+      parameters = get_stack_parameters()
+      if parameters
+        params[:parameters] = parameters
+      end
       if op == :create
         stackout = @client.create_stack(params)
         @cloudcfg.log(:info, "Created stack #{@stack}:#{@name}: #{stackout.stack_id}")

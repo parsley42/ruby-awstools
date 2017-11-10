@@ -61,6 +61,7 @@ cfg = RAWSTools::CloudManager.new()
 
 cfg.setparam("generate_only", generate_only)
 cfg.setparam("disable_rollback", disable_rollback)
+cfg.setparams(params)
 
 case command
 when "list"
@@ -141,104 +142,6 @@ when "validate"
     $stderr.puts(e.backtrace)
     exit 1
   end
-end
-
-exit 0
-
-### OLD CODE
-templatedir = "cfn/#{stack}"
-
-raise UsageException.new("Directory not found: #{templatedir}") unless File::exist?(templatedir)
-raise UsageException.new("Not a directory: #{templatedir}") unless File::stat(templatedir).directory?
-
-outputdir = templatedir + "/" + outputdir
-
-if File::exist?(outputdir)
-  raise UsageException.new("Not a directory: #{outputdir}") unless File::stat(outputdir).directory?
-else
-  if command == "create"
-    Dir::mkdir(outputdir)
-  else
-    raise UsageException.new("No such file or directory: #{outputdir}")
-  end
-end
-
-# Generate the hub template that owns other templates
-maincfg = RAWSTools::MainTemplate.new(templatedir, stack, cfg)
-maincfg.process()
-puts # blank line after 'Loading ...'
-
-filenames = [ "main" ] + maincfg.children.map { |child| child.name().downcase() }
-upload = false if filenames.length() == 1
-
-stackprefix = cfg.stack_family
-stackname = stackprefix + stack
-stack_required_capabilities = []
-stack_tags = cfg.tags.apitags()
-
-case command
-when "generate"
-  maincfg.process_children()
-  maincfg.write_all(outputdir)
-when "create", "update", "validate"
-  filenames.each() do |tfile|
-    json = File::read(outputdir + "/" + tfile + ".json")
-    case command
-    when "validate"
-      puts "Validating #{tfile}"
-      cfg.cfn.validate(json)
-    when "create", "update"
-      puts "Validating #{tfile}"
-      required_capabilities = cfg.cfn.validate(json, false)
-      if ! upload
-        json = File::read(outputdir + "/" + tfile + ".json")
-        params = {
-          stack_name: stackname,
-          tags: stack_tags,
-          capabilities: required_capabilities,
-          disable_rollback: disable_rollback,
-          template_body: json,
-        }
-        if command == "create"
-          puts "Creating #{stackname}"
-          stackout = cfg.cfn.client.create_stack(params)
-        else
-          puts "Updating #{stackname}"
-          params.delete(:disable_rollback)
-          stackout = cfg.cfn.client.update_stack(params)
-        end
-        puts "Stack ID: #{stackout.stack_id}"
-      else
-        obj = cfg.s3res.bucket(cfg["Bucket"]).object("#{cfg["Prefix"]}/#{stack}/#{tfile}.json")
-        puts "Uploading #{tfile}"
-        obj.upload_file("#{outputdir}/#{tfile}.json")
-        stack_required_capabilities = (stack_required_capabilities + required_capabilities).uniq()
-      end
-    end
-  end
-  if upload && [ "create", "update" ].include?(command)
-    json = File::read(outputdir + "/main.json")
-    template_url = "https://s3.amazonaws.com/#{cfg["Bucket"]}/#{cfg["Prefix"]}/#{stack}/main.json"
-    params = {
-      stack_name: stackname,
-      tags: stack_tags,
-      capabilities: stack_required_capabilities,
-      disable_rollback: disable_rollback,
-      template_url: template_url,
-    }
-    if command == "create"
-      puts "Creating #{stackname} from #{template_url}"
-      stackout = cfg.cfn.client.create_stack(params)
-    else
-      puts "Updating #{stackname}"
-      params.delete(:disable_rollback)
-      stackout = cfg.cfn.client.update_stack(params)
-    end
-    puts "Stack ID: #{stackout.stack_id}"
-  end
-when "delete"
-  puts "Deleting #{stackname}"
-  cfg.cfn.client.delete_stack({ stack_name: stackname })
 end
 
 rescue UsageException => e

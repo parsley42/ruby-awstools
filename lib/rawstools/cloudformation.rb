@@ -174,8 +174,10 @@ module RAWSTools
         write_raw("-1-bfunc")
         # Preserve flow mappings, replace '{', '}' with '<LBC>', '<RBC>'
         flow_re = /(\s+-\s+){([^{}]+)}(\s*)/
-        @raw = @raw.gsub('{', "<LBC>")
-        @raw = @raw.gsub('}', "<RBC>")
+        @raw = @raw.gsub(flow_re) do
+          rep = "#{$1}<LBC>#{$2}<RBC>#{$3}"
+          rep.gsub(':', "<CLN>")
+        end
         write_raw("-2-braces")
         # Replace "!<shortfunc>" with "Bang<shortfunc>" for yaml; render()
         # needs to undo this.
@@ -211,9 +213,11 @@ module RAWSTools
         write_raw("-5-fresh")
         @raw = @raw.gsub("<LB>", '[')
         @raw = @raw.gsub("<RB>", ']')
-        @raw = @raw.gsub("<LBC>", '{')
-        @raw = @raw.gsub("<RBC>", '}')
+        # Restore the braces for a flow mapping
+        @raw = @raw.gsub('"<LBC>', '{')
+        @raw = @raw.gsub('<RBC>"', '}')
         @raw = @raw.gsub("<CMA>", ',')
+        @raw = @raw.gsub("<CLN>", ':')
         write_raw("-6-brack")
         oneline_re = /^(\s+Bang\w+):$/
         @raw = @raw.gsub(oneline_re) do

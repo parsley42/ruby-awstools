@@ -14,8 +14,8 @@ Metadata:
       # - pEC2KeyPairBastion
       # - pEC2KeyPair
       - pSupportsConfig
-      - pAvailabilityZoneA
-      - pAvailabilityZoneB
+      # - pAvailabilityZoneA
+      # - pAvailabilityZoneB
     - Label:
         default: AWS Quick Start Configuration
       Parameters:
@@ -32,10 +32,10 @@ Metadata:
       #   default: Existing SSH Key for Other Instances
       pSupportsConfig:
         default: Support Config
-      pAvailabilityZoneA:
-        default: First Availability Zone
-      pAvailabilityZoneB:
-        default: Second Availability zone
+      # pAvailabilityZoneA:
+      #   default: First Availability Zone
+      # pAvailabilityZoneB:
+      #   default: Second Availability zone
       pVPCTenancy:
         default: Instance tenancy
       QSS3BucketName:
@@ -86,12 +86,12 @@ Parameters:
     - false
     Default: false
     Type: String
-  pAvailabilityZoneA:
-    Description: Availability Zone 1
-    Type: AWS::EC2::AvailabilityZone::Name
-  pAvailabilityZoneB:
-    Description: Availability Zone 2
-    Type: AWS::EC2::AvailabilityZone::Name
+  # pAvailabilityZoneA:
+  #   Description: Availability Zone 1
+  #   Type: AWS::EC2::AvailabilityZone::Name
+  # pAvailabilityZoneB:
+  #   Description: Availability Zone 2
+  #   Type: AWS::EC2::AvailabilityZone::Name
   pVPCTenancy:
     Description: Instance tenancy behavior for this VPC
     Type: String

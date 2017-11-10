@@ -69,8 +69,6 @@ StackFamily: ${&StackPrefix}
 ## SimpleDB
 # Ephemeral values like AMI IDs can be stored in a SimpleDB domain and
 # retrieved in templates with the ${%...} syntax.
-#ConfigDB: ${=simpledbstack:ConfigDBDomain}
-# SimpleDB domain for billing data
-#BillingDB: ${=common:BillingDBDomain|none}
-# If no specific domain is given, use the DefaultSDB
+# If you use these defaults, you can just 'cfn create sdbcfg'
+#ConfigDB: ${=sdbcfg:ConfigDBDomain}
 #DefaultSDB: ConfigDB

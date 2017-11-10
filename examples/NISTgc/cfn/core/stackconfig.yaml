@@ -31,6 +31,3 @@ LoggingTemplate:
   Format: yaml
 Parameters:
   pNotifyEmail: <REQUIRED> # Raise exception if no override
-  # Currently there are only two AZs in GovCloud
-  pAvailabilityZoneA: us-gov-west-1a
-  pAvailabilityZoneB: us-gov-west-1b

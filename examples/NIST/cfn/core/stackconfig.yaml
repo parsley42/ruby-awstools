@@ -14,5 +14,3 @@ LoggingTemplate:
   Format: yaml
 Parameters:
   pNotifyEmail: <REQUIRED> # Raise exception if no override
-  pAvailabilityZoneA: <REQUIRED> # e.g. us-east-1c
-  pAvailabilityZoneB: <REQUIRED> # e.g. us-east-1d

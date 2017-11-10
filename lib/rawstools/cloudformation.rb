@@ -172,7 +172,8 @@ module RAWSTools
           end
         end
         write_raw("-1-bfunc")
-        # Replace '{', '}' with '<LBC>', '<RBC>'
+        # Preserve flow mappings, replace '{', '}' with '<LBC>', '<RBC>'
+        flow_re = /(\s+-\s+){([^{}]+)}(\s*)/
         @raw = @raw.gsub('{', "<LBC>")
         @raw = @raw.gsub('}', "<RBC>")
         write_raw("-2-braces")

@@ -53,28 +53,28 @@ Metadata:
   Output:
     Description: N/A
 Parameters:
-  pDBPassword:
-    Description: Mixed alphanumeric and must be between 8 and 28 characters and contain
-      at least one capital letter
-    NoEcho: true
-    Type: String
-    MinLength: 8
-    MaxLength: 28
-    AllowedPattern: '[a-zA-Z0-9!^*\-_+]*'
-    ConstraintDescription: Can only contain alphanumeric characters or the following
-      special characters !^*-_+, between 8 and 28 characters
+  # pDBPassword:
+  #   Description: Mixed alphanumeric and must be between 8 and 28 characters and contain
+  #     at least one capital letter
+  #   NoEcho: true
+  #   Type: String
+  #   MinLength: 8
+  #   MaxLength: 28
+  #   AllowedPattern: '[a-zA-Z0-9!^*\-_+]*'
+  #   ConstraintDescription: Can only contain alphanumeric characters or the following
+  #     special characters !^*-_+, between 8 and 28 characters
   pNotifyEmail:
     Description: Notification email address for security events (you will receive
       a confirmation email)
     Type: String
     Default: distlist@example.org
-  pEC2KeyPairBastion:
-    Description: The SSH key pair in your account to use for the bastion host login
-    Type: AWS::EC2::KeyPair::KeyName
-  pEC2KeyPair:
-    Description: The SSH key pair in your account to use for all other EC2 instance
-      logins
-    Type: AWS::EC2::KeyPair::KeyName
+  # pEC2KeyPairBastion:
+  #   Description: The SSH key pair in your account to use for the bastion host login
+  #   Type: AWS::EC2::KeyPair::KeyName
+  # pEC2KeyPair:
+  #   Description: The SSH key pair in your account to use for all other EC2 instance
+  #     logins
+  #   Type: AWS::EC2::KeyPair::KeyName
   pSupportsConfig:
     Description: |
       Is AWS Config Rules already configured for this region? Use 'false'

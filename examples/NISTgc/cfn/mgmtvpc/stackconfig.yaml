@@ -1,0 +1,34 @@
+---
+# NIST stackconfig.yaml - ruby-awstools configuration and parameters for the
+# AWS NIST quickstart stack, non-govcloud.
+
+# MainTemplate always defines the configuration for the main or parent stack.
+# If you're using a third-party stack that defines a child stack named
+# MainTemplate - you'll need to rename it.
+MainTemplate:
+  # When 'true', ruby-awstools will automatically generate outputs for
+  # many resource types. Note that child stacks ALWAYS get an output.
+  AutoOutputs: false
+  File: vpc-management.template
+  Format: yaml
+  # Defaults to "https://s3.amazonaws.com", needs to be modified for GovCloud
+  S3URL: https://s3-us-gov-west-1.amazonaws.com
+  # The StackName for the main template will determine the name of the
+  # cloudformation stack. For shared stacks that can be instantiated multiple
+  # times, this should get a unique definition in cfn/<stack>/stackconfig.yaml,
+  # or should use a variable expansion.
+  StackName: MgmtVPC
+rNatInstanceTemplate:
+  AutoOutputs: false
+  File: nat-instance.template
+  Format: yaml
+Parameters:
+  # Currently there are only two AZs in GovCloud
+  pRegionAZ1Name: us-gov-west-1a
+  pRegionAZ2Name: us-gov-west-1b
+  pManagementVPCName: <REQUIRED>
+  pManagementCIDR: <REQUIRED>
+  pManagementDMZSubnetACIDR: <REQUIRED>
+  pManagementDMZSubnetBCIDR: <REQUIRED>
+  pNatInstanceType: <REQUIRED>
+  pSupportsNatGateway: 'false'

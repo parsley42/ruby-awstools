@@ -157,7 +157,7 @@ module RAWSTools
       end
       # AWS CloudFormation yaml needs pre-processing to be read in to a data
       # structure.
-      if @format.casecmp?("yaml")
+      if @format.casecmp("yaml") == 0
         write_raw("-0-orig")
         # Note: render() needs to undo this by replacing <LB>, <RB>, and <CMA>
         # with '[', ']',  and ','
@@ -208,7 +208,7 @@ module RAWSTools
 
     # Render a template to text
     def render()
-      if @format.casecmp?("yaml")
+      if @format.casecmp("yaml") == 0
         @raw = YAML::dump(@template, { line_width: -1, indentation: 4 })
         write_raw("-5-fresh")
         @raw = @raw.gsub("<LB>", '[')
@@ -404,7 +404,6 @@ module RAWSTools
       @children = []
       @disable_rollback, @generate_only = cfg.getparams("disable_rollback", "generate_only")
       @disable_rollback = false unless @disable_rollback
-      @stackname = cfg.stack_family + stack
       sourcestack = stack
       if File::exist?("cfn/#{stack}/stackconfig.yaml")
         raw = File::read("cfn/#{stack}/stackconfig.yaml")
@@ -441,7 +440,12 @@ module RAWSTools
         found = true
       end
       raise "Unable to locate stackconfig.yaml for stack: #{stack}, source stack: #{sourcestack}" unless found
-      @stackconfig["MainTemplate"]["StackName"] = stack unless @stackconfig["MainTemplate"]["StackName"]
+      if @stackconfig["MainTemplate"]
+        @stackconfig["MainTemplate"]["StackName"] = stack unless @stackconfig["MainTemplate"]["StackName"]
+        @stackname = cfg.stack_family + @stackconfig["MainTemplate"]["StackName"]
+      else
+        @stackname = cfg.stack_family + stack
+      end
       super(cfg, stack, sourcestack, @stackconfig, "MainTemplate")
     end
 

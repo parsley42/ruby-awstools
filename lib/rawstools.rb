@@ -77,7 +77,7 @@ module RAWSTools
   # Central library class that loads the configuration file and provides
   # utility classes for processing names and templates.
   class CloudManager
-    attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :rds, :route53, :tags, :params, :stack_family
+    attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :rds, :route53, :tags, :params, :stack_family, :govcloud
 
     def initialize()
       @installdir = File.dirname(Pathname.new(__FILE__).realpath) + "/rawstools"
@@ -124,6 +124,10 @@ module RAWSTools
       info = @sts.get_caller_identity()
       if info.account != @config["AccountID"]
         raise "AccountID for credentials don't match configured AccountID, the current site repository is configured for a different AWS account."
+      end
+      @govcloud = false
+      if info.arn.start_with?("arn:aws-us-gov")
+        @govcloud = true
       end
       @params = {}
       @subdom = nil
@@ -231,7 +235,8 @@ module RAWSTools
       end
       az = getparam("az")
       if az
-        setparam("az", az.upcase())
+        setparam("az", az.downcase())
+        setparam("AZ", az.upcase())
         setparam("availability_zone", @config["Region"] + az.downcase())
       end
     end

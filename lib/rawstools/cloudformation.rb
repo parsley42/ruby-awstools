@@ -269,7 +269,7 @@ module RAWSTools
     def write_raw(suffix)
       # To debug yaml loading and rendering, comment out the return
       # to dump the proceessed text at every stage.
-      #return
+      return
       f = File.open("#{@directory}/output/#{@filename}#{suffix}", "w")
       f.write(@raw)
       f.close()

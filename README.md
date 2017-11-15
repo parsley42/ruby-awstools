@@ -1,4 +1,4 @@
-`ruby-awstools` is a set of CLI and API-oriented tools that make it easy to:
+`ruby-awstools` is a library and set of CLI tools that make it easy to:
 * Create and manage a "datacenter in the cloud"
 * Create, destroy, start, stop, backup and restore compute instances based on instance templates that define security groups, instance profiles, instance types, and other settings based on a server type; e.g. Apache web, LDAP, Java app server, etc.
 * Manage a family of DNS subdomain site repositories, where each subdomain is tagged for easy billing, and can inherit common template definitions from a central repository

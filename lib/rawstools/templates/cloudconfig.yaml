@@ -16,6 +16,19 @@
 # The region for assets managed by this repository.
 #Region: us-east-1
 
+## Library tags
+# ruby-awstools makes use of AWS Tags for tracking and resolving assets.
+# To avoid conflicts, it's possible to set what tag names are used and
+# managed by the library. Note that the contents of these tags are
+# generated from the 'name' parameter and the configured DNSDomain and
+# DNSBase - even when integrated DNS isn't used.
+# The ScopedName is <hostname>.<scope>, e.g. web1.accounting. When "Name"
+# is used, the library name will be the same as the AWS Name.
+ScopedName: Name
+# The full scope is used by the library to identify all assets managed
+# by When using
+# library integrated Route53 DNS updates, the library will create A
+FullScope: Domain
 ## CloudFormation configuration items
 # S3 bucket where library resources such as CloudFormation templates will be
 # stored, for parent/child stacks.
@@ -47,7 +60,7 @@ StackFamily: ${&StackPrefix}
 # it's SearchPath.
 #DNSBase: mycompany.com
 # Resources created with this repository will get DNS records
-# of the form <name>.prod.mycompany.com, and will get a "Name" tag
+# of the form <name>.prod.mycompany.com, and will get a ScopedName
 # of <name>.prod.
 #DNSDomain: prod.mycompany.com
 # The route53 tool needs zone IDs; these are normally the CloudFormation

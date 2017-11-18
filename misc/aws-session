@@ -1,0 +1,34 @@
+#!/bin/bash -e
+
+# Usage: eval `aws-session <profile> <token>`
+#  Sets up environment variables for AWS temporary session credentials where
+#  MFA is required for API access.
+#  See: https://aws.amazon.com/premiumsupport/knowledge-center/authenticate-mfa-cli/
+#       https://mharrison.org/post/aws_mfa/
+
+if [ $# -ne 2 ]
+then
+    echo "echo \"Usage: eval \\\`aws-session <profile> <token>\\\`\""
+    exit 1
+fi
+
+PROFILE=$1
+TOKEN=$2
+
+CALLER=$(aws --profile $PROFILE --output json sts get-caller-identity)
+if [ $? -ne 0 ]
+then
+    echo "Error getting caller identity"
+    exit 1
+fi
+
+ARN=$(echo $CALLER | jq -r .Arn)
+ARN=${ARN/:user/:mfa}
+
+CREDS=$(aws --profile $PROFILE sts get-session-token --serial-number $ARN --token-code $TOKEN)
+
+SECRETKEY=$(echo $CREDS | jq -r .Credentials.SecretAccessKey)
+TOKEN=$(echo $CREDS | jq -r .Credentials.SessionToken)
+KEY=$(echo $CREDS | jq -r .Credentials.AccessKeyId)
+
+echo "export AWS_PROFILE=$PROFILE; export AWS_ACCESS_KEY_ID=$KEY; export AWS_SECRET_ACCESS_KEY=$SECRETKEY; export AWS_SESSION_TOKEN=$TOKEN"

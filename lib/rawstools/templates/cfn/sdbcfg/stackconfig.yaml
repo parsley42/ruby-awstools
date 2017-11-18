@@ -1,0 +1,8 @@
+---
+MainTemplate:
+  # When 'true', ruby-awstools will automatically generate outputs for
+  # many resource types. Note that child stacks ALWAYS get an output.
+  AutoOutputs: true
+  File: main.yaml
+  Format: yaml
+  StackName: ConfigDB

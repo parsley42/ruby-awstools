@@ -1,0 +1,71 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS S3 Bucket where ruby-awstools stores library resources,
+  configured to require encryption and expire old versions after 180 days.
+Parameters:
+  BucketName:
+    Description: The name of the bucket where library resources are kept
+    Type: String
+    MinLength: 3
+    MaxLength: 63
+    AllowedPattern: ^[a-z0-9][a-z0-9.-]*[a-z0-9]$
+  ARNRegionSpec:
+    Description: This is 'aws' for all regions but GovCloud, where it's 'aws-us-gov'
+    Type: String
+    Default: aws
+Resources:
+  RAWSBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Ref: BucketName
+      VersioningConfiguration:
+        Status: Enabled
+      # Cloudformation stuff should be stored in a git repo,
+      # but we go ahead and version this bucket since stuff is small,
+      # and just delete stuff after 180 days.
+      LifecycleConfiguration:
+        Rules:
+        - NoncurrentVersionExpirationInDays: 180
+          Id: ExpireOldVersions180Days
+          Status: Enabled
+  RAWSBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Metadata:
+      Comment: Implements the policy described at http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingServerSideEncryption.html
+    DependsOn: RAWSBucket
+    Properties:
+      Bucket:
+        Ref: BucketName
+      PolicyDocument:
+        Statement:
+        - Sid: DenyIncorrectEncryptionHeader
+          Effect: Deny
+          Principal: "*"
+          Action: s3:PutObject
+          Resource:
+            Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: ARNRegionSpec
+              - ':s3:::'
+              - Ref: BucketName
+              - "/*"
+          Condition:
+            StringNotEquals:
+              s3:x-amz-server-side-encryption: AES256
+        - Sid: DenyUnEncryptedObjectUploads
+          Effect: Deny
+          Principal: "*"
+          Action: s3:PutObject
+          Resource:
+            Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: ARNRegionSpec
+              - ':s3:::'
+              - Ref: BucketName
+              - "/*"
+          Condition:
+            'Null':
+              s3:x-amz-server-side-encryption: 'true'

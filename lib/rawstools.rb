@@ -1,5 +1,7 @@
 require 'base64'
 require 'yaml'
+require 'json'
+require 'fileutils'
 require 'pathname'
 require 'aws-sdk'
 require 'rawstools/cloudformation'
@@ -26,16 +28,6 @@ module RAWSTools
   Valid_Classes = [ "String", "Fixnum", "Integer", "TrueClass", "FalseClass" ]
   Expand_Regex = /\${([@=%&][:|.\-\/\w<>]+)}/
   Log_Levels = [:trace, :debug, :info, :warn, :error]
-
-  # Classes for loading and processing the configuration file
-  class SubnetDefinition
-    attr_reader :cidr, :subnets
-
-    def initialize(cidr, subnets)
-      @cidr = cidr
-      @subnets = subnets
-    end
-  end
 
   # Class to convert from configuration file format to AWS expected format
   # for tags
@@ -69,7 +61,15 @@ module RAWSTools
       @tags[key] = value
     end
 
-    def add(hash)
+    def add(tags)
+      if tags.class().to_s() == "Hash"
+        hash = tags
+      else
+        hash = {}
+        tags.each do |tag|
+          hash[tag["Key"]] = tag["Value"]
+        end
+      end
       @tags = @tags.merge(hash)
     end
   end
@@ -77,7 +77,7 @@ module RAWSTools
   # Central library class that loads the configuration file and provides
   # utility classes for processing names and templates.
   class CloudManager
-    attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :rds, :route53, :tags, :params, :stack_family
+    attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :rds, :route53, :tags, :params, :stack_family, :govcloud
 
     def initialize()
       @installdir = File.dirname(Pathname.new(__FILE__).realpath) + "/rawstools"
@@ -123,7 +123,11 @@ module RAWSTools
       @sts = Aws::STS::Client.new( region: @config["Region"] )
       info = @sts.get_caller_identity()
       if info.account != @config["AccountID"]
-        raise "AccountID for credentials don't match configured AccountID"
+        raise "AccountID for credentials don't match configured AccountID, the current site repository is configured for a different AWS account."
+      end
+      @govcloud = false
+      if info.arn.start_with?("arn:aws-us-gov")
+        @govcloud = true
       end
       @params = {}
       @subdom = nil
@@ -143,7 +147,7 @@ module RAWSTools
         end
       end
 
-      [ "Region", "AvailabilityZones" ].each do |c|
+      [ "Region", "AvailabilityZones", "DNSBase", "DNSDomain" ].each do |c|
         if ! @config[c]
           raise "Missing required top-level configuration item in #{@filename}: #{c}"
         end
@@ -166,16 +170,6 @@ module RAWSTools
         @subdom = @config["DNSDomain"][0..(i-2)]
       end
 
-      subnet_types = {}
-      if @config["SubnetTypes"]
-        @config["SubnetTypes"].each_key do |stack|
-          subnet_types[stack] = {}
-          @config["SubnetTypes"][stack].each_key do |st|
-            subnet_types[stack][st] = SubnetDefinition.new(@config["SubnetTypes"][stack][st]["CIDR"], @config["SubnetTypes"][stack][st]["Subnets"])
-          end
-        end
-        @config["SubnetTypes"] = subnet_types
-      end
     end
 
     # Log events, takes a symbol log level (see Log_Levels) and a message.
@@ -241,7 +235,8 @@ module RAWSTools
       end
       az = getparam("az")
       if az
-        setparam("az", az.upcase())
+        setparam("az", az.downcase())
+        setparam("AZ", az.upcase())
         setparam("availability_zone", @config["Region"] + az.downcase())
       end
     end

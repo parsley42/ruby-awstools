@@ -1,0 +1,9 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create SimpleDB config database
+Resources:
+
+  ConfigDB:
+    Type: "AWS::SDB::Domain"
+    Properties:
+      Description: Ephemeral config var database for ruby-awstools

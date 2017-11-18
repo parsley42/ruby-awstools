@@ -2,15 +2,15 @@
 # NIST stackconfig.yaml - ruby-awstools configuration and parameters for the
 # AWS NIST quickstart stack, non-govcloud.
 MainTemplate:
-  File: main.template
+  File: main.yaml
   Format: yaml
   StackName: NISTcore
 IamTemplate:
-  File: iam.template
+  File: iam.yaml
   Format: yaml
   # ... final stack name will be <StackFamily>-NISTcore-IAMStack-<random>
 LoggingTemplate:
-  File: logging.template
+  File: logging.yaml
   Format: yaml
 Parameters:
   pNotifyEmail: <REQUIRED> # Raise exception if no override

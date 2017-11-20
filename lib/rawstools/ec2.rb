@@ -386,6 +386,7 @@ module RAWSTools
         @mgr.normalize_name_parameters()
 
         @mgr.resolve_vars(template, "api_template")
+        @mgr.resolve_vars(template, "tags")
 
         if ispec[:user_data]
           ispec[:user_data] = Base64::encode64(ispec[:user_data])
@@ -400,15 +401,15 @@ module RAWSTools
             interfaces << @resource.create_network_interface(iface)
           end
         end
+        cfgtags = @mgr.tags
+        name = @mgr.getparam("name")
+        cfgtags["Name"] = name
+        cfgtags["Domain"] = @mgr["DNSDomain"]
+        cfgtags.add(template["tags"]) if template["tags"]
+        itags = cfgtags.apitags()
+        cfgtags["InstanceName"] = @mgr.getparam("name")
+        vtags = cfgtags.apitags()
         unless @mgr.govcloud
-          cfgtags = @mgr.tags
-          name = @mgr.getparam("name")
-          cfgtags["Name"] = name
-          cfgtags["Domain"] = @mgr["DNSDomain"]
-          cfgtags.add(template[:tags]) if template[:tags]
-          itags = cfgtags.apitags()
-          cfgtags["InstanceName"] = @mgr.getparam("name")
-          vtags = cfgtags.apitags()
           ispec[:tag_specifications] = [
             {
               resource_type: "instance",
@@ -480,7 +481,7 @@ module RAWSTools
           # Need to refresh to get attached volumes
           instance = @resource.instance(instance.id())
           if @mgr.govcloud
-            tag_instance(instance, template[:tags]) { |s| yield s }
+            tag_instance(instance, itags, vtags) { |s| yield s }
           end
 
           if @mgr["PrivateDNSId"]
@@ -547,27 +548,18 @@ module RAWSTools
       yield "#{@mgr.timestamp()} Terminated"
     end
 
-    def tag_instance(instance, tags=nil)
-      @mgr.normalize_name_parameters()
-      cfgtags = @mgr.tags()
-      name = @mgr.getparam("name")
-      cfgtags["Name"] = name
-      cfgtags["Domain"] = @mgr["DNSDomain"]
-      cfgtags.add(tags) if tags
-
+    # Tag an alreaedy-created instance
+    def tag_instance(instance, itags, vtags)
       yield "#{@mgr.timestamp()} Tagging instance #{name}"
-      instance.create_tags(tags: cfgtags.apitags())
+      instance.create_tags(tags: itags)
 
-      cfgtags["InstanceName"] = @mgr.getparam("name")
       instance.block_device_mappings().each() do |b|
         if b.device_name.end_with?("a") or b.device_name.end_with?("a1")
           yield "#{@mgr.timestamp()} Tagging root volume"
-          cfgtags["Name"] = name
         else
           yield "#{@mgr.timestamp()} Tagging data volume"
-          cfgtags["Name"] = name
         end
-        @resource.volume(b.ebs.volume_id()).create_tags(tags: cfgtags.apitags())
+        @resource.volume(b.ebs.volume_id()).create_tags(tags: vtags)
       end
     end
 

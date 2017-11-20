@@ -82,6 +82,9 @@ module RAWSTools
 		end
 
 		def resize_instance_storage(instance, size)
+      if instance.cluster
+        return true, "Aurora auto-resizes"
+      end
 			begin
 				instance = instance.modify({
 					apply_immediately: false,
@@ -113,7 +116,12 @@ module RAWSTools
 		end
 
 		def get_backup(instance)
-			bw = instance.preferred_backup_window()
+      cluster = instance.cluster()
+      if cluster
+        bw = instance.preferred_backup_window()
+      else
+        bw = instance.preferred_backup_window()
+      end
 			start = bw.split("-")[0]
 			slocal = Time.parse("#{start} UTC").getlocal()
 			return "#{slocal.strftime("%I:%M%p")}"
@@ -133,10 +141,16 @@ module RAWSTools
 			w_start = u_start.strftime("%H:%M")
 			w_end = u_end.strftime("%H:%M")
 			begin
-				instance = instance.modify({
+        params = {
 					apply_immediately: true,
 					preferred_backup_window: "#{w_start}-#{w_end}"
-				})
+				}
+        cluster = instance.cluster()
+        if cluster
+          cluster.modify(params)
+        else
+          instance.modify(params)
+        end
 			rescue => e
 				return false, e.message
 			end
@@ -144,7 +158,12 @@ module RAWSTools
 		end
 
 		def get_maintenance(instance)
-			mw = instance.preferred_maintenance_window()
+      cluster = instance.cluster()
+      if cluster
+        mw = cluster.preferred_maintenance_window()
+      else
+        mw = instance.preferred_maintenance_window()
+      end
 			start = mw.split("-")[0]
 			sday = start.split(":")[0]
 			stime = start.split(":")[1,2].join(":")
@@ -167,11 +186,17 @@ module RAWSTools
 			u_end = u_start + 30*60
 			w_start = u_start.strftime("%a:%H:%M").downcase()
 			w_end = u_end.strftime("%a:%H:%M").downcase()
+      params = {
+        apply_immediately: true,
+        preferred_maintenance_window: "#{w_start}-#{w_end}"
+      }
 			begin
-				instance = instance.modify({
-					apply_immediately: true,
-					preferred_maintenance_window: "#{w_start}-#{w_end}"
-				})
+        cluster = instance.cluster()
+        if cluster
+          cluster.modify(params)
+        else
+          instance.modify(params)
+        end
 			rescue => e
 				return false, e.message
 			end
@@ -275,7 +300,14 @@ module RAWSTools
 				db_snapshot_identifier: snapname,
 				tags: snaptags,
 			}
-			dbinstance.create_snapshot(params)
+      cluster = dbinstance.cluster()
+      if cluster
+        params[:db_cluster_snapshot_identifier] = params[:db_snapshot_identifier]
+        params.delete(:db_snapshot_identifier)
+        cluster.create_snapshot(params)
+      else
+			  dbinstance.create_snapshot(params)
+      end
 			return true
 		end
 
@@ -423,19 +455,35 @@ module RAWSTools
 			yield "#{@mgr.timestamp()} Created db instance #{name} (id: #{dbinstance.id()}), waiting for it to become available"
 			@client.wait_until(:db_instance_available, db_instance_identifier: dbname)
 			if snapshot
-				yield "#{@mgr.timestamp()} Modifying restored database with rootpassword and other template values"
-        if dbspec[:engine] != "aurora"
-          modify_params[:master_user_password] = @mgr.getparam("rootpassword")
-        end
-				modify_params[:apply_immediately] = true
+				yield "#{@mgr.timestamp()} Modifying restored database instance / cluster with rootpassword and other template values"
+        modify_params[:master_user_password] = @mgr.getparam("rootpassword")
+        modify_params[:apply_immediately] = true
+        iparams = modify_params.dup()
+        cparams = modify_params.dup()
 				begin
-					dbinstance.modify(modify_params)
+          if dbspec[:engine] == "aurora"
+            [ :vpc_security_group_ids, :master_user_password ].each do |key|
+              iparams.delete(key)
+            end
+          end
+					dbinstance.modify(iparams)
+          if dbspec[:engine] == "aurora"
+            [ :monitoring_interval, :monitoring_role_arn ].each do |key|
+              cparams.delete(key)
+            end
+            dbinstance.cluster.modify(cparams)
+          end
 				rescue => e
 					yield "#{@mgr.timestamp()} There were non-fatal errors modifying the restored database: #{e.message}"
-					dbinstance.modify({
+          params = {
 						master_user_password: @mgr.getparam("rootpassword"),
 						apply_immediately: true,
-					})
+					}
+          if dbspec[:engine] == aurora
+            dbinstance.cluster.modify(params)
+          else
+            dbinstance.modify(params)
+          end
 					yield "#{@mgr.timestamp()} Modified the database updating only the root password"
 				end
 				@client.wait_until(:db_instance_available, db_instance_identifier: dbname)

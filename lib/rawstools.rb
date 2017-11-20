@@ -81,6 +81,12 @@ module RAWSTools
 
     def initialize()
       @installdir = File.dirname(Pathname.new(__FILE__).realpath) + "/rawstools"
+      if ENV["RAWS_LOGLEVEL"] != nil
+        ll = ENV["RAWS_LOGLEVEL"].to_sym()
+        if Log_Levels.index(ll) != nil
+          @loglevel = Log_Levels.index(ll)
+        end
+      end
       begin
         @file = File::open("cloudconfig.yaml")
       rescue => e
@@ -96,7 +102,6 @@ module RAWSTools
       end
       search_dirs += ["."]
 
-      @loglevel = Log_Levels.index(:info)
       @config = {}
       search_dirs.each do |dir|
         log(:debug, "Looking for #{dir}/cloudconfig.yaml")
@@ -107,23 +112,19 @@ module RAWSTools
         end
       end
 
-      if @config["LogLevel"] != nil
+      if @config["LogLevel"] && ! @loglevel
         ll = @config["LogLevel"].to_sym()
         if Log_Levels.index(ll) != nil
           @loglevel = Log_Levels.index(ll)
         end
-      end
-      if ENV["RAWS_LOGLEVEL"] != nil
-        ll = ENV["RAWS_LOGLEVEL"].to_sym()
-        if Log_Levels.index(ll) != nil
-          @loglevel = Log_Levels.index(ll)
-        end
+      elsif ! @loglevel
+        @loglevel = Log_Levels.index(:info)
       end
 
       @sts = Aws::STS::Client.new( region: @config["Region"] )
       info = @sts.get_caller_identity()
-      if info.account != @config["AccountID"]
-        raise "AccountID for credentials don't match configured AccountID, the current site repository is configured for a different AWS account."
+      if info.account.to_s != @config["AccountID"].to_s
+        raise "AccountID for credentials (#{info.account}) don't match configured AccountID (#{@config["AccountID"]}), the current site repository is configured for a different AWS account."
       end
       @govcloud = false
       if info.arn.start_with?("arn:aws-us-gov")

@@ -6,14 +6,20 @@
 #  See: https://aws.amazon.com/premiumsupport/knowledge-center/authenticate-mfa-cli/
 #       https://mharrison.org/post/aws_mfa/
 
-if [ $# -ne 2 ]
+if [ $# -ne 1 -a $# -ne 2 ]
 then
-    echo "echo \"Usage: eval \\\`aws-session <profile> <token>\\\`\""
+    echo "echo \"Usage: eval \\\`aws-session (profile) <token>\\\`\""
     exit 1
 fi
 
-PROFILE=$1
-TOKEN=$2
+if [ $# -eq 1 ]
+then
+  PROFILE=default
+  TOKEN=$1
+else
+  PROFILE=$1
+  TOKEN=$2
+fi
 
 CALLER=$(aws --profile $PROFILE --output json sts get-caller-identity)
 if [ $? -ne 0 ]

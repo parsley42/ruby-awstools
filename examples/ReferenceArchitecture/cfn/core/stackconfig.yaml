@@ -1,10 +1,10 @@
 ---
-# NIST stackconfig.yaml - ruby-awstools configuration and parameters for the
-# AWS NIST quickstart stack, non-govcloud.
+# stackconfig.yaml - ruby-awstools configuration and parameters for the
+# core IAM and Logging templates, derived from the AWS NIST Quickstart
 MainTemplate:
   File: main.yaml
   Format: yaml
-  StackName: NISTcore
+  StackName: RefCore
 IamTemplate:
   File: iam.yaml
   Format: yaml

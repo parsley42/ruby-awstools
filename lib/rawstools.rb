@@ -79,13 +79,23 @@ module RAWSTools
   class CloudManager
     attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :rds, :route53, :tags, :params, :stack_family, :govcloud
 
-    def initialize()
+    # Initiallize
+    def initialize(logarray = nil, loglevel = nil)
       @installdir = File.dirname(Pathname.new(__FILE__).realpath) + "/rawstools"
-      if ENV["RAWS_LOGLEVEL"] != nil
-        ll = ENV["RAWS_LOGLEVEL"].to_sym()
+      @logarray = logarray if logarray
+      log_set = false
+      if ENV["RAWS_LOGLEVEL"] || loglevel
+        unless loglevel
+          ll = ENV["RAWS_LOGLEVEL"].to_sym()
+        else
+          ll = loglevel
+        end
         if Log_Levels.index(ll) != nil
           @loglevel = Log_Levels.index(ll)
+          log_set = true
         end
+      else
+        @loglevel = Log_Levels.index(:info)
       end
       begin
         @file = File::open("cloudconfig.yaml")
@@ -112,13 +122,11 @@ module RAWSTools
         end
       end
 
-      if @config["LogLevel"] && ! @loglevel
+      if @config["LogLevel"] && ! log_set
         ll = @config["LogLevel"].to_sym()
         if Log_Levels.index(ll) != nil
           @loglevel = Log_Levels.index(ll)
         end
-      elsif ! @loglevel
-        @loglevel = Log_Levels.index(:info)
       end
 
       @sts = Aws::STS::Client.new( region: @config["Region"] )
@@ -175,11 +183,15 @@ module RAWSTools
 
     # Log events, takes a symbol log level (see Log_Levels) and a message.
     # NOTE: eventually there should be a separate configurable log level for
-    # stuff that also gets logged to CloudWatch logs.
+    # stuff that also gets logged to CloudWatch logs and/or syslog.
     def log(level, message)
       ll = Log_Levels.index(level)
       if ll != nil && ll >= @loglevel
-        $stderr.puts(message)
+        if @logarray
+          @logarray.push(message)
+        else
+          $stderr.puts(message)
+        end
       end
     end
 

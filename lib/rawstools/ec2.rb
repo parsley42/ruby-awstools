@@ -230,9 +230,7 @@ module RAWSTools
     end
 
     def list_types()
-      Dir::chdir("ec2") do
-        Dir::glob("*.yaml").map() { |t| t[0,t.index(".yaml")] }
-      end
+      return @mgr.list_templates("ec2")
     end
 
     # metadata interpretation is left up to the tool/script using the library
@@ -386,7 +384,7 @@ module RAWSTools
         end
 
         @mgr.normalize_name_parameters()
-        
+
         @mgr.resolve_vars(template, "api_template")
 
         if ispec[:user_data]

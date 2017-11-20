@@ -312,9 +312,7 @@ module RAWSTools
 		end
 
 		def list_types()
-			Dir::chdir("rds") do
-				Dir::glob("*.yaml").map() { |t| t[0,t.index(".yaml")] }
-			end
+      return @mgr.list_templates("rds")
 		end
 
     # metadata interpretation is left up to the tool/script using the library

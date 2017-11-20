@@ -326,7 +326,9 @@ module RAWSTools
     # Load API template files in order from least to most specific; throws an
     # exeption if no specific template with the named type is loaded.
     def load_template(facility, type)
-      search_dirs = ["#{@installdir}/templates"] + @config["SearchPath"] + ["."]
+      search_dirs = ["#{@installdir}/templates"]
+      search_dirs += @config["SearchPath"] if @config["SearchPath"]
+      search_dirs += ["."]
       template = {}
       found = false
       search_dirs.each do |dir|
@@ -348,6 +350,30 @@ module RAWSTools
         raise "Couldn't find a #{facility} template for #{type}"
       end
       return template
+    end
+
+    # List all the templates available in the SearchPath. Return an array
+    # of strings.
+    def list_templates(facility, exclude_builtins = true)
+      templates = []
+      search_dirs = []
+      unless exclude_builtins
+        search_dirs = ["#{@installdir}/templates"]
+      end
+      search_dirs += @config["SearchPath"] if @config["SearchPath"]
+      search_dirs += ["."]
+      search_dirs.each do |dir|
+        log(:debug, "Checking for template directory #{dir}")
+        if File::directory?("#{dir}/#{facility}")
+          Dir::chdir("#{dir}/#{facility}") do
+            Dir::glob("*.yaml").each do |t|
+              tname = t[0,t.index(".yaml")]
+              templates.push(tname) unless tname == facility
+            end
+          end
+        end
+      end
+      return templates
     end
 
     # Take a string of the form ${something} and expand the value from

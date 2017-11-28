@@ -39,9 +39,6 @@ FullScope: Domain
 # All CloudFormation stacks created by this repository will be named
 # <StackFamily>-<stackname>, and all CloudFormation variable lookups
 #StackFamily: ProdEnv
-# For compatibility with older cloudconfig.yaml files. TODO: remove after all
-# using repositories are upgraded.
-StackFamily: ${&StackPrefix}
 # CIDRLists are treated specially; when referenced in a template
 # using $$ {listname}, they will be intelligently expanded depending
 # on the type of resource being defined, and may duplicate the resource or

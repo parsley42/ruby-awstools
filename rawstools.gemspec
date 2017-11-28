@@ -10,5 +10,11 @@ Gem::Specification.new do |s|
 	s.license = 'MIT'
 	s.files = Dir.glob("{bin,lib}/**/*") + %w(LICENSE README.md)
 	s.executables = ['ec2', 'cfn', 'rds', 'r53', 'sdb']
-	s.add_runtime_dependency "aws-sdk", "~> 3.0", ">= 3.0.1"
+	s.add_runtime_dependency "aws-sdk-core", "~> 3.9", ">= 3.9.0"
+	s.add_runtime_dependency "aws-sdk-ec2", "~> 1.18", ">= 1.18.0"
+	s.add_runtime_dependency "aws-sdk-s3", "~> 1.7", ">= 1.7.0"
+	s.add_runtime_dependency "aws-sdk-cloudformation", "~> 1.3", ">= 1.3.0"
+	s.add_runtime_dependency "aws-sdk-rds", "~> 1.8", ">= 1.8.0"
+	s.add_runtime_dependency "aws-sdk-simpledb", "~> 1.0", ">= 1.0.0"
+	s.add_runtime_dependency "aws-sdk-route53", "~> 1.5", ">= 1.5.0"
 end

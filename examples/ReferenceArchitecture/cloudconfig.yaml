@@ -1,9 +1,5 @@
----
-# cloudconfig.yaml - configuration file for ruby-awstools, with library
-# configuration information and variables that can be referenced in
-# templates. If you've added a path from examples to your SearchPath,
-# for instance examples/ReferenceArchitecture, copy the cloudconfig.yaml
-# from there instead.
+# Sample cloudconfig.yaml for the Reference Architecture. Copy to your site
+# repository, then uncomment and edit variable definitions.
 
 ###
 # Library configuration - used or required by the library, can also be
@@ -17,6 +13,9 @@
 #  Project: ProdEnv
 # The region for assets managed by this repository.
 #Region: us-east-1
+# Add the full path to examples/ReferenceArchitecture
+#SearchPath
+#- /path/to/examples/ReferenceArchitecture
 
 ## Library tags
 # ruby-awstools makes use of AWS Tags for tracking and resolving assets.
@@ -84,3 +83,7 @@ FullScope: Domain
 # If you use these defaults, you can just 'cfn create sdbcfg'
 #ConfigDB: ${=sdbcfg:ConfigDBDomain}
 #DefaultSDB: ConfigDB
+
+## Variables used by the ReferenceArchitecture
+# Email address for notifications
+#NotifyMail: me@example.com

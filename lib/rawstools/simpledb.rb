@@ -4,7 +4,7 @@ module RAWSTools
 
     def initialize(cloudmgr)
       @mgr = cloudmgr
-      @client = Aws::SimpleDB::Client.new( region: @mgr["Region"] )
+      @client = Aws::SimpleDB::Client.new( @mgr.client_opts )
     end
 
     def getdomain()

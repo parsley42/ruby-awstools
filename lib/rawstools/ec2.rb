@@ -5,7 +5,7 @@ module RAWSTools
 
     def initialize(cloudmgr)
       @mgr = cloudmgr
-      @client = Aws::EC2::Client.new( region: @mgr["Region"] )
+      @client = Aws::EC2::Client.new( @mgr.client_opts )
       @resource = Aws::EC2::Resource.new(client: @client)
     end
 

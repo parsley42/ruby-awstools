@@ -15,7 +15,7 @@ module RAWSTools
 
     def initialize(cloudmgr)
       @mgr = cloudmgr
-      @client = Aws::CloudFormation::Client.new( region: @mgr["Region"] )
+      @client = Aws::CloudFormation::Client.new( @mgr.client_opts )
       @resource = Aws::CloudFormation::Resource.new( client: @client )
       @outputs = {}
     end

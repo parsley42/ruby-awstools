@@ -82,7 +82,7 @@ module RAWSTools
   # Central library class that loads the configuration file and provides
   # utility classes for processing names and templates.
   class CloudManager
-    attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :rds, :route53, :tags, :params, :stack_family, :govcloud
+    attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :rds, :region, :route53, :tags, :params, :stack_family, :govcloud, :client_opts
 
     # Initiallize
     def initialize(logarray = nil, loglevel = nil)
@@ -134,7 +134,18 @@ module RAWSTools
         end
       end
 
-      @sts = Aws::STS::Client.new( region: @config["Region"] )
+      @client_opts = {}
+      if @config["Region"]
+        @region = @config["Region"]
+        @client_opts = { region: @region }
+      else
+        ec = Aws::EC2::Client.new()
+        # TODO:
+        # - Populate @region from describe_availability_zones
+        # - Populate @azs from new Regions struct in cloudconfig.yaml, or from describe
+      end
+
+      @sts = Aws::STS::Client.new( @client_opts )
       info = @sts.get_caller_identity()
       if info.account.to_s != @config["AccountID"].to_s
         raise "AccountID for credentials (#{info.account}) don't match configured AccountID (#{@config["AccountID"]}), the current site repository is configured for a different AWS account."
@@ -148,7 +159,7 @@ module RAWSTools
       @ec2 = Ec2.new(self)
       @cfn = CloudFormation.new(self)
       @sdb = SimpleDB.new(self)
-      @s3 = Aws::S3::Client.new( region: @config["Region"] )
+      @s3 = Aws::S3::Client.new( @client_opts )
       @s3res = Aws::S3::Resource.new( client: @s3 )
       @rds = RDS.new(self)
       @route53 = Route53.new(self)

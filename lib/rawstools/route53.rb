@@ -4,7 +4,7 @@ module RAWSTools
 
     def initialize(cloudmgr)
       @mgr = cloudmgr
-      @client = Aws::Route53::Client.new( region: @mgr["Region"] )
+      @client = Aws::Route53::Client.new( @mgr.client_opts )
     end
 
     # Wrapper that will retry on rate exceeded

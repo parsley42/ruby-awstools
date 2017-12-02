@@ -172,7 +172,7 @@ module RAWSTools
         end
       end
 
-      [ "Region", "AvailabilityZones", "DNSBase", "DNSDomain" ].each do |c|
+      [ "DNSBase", "DNSDomain" ].each do |c|
         if ! @config[c]
           raise "Missing required top-level configuration item in #{@filename}: #{c}"
         end

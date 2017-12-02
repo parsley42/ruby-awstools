@@ -44,10 +44,20 @@ FullScope: Domain
 # using $$ {listname}, they will be intelligently expanded depending
 # on the type of resource being defined, and may duplicate the resource or
 # add items to an array.
+# Required CIDR list for creating Bastion Security Group
 #CIDRLists:
-#  OfficeCIDRs:
-#  - 192.168.0.0/16
-#  - 10.20.30.0/24
+#  BastionCIDRs:
+#  - 1.1.0.0/16
+#  - 2.2.0.0/16
+# VPC CIDR, encompassing the entirety of the cloud network; this should
+# probably be a class-B network from somewhere in RFC 1918
+#MgmtCIDR: 10.42.0.0/22
+#MgmtDMZACIDR: 10.42.0.1/24
+#MgmtDMZBCIDR: 10.42.0.2/24
+#MgmtPVTACIDR: 10.42.0.3/24
+#MgmtPVTBCIDR: 10.42.0.4/24
+#RegionAZ1: us-east-1a
+#RegionAZ2: us-east-1b
 
 ## EC2 / RDS / Route53 config items. Library methods will automatically
 # create or remove DNS records when items are created / destroyed / started

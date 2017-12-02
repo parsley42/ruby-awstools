@@ -13,4 +13,4 @@ LoggingTemplate:
   File: logging.yaml
   Format: yaml
 Parameters:
-  pNotifyEmail: ${&NotifyMail|<REQUIRED>} # Raise exception if no override
+  pNotifyEmail: ${&NotifyMail} # All cloudconfig.yaml references are required

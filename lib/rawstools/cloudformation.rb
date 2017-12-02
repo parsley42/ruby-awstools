@@ -1,5 +1,7 @@
 module RAWSTools
 
+  Loc_Regex = /([\w]*)#([FL0-9?])([\w]*)/
+
   Tag_Resources = [ "AWS::EC2::InternetGateway", "AWS::EC2::NetworkAcl",
     "AWS::EC2::Instance", "AWS::EC2::Volume", "AWS::EC2::VPC",
     "AWS::S3::Bucket", "AWS::EC2::RouteTable", "AWS::RDS::DBInstance",
@@ -81,6 +83,9 @@ module RAWSTools
       outputs
     end
 
+    # Return the value of a CloudFormation output. When the output name
+    # contains /#[FL0-9?]/, return one of multiple matching outputs.
+    # (F)irst, (L)ast, Indexed(0-9) or Random(?)
     def getoutput(outputspec)
       terms = outputspec.split(':')
       child = nil
@@ -94,9 +99,31 @@ module RAWSTools
       else
         outputs = getoutputs(stackname)
       end
-      return outputs[output]
+      match = output.match(Loc_Regex)
+      if match
+        matching = []
+        re = Regexp.new("#{match[1]}.#{match[3]}")
+        loc = match[2]
+        outputs.keys.each do |key|
+          matching.push(key) if key.match(re)
+        end
+        matching.sort!()
+        case loc
+        when "F"
+          return outputs[matching[0]]
+        when "L"
+          return outputs[matching[-1]]
+        when "?"
+          return outputs[matching.sample()]
+        else
+          i=loc.to_i()
+          raise "Invalid location index #{i} for #{output}" unless matching[i]
+          return outputs[matching[i]]
+        end
+      else
+        return outputs[output]
+      end
     end
-
   end
 
   # Classes for processing yaml/json templates

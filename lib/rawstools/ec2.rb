@@ -330,25 +330,15 @@ module RAWSTools
           end
         end
 
-        if volume
-          vol_az = volume.availability_zone()
-          if availability_zone and availability_zone != vol_az
-            yield "#{@mgr.timestamp()} Overriding provided availability zone: #{availability_zone} with zone from volume: #{volname}: #{vol_az}"
-          end
-          az = vol_az[-1]
-          @mgr.setparam("az", az)
-          @mgr.setparam("availability_zone", vol_az)
-        else
-          az = @mgr["AvailabilityZones"].sample()
-          availability_zone = @mgr["Region"] + az.downcase()
-          yield "#{@mgr.timestamp()} Picked random availability zone: #{availability_zone}"
-          @mgr.setparam("az", az)
-          @mgr.setparam("availability_zone", availability_zone)
-        end
-
         @mgr.symbol_keys(template["api_template"])
 
         ispec = template["api_template"]
+        if volume
+          vol_az = volume.availability_zone()[-1]
+          if ispec[:subnet_id].match(/#[FL0-9a-j?]/)
+            ispec[:subnet_id] = ispec[:subnet_id].sub(/#[FL0-9a-j?]/,"##{vol_az}")
+          end
+        end
 
         if ispec[:block_device_mappings]
           ispec[:block_device_mappings].delete_if() do |dev|

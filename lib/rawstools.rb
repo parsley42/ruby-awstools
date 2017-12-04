@@ -140,9 +140,6 @@ module RAWSTools
         @client_opts = { region: @region }
       else
         ec = Aws::EC2::Client.new()
-        # TODO:
-        # - Populate @region from describe_availability_zones
-        # - Populate @azs from new Regions struct in cloudconfig.yaml, or from describe
       end
 
       @sts = Aws::STS::Client.new( @client_opts )
@@ -261,12 +258,6 @@ module RAWSTools
         when "cname"
           setparam("cfqdn", fqdn)
         end
-      end
-      az = getparam("az")
-      if az
-        setparam("az", az.downcase())
-        setparam("AZ", az.upcase())
-        setparam("availability_zone", @config["Region"] + az.downcase())
       end
     end
 

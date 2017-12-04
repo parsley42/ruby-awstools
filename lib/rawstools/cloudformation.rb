@@ -1,6 +1,6 @@
 module RAWSTools
 
-  Loc_Regex = /([\w]*)#([FL0-9?])([\w]*)/
+  Loc_Regex = /([\w]*)#([FL0-9a-j?])([\w]*)/
 
   Tag_Resources = [ "AWS::EC2::InternetGateway", "AWS::EC2::NetworkAcl",
     "AWS::EC2::Instance", "AWS::EC2::Volume", "AWS::EC2::VPC",
@@ -84,8 +84,8 @@ module RAWSTools
     end
 
     # Return the value of a CloudFormation output. When the output name
-    # contains /#[FL0-9?]/, return one of multiple matching outputs.
-    # (F)irst, (L)ast, Indexed(0-9) or Random(?)
+    # contains /#[FL0-9?a-j]/, return one of multiple matching outputs.
+    # (F)irst, (L)ast, Indexed(0-9), Random(?), or given availability zone.
     def getoutput(outputspec)
       terms = outputspec.split(':')
       child = nil
@@ -102,10 +102,14 @@ module RAWSTools
       match = output.match(Loc_Regex)
       if match
         matching = []
+        subnets = []
         re = Regexp.new("#{match[1]}.#{match[3]}")
         loc = match[2]
         outputs.keys.each do |key|
-          matching.push(key) if key.match(re)
+          if key.match(re)
+            matching.push(key)
+            subnets.push(outputs[key])
+          end
         end
         matching.sort!()
         case loc
@@ -115,6 +119,14 @@ module RAWSTools
           return outputs[matching[-1]]
         when "?"
           return outputs[matching.sample()]
+        when /[a-j]/
+          sn = @mgr.ec2.client.describe_subnets({ subnet_ids: subnets })
+          sn.subnets.each do |subnet|
+            if subnet.availability_zone.end_with?(loc)
+              return subnet.subnet_id
+            end
+          end
+          raise "No subnet found with availability zone #{loc} for #{output}"
         else
           i=loc.to_i()
           raise "Invalid location index #{i} for #{output}" unless matching[i]

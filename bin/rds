@@ -73,9 +73,6 @@ when "create"
   opts.on("-t", "--db-instance-type TYPE", "Use TYPE for db instance type instead of template default") do |type|
     params["type"] = type
   end
-  opts.on("-z", "--availability-zone ZONE", "Create db instance in the given zone (letter only)") do |zone|
-    params["az"] = zone
-  end
   opts.on("-T", "--tag KEYVAL", "Add tag where KEYVAL is of the form key=value") do |keyval|
     e = keyval.index("=")
     key = keyval[0..(e-1)]

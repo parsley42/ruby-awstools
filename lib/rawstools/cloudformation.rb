@@ -450,6 +450,7 @@ module RAWSTools
         if c && c["SourceStack"]
           # NOTE: the value for SourceStack Currently doesn't get expanded.
           sourcestack = c["SourceStack"]
+          cfg.log(:debug, "Set SourceStack to #{sourcestack}")
         end
       end
       FileUtils::mkdir_p("cfn/#{stack}/output")

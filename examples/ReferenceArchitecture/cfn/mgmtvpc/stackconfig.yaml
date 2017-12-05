@@ -6,6 +6,7 @@ MainTemplate:
   Format: yaml
   StackName: MgmtVPC
 Parameters:
+  # pEnvironment: Production
   pManagementCIDR: ${&MgmtCIDR}
   pManagementDMZSubnetACIDR: ${&MgmtDMZACIDR}
   pManagementDMZSubnetBCIDR: ${&MgmtDMZBCIDR}

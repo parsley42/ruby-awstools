@@ -1,0 +1,27 @@
+---
+# stackconfig.yaml - ruby-awstools configuration and parameters for a
+# Client VPC from the Reference Architecture. Multiple VPCs would
+# normally be created from this template, including e.g. Prod, Staging,
+# Test and Dev, or e.g. multiple separate Prod environments.
+
+# SourceStack: clientvpc # each spoke VPC should reference this source stack
+MainTemplate:
+  File: vpc-production.yaml
+  Format: yaml
+  # StackName: ProdVPC
+Parameters:
+  # pProductionVPCName: ProdVPC
+  # pEnvironment: Production
+  # pProductionCIDR: 10.10.0.0/16
+  # pDMZSubnetACIDR: 10.10.1.0/24
+  # pDMZSubnetBCIDR: 10.10.2.0/24
+  # pAppPrivateSubnetACIDR: 10.10.3.0/24
+  # pAppPrivateSubnetBCIDR: 10.10.4.0/24
+  # pDBPrivateSubnetACIDR: 10.10.5.0/24
+  # pDBPrivateSubnetBCIDR: 10.10.6.0/24
+  pRegionAZ1Name: ${&RegionAZ1}
+  pRegionAZ2Name: ${&RegionAZ2}
+  pManagementVPC: ${=MgmtVPC:rVPCManagement}
+  pManagementCIDR: ${&MgmtCIDR}
+  pManagementRouteTablePrivate: ${=MgmtVPC:rRouteTableMgmtPrivate}
+  pManagementRouteTableDMZ: ${=MgmtVPC:rRouteTableMgmtDMZ}

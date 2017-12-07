@@ -31,6 +31,8 @@ Metadata:
                 default: CIDR block of Management DMZ SubnetA
             pManagementDMZSubnetBCIDR:
                 default: CIDR block of Management DMZ SubnetB
+            pCreateNatGateway:
+                default: Whether or not to create a NAT Gateway for the DMZ
             pVPCTenancy:
                 default: Instance tenancy
             QuickStartS3URL:

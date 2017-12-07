@@ -15,10 +15,12 @@ Parameters:
   # pProductionCIDR: 10.10.0.0/16
   # pDMZSubnetACIDR: 10.10.1.0/24
   # pDMZSubnetBCIDR: 10.10.2.0/24
+  # pCreateAppSubnets: false # default
   # pAppPrivateSubnetACIDR: 10.10.3.0/24
   # pAppPrivateSubnetBCIDR: 10.10.4.0/24
   # pDBPrivateSubnetACIDR: 10.10.5.0/24
   # pDBPrivateSubnetBCIDR: 10.10.6.0/24
+  # pCreateNatGateway: false # default
   pRegionAZ1Name: ${&RegionAZ1}
   pRegionAZ2Name: ${&RegionAZ2}
   pManagementVPC: ${=MgmtVPC:rVPCManagement}

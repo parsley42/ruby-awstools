@@ -23,6 +23,8 @@ Metadata:
               - pManagementCIDR
               - pManagementRouteTablePrivate
               - pManagementRouteTableDMZ
+              - pCreateAppSubnets
+              - pCreateNatGateway
               - pVPCTenancy
           - Label:
                 default: AWS Quick Start Configuration
@@ -55,6 +57,10 @@ Metadata:
                 default: Management VPC Private Route Table
             pManagementRouteTableDMZ:
                 default: Management VPC DMZ Route Table
+            pCreateAppSubnets:
+                default: Whether or not to create App subnets
+            pCreateNatGateway:
+                default: Whether or not to create a NAT Gateway for private subnets
             pVPCTenancy:
                 default: Instance tenancy
             QuickStartS3URL:
@@ -75,6 +81,8 @@ Metadata:
         Description: Outputs ID of all deployed resources
 Conditions:
     cEnableFlowLogs: !Not [ !Equals [ !Ref pFlowLogGroup, '' ] ]
+    cCreateAppSubnets: !Equals [ true, !Ref pCreateAppSubnets ]
+    cCreateNatGateway: !Equals [ true, !Ref pCreateNatGateway ]
 Parameters:
     pRegionAZ1Name:
         Description: Availability Zone 1 Name in Region
@@ -129,6 +137,14 @@ Parameters:
     pManagementRouteTableDMZ:
         Description: Management VPC DMZ Route Table
         Type: String
+    pCreateAppSubnets:
+        Description: Whether or not to create App subnets
+        Type: String
+        Default: "false"
+    pCreateNatGateway:
+        Description: Whether or not to create a NAT Gateway for private subnets
+        Type: String
+        Default: "false"
     pVPCTenancy:
         Description: Instance tenancy behavior for this VPC
         Type: String
@@ -254,6 +270,7 @@ Resources:
               - Key: Environment
                 Value: !Ref pEnvironment
     rAppPrivateSubnetA:
+        Condition: cCreateAppSubnets
         Type: AWS::EC2::Subnet
         Properties:
             CidrBlock: !Ref pAppPrivateSubnetACIDR
@@ -265,6 +282,7 @@ Resources:
               - Key: Environment
                 Value: !Ref pEnvironment
     rAppPrivateSubnetB:
+        Condition: cCreateAppSubnets
         Type: AWS::EC2::Subnet
         Properties:
             CidrBlock: !Ref pAppPrivateSubnetBCIDR
@@ -320,6 +338,30 @@ Resources:
             Tags:
               - Key: Name
                 Value: Production DMZ Route
+    rEIPProdNatA:
+        Type: AWS::EC2::EIP
+        Condition: cCreateNatGateway
+        Properties:
+            Domain: vpc
+    rNATGatewaySubnetA:
+        Type: AWS::EC2::NatGateway
+        DependsOn: rIGWProd
+        Condition: cCreateNatGateway
+        Properties:
+            AllocationId: !GetAtt rEIPProdNatA.AllocationId
+            SubnetId: !Ref rDMZSubnetA
+    rEIPProdNatB:
+        Type: AWS::EC2::EIP
+        Condition: cCreateNatGateway
+        Properties:
+            Domain: vpc
+    rNATGatewaySubnetB:
+        Type: AWS::EC2::NatGateway
+        DependsOn: rIGWProd
+        Condition: cCreateNatGateway
+        Properties:
+            AllocationId: !GetAtt rEIPProdNatB.AllocationId
+            SubnetId: !Ref rDMZSubnetB
     rRouteProdIGW:
         Type: AWS::EC2::Route
         DependsOn: rGWAttachmentProdIGW
@@ -327,6 +369,20 @@ Resources:
             RouteTableId: !Ref rRouteTableMain
             GatewayId: !Ref rIGWProd
             DestinationCidrBlock: 0.0.0.0/0
+    rRouteProdPrivateNatGatewayA:
+        Type: AWS::EC2::Route
+        Condition: cCreateNatGateway
+        Properties:
+            DestinationCidrBlock: 0.0.0.0/0
+            RouteTableId: !Ref rRouteTableProdPrivateA
+            NatGatewayId: !Ref rNATGatewaySubnetA
+    rRouteProdPrivateNatGatewayB:
+        Type: AWS::EC2::Route
+        Condition: cCreateNatGateway
+        Properties:
+            DestinationCidrBlock: 0.0.0.0/0
+            RouteTableId: !Ref rRouteTableProdPrivateB
+            NatGatewayId: !Ref rNATGatewaySubnetB
     rRouteAssocProdDMZA:
         Type: AWS::EC2::SubnetRouteTableAssociation
         Properties:
@@ -338,11 +394,13 @@ Resources:
             RouteTableId: !Ref rRouteTableMain
             SubnetId: !Ref rDMZSubnetB
     rAppPrivateSubnetAssociationA:
+        Condition: cCreateAppSubnets
         Type: AWS::EC2::SubnetRouteTableAssociation
         Properties:
             RouteTableId: !Ref rRouteTableProdPrivateA
             SubnetId: !Ref rAppPrivateSubnetA
     rAppPrivateSubnetAssociationB:
+        Condition: cCreateAppSubnets
         Type: AWS::EC2::SubnetRouteTableAssociation
         Properties:
             RouteTableId: !Ref rRouteTableProdPrivateB
@@ -508,6 +566,7 @@ Resources:
             RuleNumber: 100
             NetworkAclId: !Ref rNACLPublic
     rNACLAssocAppPrivSubnetB:
+        Condition: cCreateAppSubnets
         Type: AWS::EC2::SubnetNetworkAclAssociation
         Properties:
             NetworkAclId: !Ref rNACLPrivate
@@ -523,6 +582,7 @@ Resources:
             NetworkAclId: !Ref rNACLPublic
             SubnetId: !Ref rDMZSubnetB
     rNACLAssocAppPrivSubnetA:
+        Condition: cCreateAppSubnets
         Type: AWS::EC2::SubnetNetworkAclAssociation
         Properties:
             NetworkAclId: !Ref rNACLPrivate
@@ -637,8 +697,10 @@ Outputs:
     rRouteTableProdPublic:
         Value: !Ref rRouteTableMain
     rAppPrivateSubnetA:
+        Condition: cCreateAppSubnets
         Value: !Ref rAppPrivateSubnetA
     rAppPrivateSubnetB:
+        Condition: cCreateAppSubnets
         Value: !Ref rAppPrivateSubnetB
     rDBPrivateSubnetA:
         Value: !Ref rDBPrivateSubnetA

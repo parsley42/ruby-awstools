@@ -7,6 +7,7 @@ MainTemplate:
   StackName: MgmtVPC
 Parameters:
   # pEnvironment: Production
+  # pCreateNatGateway: false # default, set true for a NAT Gateway
   pManagementCIDR: ${&MgmtCIDR}
   pManagementDMZSubnetACIDR: ${&MgmtDMZACIDR}
   pManagementDMZSubnetBCIDR: ${&MgmtDMZBCIDR}

@@ -90,6 +90,10 @@ Parameters:
         Description: CIDR block for Management AZ-1b subnet
         Type: String
         Default: 10.10.20.0/24
+    pCreateNatGateway:
+        Description: Whether to create a NAT Gateway
+        Type: String
+        Default: false
     pVPCTenancy:
         Description: Instance tenancy behavior for this VPC
         Type: String
@@ -132,6 +136,7 @@ Parameters:
         Type: String
 Conditions:
     cEnableFlowLogs: !Not [ !Equals [ !Ref pFlowLogGroup, '' ] ]
+    cCreateNatGateway: !Equals [ true, !Ref pCreateNatGateway ]
 Resources:
     rVPCManagement:
         Type: AWS::EC2::VPC
@@ -162,6 +167,13 @@ Resources:
                 Value: sg-web-access-ports-from-production
               - Key: Environment
                 Value: !Ref pEnvironment
+    rRouteMgmtNGW:
+        Condition: cCreateNatGateway
+        Type: AWS::EC2::Route
+        Properties:
+            RouteTableId: !Ref rRouteTableMgmtPrivate
+            DestinationCidrBlock: 0.0.0.0/0
+            NatGatewayId: !Ref rNATGateway
     rManagementDMZSubnetA:
         Type: AWS::EC2::Subnet
         Properties:
@@ -218,6 +230,18 @@ Resources:
             Tags:
               - Key: Name
                 Value: Management DMZ Route
+    rEIPProdNAT:
+        Type: AWS::EC2::EIP
+        Condition: cCreateNatGateway
+        Properties:
+            Domain: vpc
+    rNATGateway:
+        Type: AWS::EC2::NatGateway
+        Condition: cCreateNatGateway
+        DependsOn: rIGWManagement
+        Properties:
+            AllocationId: !GetAtt rEIPProdNAT.AllocationId
+            SubnetId: !Ref rManagementDMZSubnetA
     rGWAttachmentMgmtIGW:
         Type: AWS::EC2::VPCGatewayAttachment
         Properties:

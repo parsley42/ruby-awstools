@@ -33,8 +33,13 @@ module RAWSTools
       return stacklist
     end
 
+    # Recursively walk down CloudFormation stacks and return the outputs
+    # of the last stack in a parent(:child(:child)...) outputsspec.
+    # Results are cached in the @outputs[stackname] in-memory hash.
     def getoutputs(outputsspec)
-      parent, child = outputsspec.split(':')
+      components = outputsspec.split(':')
+      parent = components.shift()
+      childspec = components.join(':')
       prefix = @mgr.stack_family
       if prefix
         parent = prefix + parent unless parent.start_with?(prefix)
@@ -67,20 +72,30 @@ module RAWSTools
           end # begin / rescue
         end # while true
       end
-      if child
-        child = child + "Stack" unless child.end_with?("Stack")
-        if outputs[child]
-          childstack = outputs[child].split('/')[1]
-          if @outputs[childstack]
-            outputs = @outputs[childstack]
-          else
-            outputs = getoutputs(childstack)
-          end
-        else
-          {}
-        end
+      if childspec == ""
+        return outputs
       end
-      outputs
+      children = outputs.keys()
+      components = childspec.split(':')
+      parentspec = components.shift()
+      childspec = components.join(':')
+      stackoutput = nil
+      if children.include?("#{parentspec}")
+        stackoutput = parentspec
+      elsif children.include?("#{parentspec}Stack")
+        stackoutput = "#{parentspec}Stack"
+      elsif children.include?("#{parentspec}Template")
+        stackoutput = "#{parentspec}Template"
+      end
+      return {} unless stackoutput
+      # Example stack output:
+      # arn:aws:cloudformation:us-east-1:123456789012:stack/vpc-NetworkAclsStack-1S9R8KNR0ZGPM/1ac14690-cdce-11e6-9688-50fae97e0835
+      parent = outputs[stackoutput].split('/')[1]
+      if childspec == ""
+        return getoutputs(parent)
+      else
+        return getoutputs("#{parent}:#{childspec}")
+      end
     end
 
     # Return the value of a CloudFormation output. When the output name
@@ -88,17 +103,10 @@ module RAWSTools
     # (F)irst, (L)ast, Indexed(0-9), Random(?), or given availability zone.
     def getoutput(outputspec)
       terms = outputspec.split(':')
-      child = nil
-      if terms.length == 2
-        stackname, output = terms
-      else
-        stackname, child, output = terms
-      end
-      if child
-        outputs = getoutputs("#{stackname}:#{child}")
-      else
-        outputs = getoutputs(stackname)
-      end
+      raise "Invalid output specifier, no separators in #{outputspec}" unless terms.count > 1
+      output = terms.pop()
+      stack = terms.join(':')
+      outputs = getoutputs(stack)
       match = output.match(Loc_Regex)
       if match
         matching = []

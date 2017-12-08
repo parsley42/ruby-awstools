@@ -150,25 +150,15 @@ Resources:
             Tags:
               - Key: Name
                 Value: !Ref pManagementVPCName
-    rSecurityGroupVpcNat:
-        Type: AWS::EC2::SecurityGroup
+    SecurityGroupsTemplate:
+        Type: AWS::CloudFormation::Stack
+        DependsOn:
+        - rVPCManagement
         Properties:
-            GroupDescription: Allow NAT from Management VPC
-            VpcId: !Ref rVPCManagement
-            SecurityGroupIngress:
-              - IpProtocol: tcp
-                FromPort: 80
-                ToPort: 80
-                CidrIp: !Ref pManagementCIDR
-              - IpProtocol: tcp
-                FromPort: 443
-                ToPort: 443
-                CidrIp: !Ref pManagementCIDR
-            Tags:
-              - Key: Name
-                Value: sg-web-access-ports-from-production
-              - Key: Environment
-                Value: !Ref pEnvironment
+            Parameters:
+              pVpcId: !Ref rVPCManagement
+              pManagementCIDR: !Ref pManagementCIDR
+              pEnvironment: !Ref pEnvironment
     rRouteMgmtNGW:
         Condition: cCreateNatGateway
         Type: AWS::EC2::Route
@@ -277,41 +267,6 @@ Resources:
         Properties:
             RouteTableId: !Ref rRouteTableMgmtPrivate
             SubnetId: !Ref rManagementPrivateSubnetB
-    rSecurityGroupSSHFromMgmt:
-        Type: AWS::EC2::SecurityGroup
-        Properties:
-            GroupDescription: Enable SSH access via port 22
-            VpcId: !Ref rVPCManagement
-            SecurityGroupIngress:
-              - IpProtocol: tcp
-                FromPort: 22
-                ToPort: 22
-                CidrIp: !Ref pManagementCIDR
-            Tags:
-              - Key: Name
-                Value: sg-ssh-access-from-management
-              - Key: Environment
-                Value: !Ref pEnvironment
-    rSecurityGroupBastion:
-        Type: AWS::EC2::SecurityGroup
-        Properties:
-            GroupDescription: SG for Bastion Instances
-            VpcId: !Ref rVPCManagement
-            SecurityGroupIngress:
-              - IpProtocol: tcp
-                FromPort: 22
-                ToPort: 22
-                CidrIp: $$BastionCIDRs # Note: raws-specific syntax
-            SecurityGroupEgress:
-              - IpProtocol: tcp
-                FromPort: 1
-                ToPort: 65535
-                CidrIp: 0.0.0.0/0
-            Tags:
-              - Key: Name
-                Value: sg-ssh-access-from-bastion
-              - Key: Environment
-                Value: !Ref pEnvironment
     rManagementVpcFlowLogsServiceRole:
         Condition: cEnableFlowLogs
         Type: AWS::IAM::Role
@@ -367,9 +322,3 @@ Outputs:
         Value: !Ref rRouteTableMgmtPrivate
     rRouteTableMgmtDMZ:
         Value: !Ref rRouteTableMgmtDMZ
-    rSecurityGroupVpcNat:
-        Value: !Ref rSecurityGroupVpcNat
-    rSecurityGroupBastion:
-        Value: !Ref rSecurityGroupBastion
-    rSecurityGroupSSHFromMgmt:
-        Value: !Ref rSecurityGroupSSHFromMgmt

@@ -1,0 +1,92 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'Creates a standard set of security groups for the VPC'
+Parameters:
+    pVpcId:
+        Description: Id of the VPC where security groups will be created
+        Type: String
+    pManagementCIDR:
+        Description: CIDR for the Managment VPC
+        Type: String
+    pEnvironment:
+        Description: Environment (development, test, production, etc.)
+        Type: String
+Resources:
+    rSecurityGroupVpcNat:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Allow NAT from Management VPC
+            VpcId: !Ref pVpcId
+            SecurityGroupIngress:
+              - IpProtocol: tcp
+                FromPort: 80
+                ToPort: 80
+                CidrIp: !Ref pManagementCIDR
+              - IpProtocol: tcp
+                FromPort: 443
+                ToPort: 443
+                CidrIp: !Ref pManagementCIDR
+            Tags:
+              - Key: Name
+                Value: sg-web-access-ports-from-production
+              - Key: Environment
+                Value: !Ref pEnvironment
+    rSecurityGroupSSHFromMgmt:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Enable SSH access via port 22
+            VpcId: !Ref pVpcId
+            SecurityGroupIngress:
+              - IpProtocol: tcp
+                FromPort: 22
+                ToPort: 22
+                CidrIp: !Ref pManagementCIDR
+            Tags:
+              - Key: Name
+                Value: sg-ssh-access-from-management
+              - Key: Environment
+                Value: !Ref pEnvironment
+    rSecurityGroupBastion:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: SG for Bastion Instances
+            VpcId: !Ref pVpcId
+            SecurityGroupIngress:
+              - IpProtocol: tcp
+                FromPort: 22
+                ToPort: 22
+                CidrIp: $$BastionCIDRs # Note: raws-specific syntax
+            SecurityGroupEgress:
+              - IpProtocol: tcp
+                FromPort: 1
+                ToPort: 65535
+                CidrIp: 0.0.0.0/0
+            Tags:
+              - Key: Name
+                Value: sg-ssh-access-from-bastion
+              - Key: Environment
+                Value: !Ref pEnvironment
+    rSecurityGroupGlobalSSH:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Enable SSH access via port 22 from anywhere
+            VpcId: !Ref pVpcId
+            SecurityGroupIngress:
+              - IpProtocol: tcp
+                FromPort: 22
+                ToPort: 22
+                CidrIp: 0.0.0.0/0
+            Tags:
+              - Key: Name
+                Value: sg-ssh-access-from-anywhere
+              - Key: Environment
+                Value: !Ref pEnvironment
+Outputs:
+    rSecurityGroupVpcNat:
+        Value: !Ref rSecurityGroupVpcNat
+    rSecurityGroupBastion:
+        Value: !Ref rSecurityGroupBastion
+    rSecurityGroupSSHFromMgmt:
+        Value: !Ref rSecurityGroupSSHFromMgmt
+    rSecurityGroupGlobalSSH:
+        Value: !Ref rSecurityGroupGlobalSSH

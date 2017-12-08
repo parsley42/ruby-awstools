@@ -5,6 +5,9 @@ MainTemplate:
   File: vpc-management.yaml
   Format: yaml
   StackName: MgmtVPC
+SecurityGroupsTemplate:
+  File: securitygroups.yaml
+  Format: yaml
 Parameters:
   # pEnvironment: Production
   # pCreateNatGateway: false # default, set true for a NAT Gateway

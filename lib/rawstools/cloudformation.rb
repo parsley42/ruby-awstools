@@ -261,8 +261,8 @@ module RAWSTools
         @raw = @raw.gsub("<LB>", '[')
         @raw = @raw.gsub("<RB>", ']')
         # Restore the braces for a flow mapping
-        @raw = @raw.gsub('"<LBC>', '{')
-        @raw = @raw.gsub('<RBC>"', '}')
+        @raw = @raw.gsub(/"?<LBC>/, '{')
+        @raw = @raw.gsub(/<RBC>"?/, '}')
         @raw = @raw.gsub("<CMA>", ',')
         @raw = @raw.gsub("<CLN>", ':')
         write_raw("-6-brack")

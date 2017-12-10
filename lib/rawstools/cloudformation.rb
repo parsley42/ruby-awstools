@@ -120,6 +120,9 @@ module RAWSTools
       resources = getresources(stack)
       match = resource.match(Loc_Regex)
       if match
+        if res_type
+          raise "Location specifier given for non-subnet resource type: #{res_type}" unless res_type == "AWS::EC2::Subnet"
+        end
         matching = []
         subnets = []
         re = Regexp.new("#{match[1]}.#{match[3]}")
@@ -156,7 +159,7 @@ module RAWSTools
       else
         value, type = resources[resource].split('=')
         if res_type
-          raise "Resource type mismatch for #{resourcesspec}, type for #{resource} is #{type}" unless type == res_type
+          raise "Resource type mismatch for #{resourcespec}, type for #{resource} is #{type}" unless type == res_type
         end
         if property
           return @mgr.get_resource_property(type, value, property)

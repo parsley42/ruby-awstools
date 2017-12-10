@@ -17,7 +17,7 @@
 #SearchPath
 #- /path/to/examples/ReferenceArchitecture
 
-## Library tags
+## Library tags - TODO: Implement
 # ruby-awstools makes use of AWS Tags for tracking and resolving assets.
 # To avoid conflicts, it's possible to set what tag names are used and
 # managed by the library. Note that the contents of these tags are
@@ -91,7 +91,7 @@ FullScope: Domain
 # Ephemeral values like AMI IDs can be stored in a SimpleDB domain and
 # retrieved in templates with the ${%...} syntax.
 # If you use these defaults, you can just 'cfn create sdbcfg'
-#ConfigDB: ${=sdbcfg:ConfigDBDomain}
+#ConfigDB: ${=ConfigDB:ConfigDBDomain}
 #DefaultSDB: ConfigDB
 
 ## Variables used by the ReferenceArchitecture

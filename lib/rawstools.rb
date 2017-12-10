@@ -4,6 +4,7 @@ require 'json'
 require 'fileutils'
 require 'pathname'
 require 'aws-sdk-ec2'
+require 'aws-sdk-iam'
 require 'aws-sdk-rds'
 require 'aws-sdk-route53'
 require 'aws-sdk-s3'
@@ -155,6 +156,8 @@ module RAWSTools
       @subdom = nil
       @ec2 = Ec2.new(self)
       @cfn = CloudFormation.new(self)
+      @iam = Aws::IAM::Client.new( @client_opts )
+      @iamres = Aws::IAM::Resource.new( client: @iam )
       @sdb = SimpleDB.new(self)
       @s3 = Aws::S3::Client.new( @client_opts )
       @s3res = Aws::S3::Resource.new( client: @s3 )
@@ -508,6 +511,21 @@ module RAWSTools
         end
       end # case item.class
     end
+
+    # Return the value of a resource property. NOTE: very incomplete; additional
+    # types and properties to be added as needed.
+    def get_resource_property(restype, resname, property)
+      case restype
+      when "AWS::IAM::InstanceProfile"
+        res = @iamres.instance_profile(resname)
+        case property
+        when "arn"
+          return res.arn
+        end
+      end
+      raise "Unsupported resource type / property: #{restype} / #{property}"
+    end
+
   end # Class CloudManager
 
 end # Module RAWS

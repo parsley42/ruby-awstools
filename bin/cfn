@@ -15,8 +15,8 @@ opts.banner = <<-EOF
 Usage: cfn <command> (options) <stack|templatedir> - manage a CloudFormation stack
  Where <command> is one of:
   list - list all stacks for the account
-  outputs <stackname>(:childstack) - list all the outputs of a given stack
-  output <stackname>(:childstack):<outputname> - get a specific output
+  resources <stackname>(:childstack) - list all the resources of a given stack
+  resource <stackname>(:childstack...):<resourcename>(=resourcetype) - get a specific resource
   create <stack> - create a new stack
   delete <stack> - delete a stack (warning: without confirmation, no resources retained)
   update <stack> - update a stack
@@ -50,7 +50,7 @@ end
 
 begin
 
-commands = [ "create", "delete", "list", "outputs", "output", "update", "validate" ]
+commands = [ "create", "delete", "list", "resources", "resource", "update", "validate" ]
 command = ARGV.shift()
 raise UsageException.new("Missing <command>") unless command
 raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
@@ -73,23 +73,23 @@ when "list"
     puts "No stacks found"
   end
   exit 0
-when "outputs"
+when "resources"
   stack = ARGV.shift()
   raise UsageException.new("Missing required argument") unless stack
-  outputs = cfg.cfn.getoutputs(stack)
-  if outputs.length() > 0
-    puts "Outputs:"
-    outputs.each_key() do |key|
-      puts "#{key} => #{outputs[key]}"
+  resources = cfg.cfn.getresources(stack)
+  if resources.length() > 0
+    puts "Resources:"
+    resources.each_key() do |key|
+      puts "#{key} => #{resources[key]}"
     end
   else
-    puts "No outputs found for #{stack}"
+    puts "No resources found for #{stack}"
   end
   exit 0
-when "output"
-  output = ARGV.shift()
-  raise UsageException.new("Missing required argument") unless output
-  value = cfg.cfn.getoutput(output)
+when "resource"
+  resource = ARGV.shift()
+  raise UsageException.new("Missing required argument") unless resource
+  value = cfg.cfn.getresource(resource)
   if value
     puts value
   else

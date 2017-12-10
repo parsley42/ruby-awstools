@@ -1,6 +1,7 @@
 module RAWSTools
 
   Loc_Regex = /([\w]*)#([FL0-9a-j?])([\w]*)/
+  Split_Regex = /(?<!:):{1}(?!:)/
 
   Tag_Resources = [ "AWS::EC2::InternetGateway", "AWS::EC2::NetworkAcl",
     "AWS::EC2::Instance", "AWS::EC2::Volume", "AWS::EC2::VPC",
@@ -19,7 +20,7 @@ module RAWSTools
       @mgr = cloudmgr
       @client = Aws::CloudFormation::Client.new( @mgr.client_opts )
       @resource = Aws::CloudFormation::Resource.new( client: @client )
-      @outputs = {}
+      @resources = {}
     end
 
     def list_stacks()
@@ -33,29 +34,29 @@ module RAWSTools
       return stacklist
     end
 
-    # Recursively walk down CloudFormation stacks and return the outputs
-    # of the last stack in a parent(:child(:child)...) outputsspec.
-    # Results are cached in the @outputs[stackname] in-memory hash.
-    def getoutputs(outputsspec)
-      components = outputsspec.split(':')
+    # Recursively walk down CloudFormation stacks and return the resources
+    # of the last stack in a parent(:child(:child)...) resourcesspec.
+    # Results are cached in the @resources[stackname] in-memory hash.
+    def getresources(resourcesspec)
+      components = resourcesspec.split(Split_Regex)
       parent = components.shift()
       childspec = components.join(':')
       prefix = @mgr.stack_family
       if prefix
         parent = prefix + parent unless parent.start_with?(prefix)
       end
-      if @outputs[parent]
-        outputs = @outputs[parent]
+      if @resources[parent]
+        resources = @resources[parent]
       else
         stack = @resource.stack(parent)
-        outputs = {}
-        @outputs[parent] = outputs
+        resources = {}
+        @resources[parent] = resources
         tries = 0
         while true
           begin
             if stack.exists?()
-              stack.outputs().each() do |output|
-                outputs[output.output_key] = output.output_value
+              stack.resource_summaries().each() do |r|
+                resources[r.data.logical_resource_id] = "#{r.data.physical_resource_id}=#{r.data.resource_type}"
               end
             end
             break
@@ -73,60 +74,72 @@ module RAWSTools
         end # while true
       end
       if childspec == ""
-        return outputs
+        return resources
       end
-      children = outputs.keys()
-      components = childspec.split(':')
+      children = resources.keys()
+      components = childspec.split(Split_Regex)
       parentspec = components.shift()
       childspec = components.join(':')
-      stackoutput = nil
+      stackresource = nil
       if children.include?("#{parentspec}")
-        stackoutput = parentspec
+        stackresource = parentspec
       elsif children.include?("#{parentspec}Stack")
-        stackoutput = "#{parentspec}Stack"
+        stackresource = "#{parentspec}Stack"
       elsif children.include?("#{parentspec}Template")
-        stackoutput = "#{parentspec}Template"
+        stackresource = "#{parentspec}Template"
       end
-      return {} unless stackoutput
-      # Example stack output:
+      return {} unless stackresource
+      # Example stack resource:
       # arn:aws:cloudformation:us-east-1:123456789012:stack/vpc-NetworkAclsStack-1S9R8KNR0ZGPM/1ac14690-cdce-11e6-9688-50fae97e0835
-      parent = outputs[stackoutput].split('/')[1]
+      value, type = resources[stackresource].split('=')
+      raise "Wrong type for #{stackresource} in #{resourcespec}, required: AWS::CloudFormation::Stack, actual: #{type}" unless type == "AWS::CloudFormation::Stack"
+      parent = value.split('/')[1]
       if childspec == ""
-        return getoutputs(parent)
+        return getresources(parent)
       else
-        return getoutputs("#{parent}:#{childspec}")
+        return getresources("#{parent}:#{childspec}")
       end
     end
 
-    # Return the value of a CloudFormation output. When the output name
-    # contains /#[FL0-9?a-j]/, return one of multiple matching outputs.
+    # Return the value of a CloudFormation resource. When the resource name
+    # contains /#[FL0-9?a-j]/, return one of multiple matching resources.
     # (F)irst, (L)ast, Indexed(0-9), Random(?), or given availability zone.
-    def getoutput(outputspec)
-      terms = outputspec.split(':')
-      raise "Invalid output specifier, no separators in #{outputspec}" unless terms.count > 1
-      output = terms.pop()
+    def getresource(resourcespec)
+      terms = resourcespec.split(Split_Regex)
+      raise "Invalid resource specifier, no separators in #{resourcespec}" unless terms.count > 1
+      resource = terms.pop()
+      res_type = nil
+      property = nil
+      if resource =~ /=/
+        resource, res_type = resource.split('=')
+      end
+      if resource =~ /\./
+        resource, property = resource.split('.')
+      end
       stack = terms.join(':')
-      outputs = getoutputs(stack)
-      match = output.match(Loc_Regex)
+      resources = getresources(stack)
+      match = resource.match(Loc_Regex)
       if match
         matching = []
         subnets = []
         re = Regexp.new("#{match[1]}.#{match[3]}")
         loc = match[2]
-        outputs.keys.each do |key|
+        resources.keys.each do |key|
           if key.match(re)
+            resource, type = resources[key].split('=')
+            next unless type == "AWS::EC2::Subnet"
             matching.push(key)
-            subnets.push(outputs[key])
+            subnets.push(resource)
           end
         end
         matching.sort!()
         case loc
         when "F"
-          return outputs[matching[0]]
+          return resources[matching[0]].split('=')[0]
         when "L"
-          return outputs[matching[-1]]
+          return resources[matching[-1]].split('=')[0]
         when "?"
-          return outputs[matching.sample()]
+          return resources[matching.sample()].split('=')[0]
         when /[a-j]/
           sn = @mgr.ec2.client.describe_subnets({ subnet_ids: subnets })
           sn.subnets.each do |subnet|
@@ -134,14 +147,21 @@ module RAWSTools
               return subnet.subnet_id
             end
           end
-          raise "No subnet found with availability zone #{loc} for #{output}"
+          raise "No subnet found with availability zone #{loc} for #{resource}"
         else
           i=loc.to_i()
-          raise "Invalid location index #{i} for #{output}" unless matching[i]
-          return outputs[matching[i]]
+          raise "Invalid location index #{i} for #{resource}" unless matching[i]
+          return resources[matching[i]].split('=')[0]
         end
       else
-        return outputs[output]
+        value, type = resources[resource].split('=')
+        if res_type
+          raise "Resource type mismatch for #{resourcesspec}, type for #{resource} is #{type}" unless type == res_type
+        end
+        if property
+          return @mgr.get_resource_property(type, value, property)
+        end
+        return value
       end
     end
   end
@@ -149,7 +169,7 @@ module RAWSTools
   # Classes for processing yaml/json templates
 
   class CFTemplate
-    attr_reader :name, :outputs, :s3url, :noupload
+    attr_reader :name, :resources, :s3url, :noupload
 
     def initialize(cloudcfg, stack, sourcestack, stack_config, cfg_name)
       @cloudcfg = cloudcfg
@@ -374,7 +394,7 @@ module RAWSTools
             next
           end
           # Every child needs an output to enable parent:child:output lookups
-          @outputs[reskey] = gen_output("#{reskey} child stack", reskey)
+          @outputs[reskey] = gen_output("#{reskey} child stack", reskey) if @autoutputs
           child = CFTemplate.new(@cloudcfg, @stack, @sourcestack, @stackconfig, reskey)
           @children.push(child)
           @res[reskey]["Properties"]["TemplateURL"] = child.s3url

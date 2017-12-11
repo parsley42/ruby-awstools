@@ -32,7 +32,7 @@ module RAWSTools
   end
 
   Valid_Classes = [ "String", "Fixnum", "Integer", "TrueClass", "FalseClass" ]
-  Expand_Regex = /\${([@=%&][:|.\-\/\w<>]+)}/
+  Expand_Regex = /\${([@=%&][:|.\-\/\w<>=#]+)}/
   Log_Levels = [:trace, :debug, :info, :warn, :error]
 
   # Class to convert from configuration file format to AWS expected format

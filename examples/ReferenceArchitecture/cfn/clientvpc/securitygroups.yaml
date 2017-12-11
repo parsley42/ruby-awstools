@@ -1,0 +1,90 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'Creates a standard set of security groups for the VPC'
+Parameters:
+    pVpcId:
+        Description: Id of the VPC where security groups will be created
+        Type: String
+    pProductionCIDR:
+        Description: CIDR for the VPC
+        Type: String
+    pManagementCIDR:
+        Description: CIDR for the Managment VPC
+        Type: String
+    pEnvironment:
+        Description: Environment (development, test, production, etc.)
+        Type: String
+Resources:
+    rSecurityGroupVpcNat:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Allow NAT from production
+            VpcId: !Ref rVPCProduction
+            SecurityGroupIngress:
+              - IpProtocol: tcp
+                FromPort: 80
+                ToPort: 80
+                CidrIp: !Ref pProductionCIDR
+              - IpProtocol: tcp
+                FromPort: 443
+                ToPort: 443
+                CidrIp: !Ref pProductionCIDR
+            Tags:
+              - Key: Name
+                Value: sg-web-access-ports-from-production
+              - Key: Environment
+                Value: !Ref pEnvironment
+    rSecurityGroupMgmtSSH:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Allow SSH from Management Network
+            VpcId: !Ref rVPCProduction
+            SecurityGroupIngress:
+              - IpProtocol: tcp
+                FromPort: 22
+                ToPort: 22
+                CidrIp: $$BastionCIDRs # Note: raws-specific syntax
+            Tags:
+              - Key: Name
+                Value: sg-ssh-access-from-management-vpc
+              - Key: Environment
+                Value: !Ref pEnvironment
+    rSecurityGroupSSHFromProd:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Enable SSH access via port 22
+            VpcId: !Ref rVPCProduction
+            SecurityGroupIngress:
+              - IpProtocol: tcp
+                FromPort: 22
+                ToPort: 22
+                CidrIp: !Ref pProductionCIDR
+            Tags:
+              - Key: Name
+                Value: sg-enable-ssh-access
+              - Key: Environment
+                Value: !Ref pEnvironment
+    rSecurityGroupGlobalSSH:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Enable SSH access via port 22 from anywhere
+            VpcId: !Ref pVpcId
+            SecurityGroupIngress:
+              - IpProtocol: tcp
+                FromPort: 22
+                ToPort: 22
+                CidrIp: 0.0.0.0/0
+            Tags:
+              - Key: Name
+                Value: sg-ssh-access-from-anywhere
+              - Key: Environment
+                Value: !Ref pEnvironment
+Outputs:
+    rSecurityGroupVpcNat:
+        Value: !Ref rSecurityGroupVpcNat
+    rSecurityMgmtSSH:
+        Value: !Ref rSecurityMgmtSSH
+    rSecurityGroupSSHFromProd:
+        Value: !Ref rSecurityGroupSSHFromProd
+    rSecurityGroupGlobalSSH:
+        Value: !Ref rSecurityGroupGlobalSSH

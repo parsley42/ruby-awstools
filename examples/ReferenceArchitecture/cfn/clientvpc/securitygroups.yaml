@@ -19,7 +19,7 @@ Resources:
         Type: AWS::EC2::SecurityGroup
         Properties:
             GroupDescription: Allow NAT from production
-            VpcId: !Ref rVPCProduction
+            VpcId: !Ref pVpcId
             SecurityGroupIngress:
               - IpProtocol: tcp
                 FromPort: 80
@@ -38,7 +38,7 @@ Resources:
         Type: AWS::EC2::SecurityGroup
         Properties:
             GroupDescription: Allow SSH from Management Network
-            VpcId: !Ref rVPCProduction
+            VpcId: !Ref pVpcId
             SecurityGroupIngress:
               - IpProtocol: tcp
                 FromPort: 22
@@ -53,7 +53,7 @@ Resources:
         Type: AWS::EC2::SecurityGroup
         Properties:
             GroupDescription: Enable SSH access via port 22
-            VpcId: !Ref rVPCProduction
+            VpcId: !Ref pVpcId
             SecurityGroupIngress:
               - IpProtocol: tcp
                 FromPort: 22
@@ -82,8 +82,8 @@ Resources:
 Outputs:
     rSecurityGroupVpcNat:
         Value: !Ref rSecurityGroupVpcNat
-    rSecurityMgmtSSH:
-        Value: !Ref rSecurityMgmtSSH
+    rSecurityGroupMgmtSSH:
+        Value: !Ref rSecurityGroupMgmtSSH
     rSecurityGroupSSHFromProd:
         Value: !Ref rSecurityGroupSSHFromProd
     rSecurityGroupGlobalSSH:

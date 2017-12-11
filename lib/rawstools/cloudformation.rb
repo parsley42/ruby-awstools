@@ -157,6 +157,7 @@ module RAWSTools
           return resources[matching[i]].split('=')[0]
         end
       else
+        raise "CloudFormation resource not found: #{resourcespec}" unless resources[resource]
         value, type = resources[resource].split('=')
         if res_type
           raise "Resource type mismatch for #{resourcespec}, type for #{resource} is #{type}" unless type == res_type

@@ -9,6 +9,9 @@ MainTemplate:
   File: vpc-production.yaml
   Format: yaml
   # StackName: ProdVPC
+SecurityGroupsTemplate:
+  File: securitygroups.yaml
+  Format: yaml
 Parameters:
   # pProductionVPCName: ProdVPC
   # pEnvironment: Production

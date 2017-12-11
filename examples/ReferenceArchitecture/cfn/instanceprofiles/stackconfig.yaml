@@ -1,0 +1,7 @@
+---
+MainTemplate:
+  File: main.yaml
+  Format: yaml
+  StackName: InstanceProfiles
+Parameters:
+  ConfigDB: ${=ConfigDB:ConfigDBDomain}

@@ -1,0 +1,110 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Instance Profiles for launching instances with roles for logging and
+  managing other instances.
+Parameters:
+  ConfigDB:
+    Type: String
+
+Resources:
+  InstanceManager:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: "/"
+      Roles:
+        - Ref: "InstanceManagerRole"
+
+  LoggingInstance:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: "/"
+      Roles:
+        - Ref: "LoggingInstanceRole"
+
+  InstanceManagerRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: InstanceManagerRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+
+  LoggingInstanceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: LoggingInstanceRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+
+  InstanceLoggingPolicy:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyName: InstanceLoggingPolicy
+      Roles:
+      - Ref: InstanceManagerRole
+      - Ref: LoggingInstanceRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: "Allow"
+          Action:
+          - 'logs:CreateLogGroup'
+          - 'logs:CreateLogStream'
+          - 'logs:PutLogEvents'
+          - 'logs:DescribeLogStreams'
+          Resource: 'arn:aws:logs:*:*:log-group:RAWS:log-stream:*'
+        - Effect: "Allow"
+          Action:
+          - 'cloudwatch:PutMetricData'
+          Resource: '*'
+
+  InstanceManagerPolicy:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyName: InstanceManagerPolicy
+      Roles:
+      - Ref: InstanceManagerRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: "Allow"
+          Action: "ec2:*"
+          Resource: "*"
+        - Effect: "Allow"
+          Action: "rds:*"
+          Resource: "*"
+        - Effect: "Allow"
+          Action: "route53:*"
+          Resource: "*"
+        - Effect: "Allow"
+          Action:
+          - 'cloudformation:Describe*'
+          - 'cloudformation:Get*'
+          - 'cloudformation:List*'
+          Resource: "*"
+        - Effect: "Allow"
+          Action: "sdb:*"
+          Resource:
+          # NOTE: the next line uses CloudFormation native substitution
+          - "Fn::Sub": "arn:aws:sdb:*:*:domain/${ConfigDB}"
+        - Effect: "Allow"
+          Action: "iam:PassRole"
+          Resource:
+          - arn:aws:iam::*:role/*LoggingInstanceRole
+          - {"Fn::GetAtt" : ["InstanceManagerRole", "Arn"] }

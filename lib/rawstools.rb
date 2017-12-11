@@ -466,7 +466,7 @@ module RAWSTools
     # types, and evaluate and expand all the string values in a template, called
     # by library methods just prior to using a template in an API call.
     def resolve_vars(parent, item)
-      log(:trace, "Resolving values for key: #{item}")
+      log(:trace, "Resolving values for #{parent} key: #{item}")
       case parent[item].class().to_s()
       when "Array"
         parent[item].each_index() do |index|

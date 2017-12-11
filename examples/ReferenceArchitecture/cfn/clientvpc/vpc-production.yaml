@@ -26,12 +26,6 @@ Metadata:
               - pCreateAppSubnets
               - pCreateNatGateway
               - pVPCTenancy
-          - Label:
-                default: AWS Quick Start Configuration
-            Parameters:
-              - QuickStartS3URL
-              - QSS3BucketName
-              - QSS3KeyPrefix
         ParameterLabels:
             pProductionVPCName:
                 default: Name of Production VPC
@@ -63,12 +57,6 @@ Metadata:
                 default: Whether or not to create a NAT Gateway for private subnets
             pVPCTenancy:
                 default: Instance tenancy
-            QuickStartS3URL:
-                default: Quick Start URL
-            QSS3BucketName:
-                default: Quick Start S3 Bucket Name
-            QSS3KeyPrefix:
-                default: Quick Start S3 Key Prefix
     Stack:
         Value: 2
     VersionDate:
@@ -198,55 +186,16 @@ Resources:
                 Value: !Ref pProductionVPCName
               - Key: Environment
                 Value: !Ref pEnvironment
-    rSecurityGroupVpcNat:
-        Type: AWS::EC2::SecurityGroup
+    SecurityGroupsTemplate:
+        Type: AWS::CloudFormation::Stack
+        DependsOn:
+        - rVPCProduction
         Properties:
-            GroupDescription: Allow NAT from production
-            VpcId: !Ref rVPCProduction
-            SecurityGroupIngress:
-              - IpProtocol: tcp
-                FromPort: 80
-                ToPort: 80
-                CidrIp: !Ref pProductionCIDR
-              - IpProtocol: tcp
-                FromPort: 443
-                ToPort: 443
-                CidrIp: !Ref pProductionCIDR
-            Tags:
-              - Key: Name
-                Value: sg-web-access-ports-from-production
-              - Key: Environment
-                Value: !Ref pEnvironment
-    rSecurityGroupMgmtBastion:
-        Type: AWS::EC2::SecurityGroup
-        Properties:
-            GroupDescription: Allow Bastion from Management Network
-            VpcId: !Ref rVPCProduction
-            SecurityGroupIngress:
-              - IpProtocol: tcp
-                FromPort: 22
-                ToPort: 22
-                CidrIp: $$BastionCIDRs # Note: raws-specific syntax
-            Tags:
-              - Key: Name
-                Value: sg-ssh-access-from-management-vpc
-              - Key: Environment
-                Value: !Ref pEnvironment
-    rSecurityGroupSSHFromProd:
-        Type: AWS::EC2::SecurityGroup
-        Properties:
-            GroupDescription: Enable SSH access via port 22
-            VpcId: !Ref rVPCProduction
-            SecurityGroupIngress:
-              - IpProtocol: tcp
-                FromPort: 22
-                ToPort: 22
-                CidrIp: !Ref pProductionCIDR
-            Tags:
-              - Key: Name
-                Value: sg-enable-ssh-access
-              - Key: Environment
-                Value: !Ref pEnvironment
+            Parameters:
+              pVpcId: !Ref rVPCProduction
+              pProductionCIDR: !Ref pProductionCIDR
+              pManagementCIDR: !Ref pManagementCIDR
+              pEnvironment: !Ref pEnvironment
     rDMZSubnetA:
         Type: AWS::EC2::Subnet
         Properties:
@@ -710,7 +659,3 @@ Outputs:
         Value: !Ref rNACLPrivate
     rNACLPublic:
         Value: !Ref rNACLPublic
-    rSecurityGroupSSHFromProd:
-        Value: !Ref rSecurityGroupSSHFromProd
-    rSecurityGroupVpcNat:
-        Value: !Ref rSecurityGroupVpcNat

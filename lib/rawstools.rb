@@ -411,7 +411,7 @@ module RAWSTools
           default=""
         end
         output = lookup[1..-1]
-        value = @cfn.getoutput(output)
+        value = @cfn.getresource(output)
         if value
           return value
         elsif default

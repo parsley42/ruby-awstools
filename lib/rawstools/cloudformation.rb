@@ -551,7 +551,7 @@ module RAWSTools
       else
         params.delete(:disable_rollback)
         stackout = @client.update_stack(params)
-        @cloudcfg.log(:info, "Updated stack #{@stack}:#{@name}: #{stackout.stack_id}")
+        @cloudcfg.log(:info, "Issued update for stack #{@stack}:#{@name}: #{stackout.stack_id}")
       end
       return stackout
     end

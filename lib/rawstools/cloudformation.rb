@@ -175,27 +175,36 @@ module RAWSTools
   class CFTemplate
     attr_reader :name, :resources, :s3url, :noupload
 
-    def initialize(cloudcfg, stack, sourcestack, stack_config, cfg_name)
+    def initialize(cloudcfg, stack, sourcestack, stack_config, cfg_name, parent)
       @cloudcfg = cloudcfg
+      @parent = parent
+      @stackconfig = stack_config
       raise "stackconfig.yaml has no stanza for #{cfg_name}" unless stack_config[cfg_name]
       @directory = "cfn/#{stack}"
       @stack = stack
       @sourcestack = sourcestack
       @name = cfg_name
       @cloudcfg.resolve_vars(stack_config, cfg_name)
+      @stackname = stack_config["MainTemplate"]["StackName"]
       @client = @cloudcfg.cfn.client
       scfg = stack_config[cfg_name]
       @filename = scfg["File"]
       @format = scfg["Format"]
       @noupload = scfg["DisableUpload"] # note nil is also false
       @autoutputs = scfg["AutoOutputs"] # note nil is also false
-      if stack_config["MainTemplate"]["S3URL"]
-        @s3urlprefix = stack_config["MainTemplate"]["S3URL"]
+      if stack_config["MainTemplate"]["S3URLPrefix"]
+        @s3urlprefix = stack_config["MainTemplate"]["S3URLPrefix"]
       else
         @s3urlprefix = "https://s3.amazonaws.com"
       end
-      @s3url = "#{@s3urlprefix}/#{cloudcfg["Bucket"]}/#{@cloudcfg["Prefix"]}/#{@stack}/#{@filename}"
-      @s3key = "#{@cloudcfg["Prefix"]}/#{@stack}/#{@filename}"
+      @s3url = "#{@s3urlprefix}/#{cloudcfg["Bucket"]}/"
+      @s3key = "#{@stackname}/#{@filename}"
+      prefix = @cloudcfg["Prefix"]
+      if prefix
+        @s3url += "#{prefix}/"
+        @s3key = "#{prefix}/" + @s3key
+      end
+      @s3url += "#{@stackname}/#{@filename}"
       # Load the first CloudFormation stack definition found, looking in the local
       # directory first, then reverse order of the SearchPath, and finally the
       # library templates. When found:
@@ -399,8 +408,8 @@ module RAWSTools
           end
           # Every child needs an output to enable parent:child:output lookups
           @outputs[reskey] = gen_output("#{reskey} child stack", reskey) if @autoutputs
-          child = CFTemplate.new(@cloudcfg, @stack, @sourcestack, @stackconfig, reskey)
-          @children.push(child)
+          child = CFTemplate.new(@cloudcfg, @stack, @sourcestack, @stackconfig, reskey, @parent)
+          @parent.children.push(child)
           @res[reskey]["Properties"]["TemplateURL"] = child.s3url
           @cloudcfg.log(:debug, "Found child template #{child.name}, url: #{child.s3url}")
         when "AWS::EC2::RouteTable"
@@ -492,14 +501,14 @@ module RAWSTools
       if cfg["SearchPath"]
         search_dirs += cfg["SearchPath"]
       end
-      @stackconfig = {}
+      stack_config = {}
       found = false
       search_dirs.each do |dir|
         cfg.log(:debug, "Looking for #{dir}/cfn/#{sourcestack}/stackconfig.yaml")
         if File::exist?("#{dir}/cfn/#{sourcestack}/stackconfig.yaml")
           cfg.log(:debug, "=> Loading #{dir}/cfn/#{sourcestack}/stackconfig.yaml")
           raw = File::read("#{dir}/cfn/#{sourcestack}/stackconfig.yaml")
-          cfg.merge_templates(YAML::load(raw), @stackconfig)
+          cfg.merge_templates(YAML::load(raw), stack_config)
           found = true
         end
       end
@@ -508,17 +517,16 @@ module RAWSTools
       if File::exist?("./cfn/#{stack}/stackconfig.yaml")
         cfg.log(:debug, "=> Loading ./cfn/#{stack}/stackconfig.yaml")
         raw = File::read("./cfn/#{stack}/stackconfig.yaml")
-        cfg.merge_templates(YAML::load(raw), @stackconfig)
+        cfg.merge_templates(YAML::load(raw), stack_config)
         found = true
       end
       raise "Unable to locate stackconfig.yaml for stack: #{stack}, source stack: #{sourcestack}" unless found
-      if @stackconfig["MainTemplate"]
-        @stackconfig["MainTemplate"]["StackName"] = stack unless @stackconfig["MainTemplate"]["StackName"]
-        @stackname = cfg.stack_family + @stackconfig["MainTemplate"]["StackName"]
+      if stack_config["MainTemplate"]
+        stack_config["MainTemplate"]["StackName"] = stack unless stack_config["MainTemplate"]["StackName"]
       else
-        @stackname = cfg.stack_family + stack
+        raise "MainTemplate definition not found for #{stack}"
       end
-      super(cfg, stack, sourcestack, @stackconfig, "MainTemplate")
+      super(cfg, stack, sourcestack, stack_config, "MainTemplate", self)
     end
 
     def write_all()
@@ -559,7 +567,7 @@ module RAWSTools
       tags = @cloudcfg.tags.apitags()
       template = render()
       params = {
-        stack_name: @stackname,
+        stack_name: @cloudcfg.stack_family + @stackname,
         tags: tags,
         capabilities: required_capabilities,
         disable_rollback: @disable_rollback,
@@ -590,7 +598,7 @@ module RAWSTools
 
     def Delete()
       @cloudcfg.log(:warn, "Deleting stack #{@stack}:#{@name}")
-      @client.delete_stack({ stack_name: @stackname })
+      @client.delete_stack({ stack_name: @cloudcfg.stack_family + @stackname })
     end
 
   end

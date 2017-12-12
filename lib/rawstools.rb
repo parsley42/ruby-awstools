@@ -290,6 +290,7 @@ module RAWSTools
     end
 
     def [](key)
+      return nil unless @config[key]
       if @config[key].class().to_s == "String"
         return expand_strings(@config[key])
       else

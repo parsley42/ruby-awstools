@@ -264,6 +264,13 @@ Resources:
                 Value: Production DB Subnet B
               - Key: Environment
                 Value: !Ref pEnvironment
+    rDBPrivateSubnetGroup:
+        Type: AWS::RDS::DBSubnetGroup
+        Properties:
+            DBSubnetGroupDescription: !Sub ${pProductionVPCName}DBSubnets
+            SubnetIds:
+            - !Ref rDBPrivateSubnetA
+            - !Ref rDBPrivateSubnetB
     rIGWProd:
         Type: AWS::EC2::InternetGateway
         Properties:

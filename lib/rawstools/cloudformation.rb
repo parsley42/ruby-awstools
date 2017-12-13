@@ -392,6 +392,7 @@ module RAWSTools
       reskeys = @res.keys()
       reskeys.each do |reskey|
         @cloudcfg.log(:debug, "Processing resource #{reskey}, type #{@res[reskey]["Type"]} in #{@filename}")
+        @res[reskey]["Properties"] = {} unless @res[reskey]["Properties"]
         if Tag_Resources.include?(@res[reskey]["Type"])
           update_tags(@res[reskey], reskey)
         end
@@ -599,6 +600,11 @@ module RAWSTools
     def Delete()
       @cloudcfg.log(:warn, "Deleting stack #{@stack}:#{@name}")
       @client.delete_stack({ stack_name: @cloudcfg.stack_family + @stackname })
+    end
+
+    def Validate()
+      validate()
+      @children.each() { |child| child.validate() }
     end
 
   end

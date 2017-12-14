@@ -32,7 +32,7 @@ module RAWSTools
   end
 
   Valid_Classes = [ "String", "Fixnum", "Integer", "TrueClass", "FalseClass" ]
-  Expand_Regex = /\${([@=%&][:|.\-\/\w<>=#]+)}/
+  Expand_Regex = /\${([@=%&~][:|.\-\/\w<>=#]+)}/
   Log_Levels = [:trace, :debug, :info, :warn, :error]
 
   # Class to convert from configuration file format to AWS expected format
@@ -392,6 +392,7 @@ module RAWSTools
     def expand_string(var)
       var = $1 if var.match(Expand_Regex)
       case var[0]
+      # passed-in parameters
       when "@"
         param, default = var.split('|')
         if not default and var.end_with?('|')
@@ -406,6 +407,22 @@ module RAWSTools
         else
           raise "Reference to undefined parameter: \"#{param}\""
         end
+      # environment variables
+      when "~"
+        env_var, default = var.split('|')
+        if not default and var.end_with?('|')
+          default=""
+        end
+        env_var = env_var[1..-1]
+        value = ENV[env_var]
+        if value
+          return value
+        elsif default
+          return default
+        else
+          raise "Reference to unset environment variable: \"#{env_var}\""
+        end
+      # cloudformation resources
       when "="
         lookup, default = var.split('|')
         if not default and var.end_with?('|')
@@ -420,6 +437,7 @@ module RAWSTools
         else
           raise "Output not found while expanding \"#{var}\""
         end
+      # simpledb lookups
       when "%"
         lookup, default = var.split('|')
         if not default and var.end_with?('|')
@@ -463,9 +481,19 @@ module RAWSTools
       return data
     end
 
-    # Resolve $var, $@var, $%var references to cfg items, no error checking on
-    # types, and evaluate and expand all the string values in a template, called
-    # by library methods just prior to using a template in an API call.
+    # resolve_vars performs two types of string value expansion:
+    # - When a string is of the form $var, $@var, or $%var, a complex
+    #   substitution is performed where the string is replaced by an arbitrary
+    #   value, be that another string, a hash, an array, or more complex
+    #   structure.
+    # - Strings not matching the complex variable patter are passed to
+    #   expand_strings to produce another string with all variables expanded.
+    #
+    # This is used most heavily for API templates. While it is also called for
+    # CloudFormation templates, best practices dictate use of stack parameters
+    # (which are commonly resolved this way) instead of directly in the
+    # template, to preserve compatibility with many 3rd-party CloudFormation
+    # templates.
     def resolve_vars(parent, item)
       log(:trace, "Resolving values for #{parent} key: #{item}")
       case parent[item].class().to_s()
@@ -479,6 +507,7 @@ module RAWSTools
         end # Hash each
       when "String"
         var = parent[item]
+        # Complex value expansion
         if var[0] == '$' and var[1] != '$' and var[1] != '{'
           cfgvar = var[1..-1]
           case cfgvar[0]
@@ -500,6 +529,7 @@ module RAWSTools
             end
             parent[item] = @config[cfgvar]
           end # case cfgvar[0]
+        # String expansion
         else
           expanded = expand_strings(parent[item])
           log(:trace, "Expanded string \"#{parent[item]}\" -> \"#{expanded}\"")

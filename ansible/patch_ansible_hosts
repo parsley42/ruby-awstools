@@ -1,0 +1,18 @@
+diff --git a/ansible/ansible_hosts b/ansible/ansible_hosts
+index e87c324..7012112 100755
+--- a/ansible/ansible_hosts
++++ b/ansible/ansible_hosts
+@@ -444,6 +444,13 @@ class Ec2Inventory(object):
+                 }
+                 if aws_security_token:
+                     self.credentials['security_token'] = aws_security_token
++        # Make boto work with new AWS_SESSION_TOKEN for ruby-awstools / aws-session
++        elif os.environ.get('AWS_SESSION_TOKEN'):
++            self.credentials = {
++                'aws_access_key_id': os.environ.get('AWS_ACCESS_KEY_ID'),
++                'aws_secret_access_key': os.environ.get('AWS_SECRET_ACCESS_KEY'),
++                'security_token': os.environ.get('AWS_SESSION_TOKEN')
++            }
+ 
+         # Cache related
+         cache_dir = os.path.expanduser(config.get('ec2', 'cache_path'))

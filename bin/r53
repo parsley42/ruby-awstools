@@ -10,7 +10,7 @@ opts = OptionParser.new
 ttl = nil
 
 opts.banner = <<-EOF
-Usage: route53 <command> (options) (args) - manage route53 records
+Usage: r53 <command> (options) (args) - manage route53 records
  Where <command> is one of:
   arec <public|private|both> <host(.subdom)> <ipaddr> - inserts/updates A records in given zones, uses route53/arec.yaml
   cname <public|private|both> <cnamehost(.subdom)> <arechost(.subdom)> - inserts/updates CNAME records in given zones, uses route53/cname.yaml

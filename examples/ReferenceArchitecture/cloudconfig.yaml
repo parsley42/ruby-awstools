@@ -82,10 +82,6 @@ FullScope: Domain
 #ARecTTL: 300
 #CNAMERecTTL: 600
 #TXTRecTTL: 120
-# Not all availability zones are available for a given account, so check
-# first with 'aws ec2 describe-availability-zones', then list the ones
-# you want to use here.
-#AvailabilityZones: [ "a", "b", "c", "d" ]
 
 ## SimpleDB
 # Ephemeral values like AMI IDs can be stored in a SimpleDB domain and

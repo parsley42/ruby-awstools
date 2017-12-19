@@ -4,4 +4,4 @@ MainTemplate:
   Format: yaml
   StackName: InstanceProfiles
 Parameters:
-  ConfigDB: ${=ConfigDB:ConfigDBDomain}
+  ConfigDB: ${=ConfigDB:ConfigDB}

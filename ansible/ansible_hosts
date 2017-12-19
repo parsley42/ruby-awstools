@@ -444,6 +444,7 @@ class Ec2Inventory(object):
                 }
                 if aws_security_token:
                     self.credentials['security_token'] = aws_security_token
+
         # Make boto work with new AWS_SESSION_TOKEN for ruby-awstools / aws-session
         elif os.environ.get('AWS_SESSION_TOKEN'):
             self.credentials = {

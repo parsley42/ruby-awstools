@@ -59,6 +59,7 @@ module RAWSTools
     def lookup(zone, fqdn = nil, type=nil)
       @mgr.normalize_name_parameters()
       fqdn = @mgr.getparam("fqdn") unless fqdn
+      @mgr.log(:debug, "Looking up #{fqdn} in #{zone}")
       raise "No fqdn parameter or function argument; missing a call to normalize_name_parameters?" unless fqdn
       lookup = {
         hosted_zone_id: zone,

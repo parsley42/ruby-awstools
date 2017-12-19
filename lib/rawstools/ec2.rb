@@ -334,9 +334,21 @@ module RAWSTools
 
         ispec = template["api_template"]
         if volume
+          # When re-attaching a volume, the instance needs to launch in the same
+          # availability zone
           vol_az = volume.availability_zone()[-1]
-          if ispec[:subnet_id].match(/#[FL0-9a-j?]/)
-            ispec[:subnet_id] = ispec[:subnet_id].sub(/#[FL0-9a-j?]/,"##{vol_az}")
+          if ispec[:subnet_id]
+            if ispec[:subnet_id].match(/#[FL0-9a-j?]/)
+              @mgr.log(:debug, "Setting instance location to ##{vol_az} to match the existing volume")
+              ispec[:subnet_id] = ispec[:subnet_id].sub(/#[FL0-9a-j?]/,"##{vol_az}")
+            end
+          elsif ispec[:network_interfaces][0][:subnet_id]
+            if ispec[:network_interfaces][0][:subnet_id].match(/#[FL0-9a-j?]/)
+              @mgr.log(:debug, "Setting instance location to ##{vol_az} to match the existing volume")
+              ispec[:network_interfaces][0][:subnet_id] = ispec[:network_interfaces][0][:subnet_id].sub(/#[FL0-9a-j?]/,"##{vol_az}")
+            end
+          else
+            @mgr.log(:warn, "Unable to identify a location specifier in the instance subnet_id, launching without updating instance location to match the volume")
           end
         end
 

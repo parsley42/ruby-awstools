@@ -258,7 +258,7 @@ when "genkeypair"
 when "deletekeypair"
   keyname = ARGV.shift()
   raise UsageException.new("Missing <keyname> argument") unless keyname
-  cfg.ec2.delete_key_pair({key_name: keyname})
+  cfg.ec2.client.delete_key_pair({key_name: keyname})
   puts "Deleted"
 end
 

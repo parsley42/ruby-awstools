@@ -255,7 +255,7 @@ module RAWSTools
         @mgr.normalize(name)
       end
       @mgr.setparam("key", key)
-      name, volname, snapid, datasize, availability_zone, dryrun, nodns = @mgr.getparams("name", "volname", "snapid", "datasize", "availability_zone", "dryrun", "nodns")
+      name, volname, snapid, datasize, dryrun = @mgr.getparams("name", "volname", "snapid", "datasize", "dryrun")
 
       # Acquire global lock before lookups - insure if instance doesn't exist, it doesn't
       # get created by another process.

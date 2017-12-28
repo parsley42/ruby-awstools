@@ -253,13 +253,16 @@ module RAWSTools
     def create_instance(name, key, type, wait=true)
       if name
         @mgr.normalize(name)
+      else
+        @mgr.normalize_name_parameters()
       end
       @mgr.setparam("key", key)
       name, volname, snapid, datasize, dryrun = @mgr.getparams("name", "volname", "snapid", "datasize", "dryrun")
 
-      # Acquire global lock before lookups - insure if instance doesn't exist, it doesn't
-      # get created by another process.
-      @mgr.lock() # NOTE: unlock() will be called by either abort_instance or update_dns
+      # Acquire global lock before lookups - ensure if instance doesn't exist,
+      # it doesn't get created by another process.
+      # NOTE: unlock() will be called by either abort_instance or update_dns
+      @mgr.lock()
 
       # Catch any exceptions so we can unlock
       begin
@@ -389,6 +392,34 @@ module RAWSTools
 
         @mgr.resolve_vars(template, "api_template")
         @mgr.resolve_vars(template, "tags")
+
+        # Create a private security group for this instance?
+        if template["private_sg"] == true
+          begin
+            if ispec[:network_interfaces][0][:subnet_id]
+              vpc_id = @resource.subnet(ispec[:network_interfaces][0][:subnet_id]).vpc.id
+              private_sg = @resource.create_security_group({
+                description: "Private security group for #{name}",
+                group_name: name,
+                vpc_id: vpc_id
+              })
+              ispec[:network_interfaces][0][:groups] << private_sg.id()
+            elsif ispec[:subnet_id]
+              vpc_id = @resource.subnet(ispec[:subnet_id]).vpc.id
+              private_sg = @resource.create_security_group({
+                description: "Private security group for #{name}",
+                group_name: name,
+                vpc_id: vpc_id
+              })
+              ispec[:security_group_ids] << private_sg.id()
+            else
+              raise "Unable to identify a subnet/VPC for creating instance private security group"
+            end
+          rescue => e
+            @mgr.unlock()
+            raise "Error creating instance private security group #{name}: #{e.message}"
+          end
+        end
 
         if ispec[:user_data]
           ispec[:user_data] = Base64::encode64(ispec[:user_data])

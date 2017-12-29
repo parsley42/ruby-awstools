@@ -20,11 +20,13 @@ module RAWSTools
             if tries >= 4
               raise e
             end
+            @mgr.log(:debug, "Caught exception in change_resource_record_sets: #{e.message}, retrying")
             sleep 2 * tries
-          elsif /rate for operation/i =~ e.message
+          elsif /rate for operation/i =~ e.message or /ServiceUnavailable/i =~ e.message
             if tries >= 4
               raise e
             end
+            @mgr.log(:debug, "Caught exception in change_resource_record_sets: #{e.message}, retrying")
             sleep 30
           else
             raise e
@@ -42,11 +44,12 @@ module RAWSTools
           resp = @client.list_resource_record_sets(params)
           break
         rescue => e
-          if /rate exceed/i =~ e.message
+          if /rate exceed/i =~ e.message or /ServiceUnavailable/i =~ e.message
             tries += 1
             if tries >= 4
               raise e
             end
+            @mgr.log(:debug, "Caught exception in list_resource_record_sets: #{e.message}, retrying")
             sleep 2 & tries
           else
             raise e

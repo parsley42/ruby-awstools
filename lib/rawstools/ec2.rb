@@ -257,13 +257,14 @@ module RAWSTools
         @mgr.normalize_name_parameters()
       end
       @mgr.setparam("key", key)
-      name, volname, snapid, datasize, dryrun = @mgr.getparams("name", "volname", "snapid", "datasize", "dryrun")
+      name, fqdn, volname, snapid, datasize, dryrun = @mgr.getparams("name", "fqdn", "volname", "snapid", "datasize", "dryrun")
 
       # Acquire global lock before lookups - ensure if instance doesn't exist,
       # it doesn't get created by another process.
       # NOTE: unlock() will be called by either abort_instance or update_dns
       @mgr.lock()
 
+      stale_dns = false
       # Catch any exceptions so we can unlock
       begin
         i, err = resolve_instance()
@@ -275,12 +276,26 @@ module RAWSTools
         end
 
         if @mgr["PrivateDNSId"]
-          rr = @mgr.route53.lookup(@mgr["PrivateDNSId"])
-          if rr.size != 0
-            msg = "DNS record for #{name} already exists"
-            yield "#{@mgr.timestamp()} #{msg}"
-            @mgr.unlock
-            return nil
+          lookup = {
+            hosted_zone_id: @mgr["PrivateDNSId"],
+            start_record_name: fqdn,
+            max_items: 1,
+          }
+          resp = @mgr.route53.list_record_sets(lookup)
+          records = resp.resource_record_sets
+          if records.size == 1
+            record = records[0]
+            if record.type == "CNAME"
+              @mgr.unlock()
+              raise "CNAME exists for #{fqdn}, aborting"
+            elsif record.type != "A"
+              @mgr.unlock()
+              raise "Unable to handle record type for #{fqdn}: #{record.type}"
+            end
+            raise "Unable to handle multiple value lookup for #{fqdn}: #{record.type}" if record.resource_records.size > 1
+            private_ip = record.resource_records[0].value
+            stale_dns = true
+            # TODO: check for in-use or stale value
           end
         end
       rescue => e
@@ -517,7 +532,7 @@ module RAWSTools
             tag_instance(instance, itags, vtags) { |s| yield s }
           end
 
-          if @mgr["PrivateDNSId"]
+          if @mgr["PrivateDNSId"] and not stale_dns
             rr = @mgr.route53.lookup(@mgr["PrivateDNSId"])
             if rr.size != 0
               msg = "DNS record for #{name} created during launch"

@@ -2,3 +2,4 @@
 lib/rawstools/vendor/ruby
 rawstools*gem
 .publish
+.c9

@@ -180,12 +180,12 @@ module RAWSTools
       @parent = parent
       @stackconfig = stack_config
       raise "stackconfig.yaml has no stanza for #{cfg_name}" unless stack_config[cfg_name]
-      @directory = "cfn/#{stack}"
       @stack = stack
       @sourcestack = sourcestack
       @name = cfg_name
       @cloudcfg.resolve_vars(stack_config, cfg_name)
       @stackname = stack_config["MainTemplate"]["StackName"]
+      @directory = "cfn/#{stack}/#{@stackname}"
       @client = @cloudcfg.cfn.client
       scfg = stack_config[cfg_name]
       @filename = scfg["File"]
@@ -495,7 +495,6 @@ module RAWSTools
           cfg.log(:debug, "Set SourceStack to #{sourcestack}")
         end
       end
-      FileUtils::mkdir_p("cfn/#{stack}/output")
       # Load CloudFormation stackconfig.yaml, first from SearchPath, then from
       # stack path. Raise exception if no stackconfig.yaml found.
       search_dirs = ["#{cfg.installdir}/templates"]
@@ -527,6 +526,7 @@ module RAWSTools
       else
         raise "MainTemplate definition not found for #{stack}"
       end
+      FileUtils::mkdir_p("cfn/#{stack}/#{stack_config["MainTemplate"]["StackName"]}/output")
       super(cfg, stack, sourcestack, stack_config, "MainTemplate", self)
     end
 

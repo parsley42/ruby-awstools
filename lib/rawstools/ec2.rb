@@ -283,7 +283,7 @@ module RAWSTools
           }
           resp = @mgr.route53.list_record_sets(lookup)
           records = resp.resource_record_sets
-          if records.size == 1
+          if records.size == 1 and fqdn =~ /#{records[0].name}\.?/
             record = records[0]
             if record.type == "CNAME"
               @mgr.unlock()
@@ -294,8 +294,12 @@ module RAWSTools
             end
             raise "Unable to handle multiple value lookup for #{fqdn}: #{record.type}" if record.resource_records.size > 1
             private_ip = record.resource_records[0].value
+            @mgr.log(:debug, "Checking to see if #{fqdn} -> #{private_ip} is stale")
+            f = [ { name: "private-ip-address", values: [ private_ip ] } ]
+            instances = @resource.instances(filters: f)
+            raise "Private DNS record for #{fqdn} points to existing instance #{instances.first.id}" if instances.count() > 1
             stale_dns = true
-            # TODO: check for in-use or stale value
+            @mgr.log(:info, "Found stale private DNS record #{fqdn} -> #{private_ip}, ignoring")
           end
         end
       rescue => e
@@ -411,6 +415,11 @@ module RAWSTools
         # Create a private security group for this instance?
         if template["private_sg"] == true
           begin
+            existing = @resource.security_groups({ group_names: [ name ] })
+            if existing.size() == 1
+              @mgr.log(:info, "Deleting orphaned private security group #{name}")
+              existing.first.delete()
+            end
             if ispec[:network_interfaces][0][:subnet_id]
               vpc_id = @resource.subnet(ispec[:network_interfaces][0][:subnet_id]).vpc.id
               private_sg = @resource.create_security_group({

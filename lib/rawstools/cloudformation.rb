@@ -340,7 +340,7 @@ module RAWSTools
 
     # Write the template out to a file
     def write()
-      f = File.open("#{@directory}/output/#{@filename}", "w")
+      f = File.open("#{@directory}/#{@filename}", "w")
       f.write(render())
       f.close()
     end
@@ -350,7 +350,7 @@ module RAWSTools
       # To debug yaml loading and rendering, comment out the return
       # to dump the proceessed text at every stage.
       return
-      f = File.open("#{@directory}/output/#{@filename}#{suffix}", "w")
+      f = File.open("#{@directory}/#{@filename}#{suffix}", "w")
       f.write(@raw)
       f.close()
     end
@@ -526,13 +526,16 @@ module RAWSTools
       else
         raise "MainTemplate definition not found for #{stack}"
       end
-      FileUtils::mkdir_p("cfn/#{stack}/#{stack_config["MainTemplate"]["StackName"]}/output")
+      FileUtils::mkdir_p("cfn/#{stack}/#{stack_config["MainTemplate"]["StackName"]}")
       super(cfg, stack, sourcestack, stack_config, "MainTemplate", self)
     end
 
     def write_all()
       write()
       @children.each() { |child| child.write() }
+      f = File.open("#{@directory}/stackconfig.yaml", "w")
+      f.write(YAML::dump(@stackconfig, { line_width: -1, indentation: 4 }))
+      f.close()
     end
 
     def upload_all_conditional()
@@ -562,7 +565,6 @@ module RAWSTools
 
     # Create or Update a cloudformation stack
     def create_or_update(op)
-      write_all()
       upload_all_conditional()
       required_capabilities = get_stack_required_capabilities()
       tags = @cloudcfg.tags.apitags()
@@ -575,6 +577,7 @@ module RAWSTools
         template_body: template,
       }
       parameters = get_stack_parameters()
+      write_all()
       if parameters
         params[:parameters] = parameters
       end

@@ -1,5 +1,9 @@
 module RAWSTools
 
+# TODO:
+# - Add methods allow_tcp(allow_array), and allow_udp(allow_array), and
+#   reset_private_sg
+
   class Ec2
     attr_reader :client, :resource
 
@@ -412,32 +416,53 @@ module RAWSTools
         @mgr.resolve_vars(template, "api_template")
         @mgr.resolve_vars(template, "tags")
 
+        # Set up tags for private_sg
+        cfgtags = @mgr.tags
+        name = @mgr.getparam("name")
+        cfgtags["Name"] = name
+        cfgtags["Domain"] = @mgr["DNSDomain"]
+        sgtags = cfgtags.apitags()
+        cfgtags.add(template["tags"]) if template["tags"]
+        itags = cfgtags.apitags()
+        cfgtags["InstanceName"] = @mgr.getparam("name")
+        vtags = cfgtags.apitags()
+
         # Create a private security group for this instance?
         if template["private_sg"] == true
           begin
-            existing = @resource.security_groups({ group_names: [ name ] })
-            if existing.size() == 1
+            if ispec[:network_interfaces][0][:subnet_id]
+              vpc_id = @resource.subnet(ispec[:network_interfaces][0][:subnet_id]).vpc.id
+            elsif ispec[:subnet_id]
+              vpc_id = @resource.subnet(ispec[:subnet_id]).vpc.id
+            else
+              raise "Unable to identify a subnet/VPC for creating instance private security group"
+            end
+            existing = @resource.security_groups({
+              filters: [
+                { name: "vpc-id",
+                  values: [ vpc_id ] },
+                { name: "group-name",
+                  values: [ name ] },
+              ]
+            })
+            if existing.count() == 1
               @mgr.log(:info, "Deleting orphaned private security group #{name}")
               existing.first.delete()
             end
+            @mgr.log(:debug, "Creating private security group #{name}")
+            private_sg = @resource.create_security_group({
+              description: "Private security group for #{name}",
+              group_name: name,
+              vpc_id: vpc_id
+            })
+            @resource.create_tags(
+              resources: [ private_sg.id() ],
+              tags: sgtags
+            )
             if ispec[:network_interfaces][0][:subnet_id]
-              vpc_id = @resource.subnet(ispec[:network_interfaces][0][:subnet_id]).vpc.id
-              private_sg = @resource.create_security_group({
-                description: "Private security group for #{name}",
-                group_name: name,
-                vpc_id: vpc_id
-              })
               ispec[:network_interfaces][0][:groups] << private_sg.id()
             elsif ispec[:subnet_id]
-              vpc_id = @resource.subnet(ispec[:subnet_id]).vpc.id
-              private_sg = @resource.create_security_group({
-                description: "Private security group for #{name}",
-                group_name: name,
-                vpc_id: vpc_id
-              })
               ispec[:security_group_ids] << private_sg.id()
-            else
-              raise "Unable to identify a subnet/VPC for creating instance private security group"
             end
           rescue => e
             @mgr.unlock()
@@ -458,14 +483,6 @@ module RAWSTools
             interfaces << @resource.create_network_interface(iface)
           end
         end
-        cfgtags = @mgr.tags
-        name = @mgr.getparam("name")
-        cfgtags["Name"] = name
-        cfgtags["Domain"] = @mgr["DNSDomain"]
-        cfgtags.add(template["tags"]) if template["tags"]
-        itags = cfgtags.apitags()
-        cfgtags["InstanceName"] = @mgr.getparam("name")
-        vtags = cfgtags.apitags()
         unless @mgr.govcloud
           ispec[:tag_specifications] = [
             {
@@ -756,6 +773,20 @@ module RAWSTools
       end
       instance, err = resolve_instance()
       if instance
+        vpc_id = instance.vpc.id
+        private_sg = false
+        existing = @resource.security_groups({
+          filters: [
+            { name: "vpc-id",
+              values: [ vpc_id ] },
+            { name: "group-name",
+              values: [ name ] },
+          ]
+        })
+        if existing.count() == 1
+          private_sg = true
+          @mgr.log(:debug, "Found private security group #{name}")
+        end
         yield "#{@mgr.timestamp()} Terminating #{name}"
         remove_dns = false
         remove_dns = true if instance.state.name == "running"
@@ -769,10 +800,14 @@ module RAWSTools
         end
         instance.terminate()
         remove_dns(instance, wait) { |s| yield s } if remove_dns
-        return unless wait or deletevol
+        return unless wait or deletevol or private_sg
         yield "#{@mgr.timestamp()} Waiting for instance to terminate..."
         instance.wait_until_terminated()
         yield "#{@mgr.timestamp()} Terminated"
+        if private_sg
+          @mgr.log(:info, "Deleting private security group: #{name}")
+          existing.first.delete()
+        end
         if deletevol and volume
           yield "#{@mgr.timestamp()} Waiting for volume to be available..."
           @client.wait_until(:volume_available, {

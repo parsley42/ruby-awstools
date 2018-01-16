@@ -6,8 +6,6 @@ $LOAD_PATH.unshift("#{lp}/lib")
 require 'rawstools'
 require 'optparse'
 
-outputdir = "output"
-upload = true
 disable_rollback = false
 generate_only = false
 params = {}

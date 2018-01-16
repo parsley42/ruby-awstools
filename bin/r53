@@ -1,5 +1,8 @@
 #!/usr/bin/ruby
 
+require 'pathname'
+lp = Pathname.new($0).realpath().dirname().dirname()
+$LOAD_PATH.unshift("#{lp}/lib")
 require 'rawstools'
 require 'optparse'
 

@@ -139,8 +139,6 @@ module RAWSTools
       if @config["Region"]
         @region = @config["Region"]
         @client_opts = { region: @region }
-      else
-        ec = Aws::EC2::Client.new()
       end
 
       @sts = Aws::STS::Client.new( @client_opts )

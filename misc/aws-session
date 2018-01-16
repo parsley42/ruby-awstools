@@ -12,6 +12,8 @@ then
     exit 1
 fi
 
+TIMEOUT=${RAWS_SESSION_TIMEOUT-14400}
+
 if [ $# -eq 1 ]
 then
   PROFILE=default
@@ -31,7 +33,7 @@ fi
 ARN=$(echo $CALLER | jq -r .Arn)
 ARN=${ARN/:user/:mfa}
 
-CREDS=$(aws --profile $PROFILE sts get-session-token --serial-number $ARN --token-code $TOKEN)
+CREDS=$(aws --profile $PROFILE sts get-session-token --duration-seconds $TIMEOUT --serial-number $ARN --token-code $TOKEN)
 
 SECRETKEY=$(echo $CREDS | jq -r .Credentials.SecretAccessKey)
 TOKEN=$(echo $CREDS | jq -r .Credentials.SessionToken)

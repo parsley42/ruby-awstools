@@ -171,7 +171,6 @@ module RAWSTools
       @s3res = Aws::S3::Resource.new( client: @s3 )
       @rds = RDS.new(self)
       @route53 = Route53.new(self)
-      @tags = Tags.new(self)
       @stack_family = ""
       if @config["StackFamily"] != nil
         @stack_family = expand_strings(@config["StackFamily"])
@@ -208,8 +207,11 @@ module RAWSTools
       paramhash.each_key do |k,v|
         parr << "#{k}=#{@params[k]}"
       end
-      @params["userparameters"] = parr.join("+")
-
+      @params["userparameters"] = parr.join("+") if parr.size > 0
+      # Resolve tags after generated parameters are done, so tags can reference
+      # all parameters including generated ones.
+      resolve_vars(self, "Tags")
+      @tags = Tags.new(self)
     end
 
     # Log events, takes a symbol log level (see Log_Levels) and a message.
@@ -319,7 +321,7 @@ module RAWSTools
       if @config[key].class().to_s == "String"
         return expand_strings(@config[key])
       else
-        resolve_vars(@config, key)
+        resolve_vars(@config, key) unless key == "Tags"
         return @config[key]
       end
     end
@@ -481,15 +483,23 @@ module RAWSTools
           raise "Failed to receive single-value retrieving attribute \"#{key}\" from item #{item} in SimpleDB domain #{@sdb.getdomain()}, got: #{values}"
         end
       when "&"
-        cfgvar = var[1..-1]
-        if @config[cfgvar] == nil
-          raise "Bad variable reference: \"#{cfgvar}\" not defined in cloudconfig.yaml"
+        cfgvar, default = var.split('|')
+        if not default and var.end_with?('|')
+          default=""
         end
-        varclass = @config[cfgvar].class().to_s()
-        unless Valid_Classes.include?(varclass)
-          raise "Bad variable reference during string expansion: \"$#{cfgvar}\" expands to non-scalar class #{varclass}"
+        cfgvar = cfgvar[1..-1]
+        value = @config[cfgvar]
+        if value
+          varclass = @config[cfgvar].class().to_s()
+          unless Valid_Classes.include?(varclass)
+            raise "Bad variable reference during string expansion: \"#{cfgvar}\" expands to non-scalar class #{varclass}"
+          end
+          return @config[cfgvar]
+        elsif default
+          return default
+        else
+          raise "Configuration variable \"#{cfgvar}\" not found in cloudconfig.yaml locally or in the SearchPath"
         end
-        return @config[cfgvar]
       end
     end
 
@@ -557,7 +567,7 @@ module RAWSTools
         # String expansion
         else
           expanded = expand_strings(parent[item])
-          log(:trace, "Expanded string \"#{parent[item]}\" -> \"#{expanded}\"")
+          log(:trace, "Expanded string \"#{parent[item]}\" -> \"#{expanded}\"") if parent[item] != expanded
           parent[item] = expanded
           if parent[item] == "<DELETE>"
             parent.delete(item)

@@ -99,8 +99,7 @@ end
 
 opts.parse!
 
-cfg = RAWSTools::CloudManager.new()
-cfg.setparams(params)
+cfg = RAWSTools::CloudManager.new(params)
 
 case command
 when "metadata"

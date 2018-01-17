@@ -127,10 +127,8 @@ end
 
 opts.parse!
 
-cfg = RAWSTools::CloudManager.new()
-cfg.setparams(params)
-tags["Creator"] = ENV["USER"] unless tags["Creator"]
-cfg.tags.add(tags)
+params["dryrun"] = dryrun
+cfg = RAWSTools::CloudManager.new(params)
 
 case command
 when "delete"

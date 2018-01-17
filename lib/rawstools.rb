@@ -86,7 +86,7 @@ module RAWSTools
     attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :rds, :region, :route53, :tags, :params, :stack_family, :govcloud, :client_opts
 
     # Initiallize
-    def initialize(logarray = nil, loglevel = nil)
+    def initialize(paramhash, logarray = nil, loglevel = nil)
       @installdir = File.dirname(Pathname.new(__FILE__).realpath) + "/rawstools"
       @logarray = logarray if logarray
       log_set = false
@@ -118,7 +118,10 @@ module RAWSTools
       end
       search_dirs += ["."]
 
+      @params = {}
+      @params = @params.merge(paramhash)
       @config = {}
+      repositories = ""
       search_dirs.each do |dir|
         log(:debug, "Looking for #{dir}/cloudconfig.yaml")
         if File::exist?("#{dir}/cloudconfig.yaml")
@@ -126,7 +129,15 @@ module RAWSTools
           raw = File::read("#{dir}/cloudconfig.yaml")
           merge_templates(YAML::load(raw), @config)
         end
+        Dir::chdir(dir) do
+          reponame = File.basename(`git rev-parse --show-toplevel`).chomp()
+          repohash = `git rev-parse --short=8 HEAD`.chomp()
+          dirtyflag = `git diff --quiet --ignore-submodules HEAD 2>/dev/null; [ $? -eq 1 ] && echo "+"`.chomp()
+          repositories += ":#{reponame}@#{repohash}#{dirtyflag}"
+        end
       end
+      @params["repositories"] = repositories[1..-1]
+      @params["creator"] = ENV["USER"] unless @params["creator"]
 
       if @config["LogLevel"] && ! log_set
         ll = @config["LogLevel"].to_sym()
@@ -150,7 +161,6 @@ module RAWSTools
       if info.arn.start_with?("arn:aws-us-gov")
         @govcloud = true
       end
-      @params = {}
       @subdom = nil
       @ec2 = Ec2.new(self)
       @cfn = CloudFormation.new(self)
@@ -192,6 +202,13 @@ module RAWSTools
         i = @config["DNSDomain"].index(@config["DNSBase"])
         @subdom = @config["DNSDomain"][0..(i-2)]
       end
+      # Generate userparameters hash
+      normalize_name_parameters()
+      parr = []
+      paramhash.each_key do |k,v|
+        parr << "#{k}=#{@params[k]}"
+      end
+      @params["userparameters"] = parr.join("+")
 
     end
 
@@ -232,6 +249,7 @@ module RAWSTools
       ["name", "cname", "volname"].each() do |name|
         norm = getparam(name)
         next unless norm
+        log(:trace,"Normalizing #{norm}")
         norm = norm.gsub(/\.+/, '.')
         # fqdn with dot given
         if norm.end_with?(".#{domain}.")
@@ -260,6 +278,7 @@ module RAWSTools
           norm = norm[0..-2] if norm.end_with?(".")
           fqdn = norm + "." + domain + "."
         end
+        log(:trace,"Normalized to #{norm}")
         setparam(name, norm)
         case name
         when "name"
@@ -279,10 +298,6 @@ module RAWSTools
       @params[param] = name
       normalize_name_parameters()
       return @params[param]
-    end
-
-    def setparams(hash)
-      @params = hash
     end
 
     def setparam(param, value)

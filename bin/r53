@@ -6,7 +6,6 @@ $LOAD_PATH.unshift("#{lp}/lib")
 require 'rawstools'
 require 'optparse'
 
-cfgfile = ENV["RAWS_CLOUDCFG"]
 wait = false
 
 opts = OptionParser.new
@@ -44,8 +43,9 @@ raise UsageException.new("Unknown command: #{command}") unless commands.include?
 
 opts.parse!
 
-cfg = RAWSTools::CloudManager.new()
-cfg.setparam("ttl", ttl) if ttl
+params = {}
+params["ttl"] = ttl if ttl
+cfg = RAWSTools::CloudManager.new(params)
 where = nil
 template = nil
 

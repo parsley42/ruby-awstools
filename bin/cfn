@@ -58,11 +58,9 @@ raise UsageException.new("Unknown command: #{command}") unless commands.include?
 
 opts.parse!
 
-cfg = RAWSTools::CloudManager.new()
-
-cfg.setparam("generate_only", generate_only)
-cfg.setparam("disable_rollback", disable_rollback)
-cfg.setparams(params)
+params["generate_only"] = generate_only
+params["disable_rollback"] = disable_rollback
+cfg = RAWSTools::CloudManager.new(params)
 
 case command
 when "list"

@@ -93,6 +93,7 @@ module RAWSTools
       if ENV["RAWS_LOGLEVEL"] || loglevel
         unless loglevel
           ll = ENV["RAWS_LOGLEVEL"].to_sym()
+          ll = :info unless Log_Levels.include?(ll)
         else
           ll = loglevel
         end

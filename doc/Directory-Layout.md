@@ -7,7 +7,7 @@ The directory structure for `cfn` looks like this:
 ```
 cloudconfig.yaml - project-wide settings
 	cfn/
-		<stackname>/ - `cfn` creates a stack named after the subdirectory,
+		<stackdefinition>/ - `cfn` creates a stack named after the subdirectory,
 		  prefixed with `StackPrefix` if it's set in cloudconfig.yaml.
 			main.yaml - the list of resources for this stack, may include
 			  other stacks with resource names of <Something>Stack
@@ -15,6 +15,6 @@ cloudconfig.yaml - project-wide settings
 			  resource, `cfn` gets the resources from `<something>.yaml`
 			somethingelse.yaml
 			...
-		<stackname>/
+		<stackdefinition>/
 		...
 ```

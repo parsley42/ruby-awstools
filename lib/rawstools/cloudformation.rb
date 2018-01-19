@@ -178,7 +178,7 @@ module RAWSTools
     def initialize(cloudmgr, stack, sourcestack, stack_config, filename)
       @mgr = cloudmgr
       @stackconfig = stack_config
-      @stack = stack # local load dir
+      @stackdef = stack # local load dir
       @sourcestack = sourcestack # searchpath load dir
       @stackname = stack_config["StackName"]
       @directory = "cfn/#{stack}/#{@stackname}"
@@ -196,10 +196,10 @@ module RAWSTools
       # library templates. When found:
       # - If it's yaml, replace !Ref with BangRef, !GetAtt with BangGetAtt, etc.
       found = false
-      @mgr.log(:debug, "Looking for ./cfn/#{@stack}/#{@filename}")
-      if File::exist?("./cfn/#{@stack}/#{@filename}")
-        @mgr.log(:debug, "=> Loading ./cfn/#{@stack}/#{@filename}")
-        @raw = File::read("./cfn/#{@stack}/#{@filename}")
+      @mgr.log(:debug, "Looking for ./cfn/#{@stackdef}/#{@filename}")
+      if File::exist?("./cfn/#{@stackdef}/#{@filename}")
+        @mgr.log(:info, "Loading CloudFormation stack template ./cfn/#{@stackdef}/#{@filename}")
+        @raw = File::read("./cfn/#{@stackdef}/#{@filename}")
         found = true
       end
       unless found
@@ -211,7 +211,7 @@ module RAWSTools
         search_dirs.each do |dir|
           @mgr.log(:debug, "Looking for #{dir}/cfn/#{@sourcestack}/#{@filename}")
           if File::exist?("#{dir}/cfn/#{@sourcestack}/#{@filename}")
-            @mgr.log(:debug, "=> Loading #{dir}/cfn/#{@sourcestack}/#{@filename}")
+            @mgr.log(:info, "Loading CloudFormation stack template #{dir}/cfn/#{@sourcestack}/#{@filename}")
             @raw = File::read("#{dir}/cfn/#{@sourcestack}/#{@filename}")
             found = true
             break
@@ -219,15 +219,15 @@ module RAWSTools
         end
       end
       unless found
-        raise "Couldn't find #{@filename} for stack: #{@stack}, source stack: #{@sourcestack}"
+        raise "Couldn't find #{@filename} for stack definition: #{@stackdef}, source stack: #{@sourcestack}"
       end
     end
 
     # Validate the template
     def validate()
-      @mgr.log(:debug,"Validating #{@stack}:#{@filename}")
+      @mgr.log(:debug,"Validating #{@stackdef}:#{@filename}")
       resp = @client.validate_template({ template_body: @raw })
-      @mgr.log(:info,"Validated #{@stack}:#{@filename}: #{resp.description}")
+      @mgr.log(:info,"Validated #{@stackdef}:#{@filename}: #{resp.description}")
       if resp.capabilities.length > 0
         @mgr.log(:info, "Capabilities: #{resp.capabilities.join(",")}")
         @mgr.log(:info, "Reason: #{resp.capabilities_reason}")
@@ -238,7 +238,7 @@ module RAWSTools
     # Upload the template to the proper S3 location
     def upload()
       obj = @mgr.s3res.bucket(@mgr["Bucket"]).object(@s3key)
-      @mgr.log(:info,"Uploading cloudformation stack template #{@stack}:#{@filename} to s3://#{@mgr["Bucket"]}/#{@s3key}")
+      @mgr.log(:info,"Uploading cloudformation stack template #{@stackdef}:#{@filename} to s3://#{@mgr["Bucket"]}/#{@s3key}")
       template = @mgr.load_template("s3", "cfnput")
       @mgr.symbol_keys(template)
       @mgr.resolve_vars(template, :api_template)
@@ -285,7 +285,7 @@ module RAWSTools
       search_dirs.each do |dir|
         mgr.log(:debug, "Looking for #{dir}/cfn/#{sourcestack}/stackconfig.yaml")
         if File::exist?("#{dir}/cfn/#{sourcestack}/stackconfig.yaml")
-          mgr.log(:debug, "=> Loading #{dir}/cfn/#{sourcestack}/stackconfig.yaml")
+          mgr.log(:info, "Loading stack configuration from #{dir}/cfn/#{sourcestack}/stackconfig.yaml")
           raw = File::read("#{dir}/cfn/#{sourcestack}/stackconfig.yaml")
           mgr.merge_templates(YAML::load(raw), stack_config)
           found = true
@@ -294,7 +294,7 @@ module RAWSTools
       # Finally merge w/ repository version, if present.
       mgr.log(:debug, "Looking for ./cfn/#{stack}/stackconfig.yaml")
       if File::exist?("./cfn/#{stack}/stackconfig.yaml")
-        mgr.log(:debug, "=> Loading ./cfn/#{stack}/stackconfig.yaml")
+        mgr.log(:info, "Loading stack configuration from ./cfn/#{stack}/stackconfig.yaml")
         raw = File::read("./cfn/#{stack}/stackconfig.yaml")
         mgr.merge_templates(YAML::load(raw), stack_config)
         found = true
@@ -312,7 +312,7 @@ module RAWSTools
       if prefix
         s3urlprefix += "#{prefix}/"
       end
-      s3urlprefix += "#{@stackname}"
+      s3urlprefix += "#{stack_config["StackName"]}"
       mgr.log(:debug, "Setting generated parameter \"s3urlprefix\" to: #{s3urlprefix}")
       mgr.setparam("s3urlprefix", s3urlprefix)
       resparent = { "stackconfig" => stack_config }
@@ -320,7 +320,7 @@ module RAWSTools
       super(mgr, stack, sourcestack, stack_config, stack_config["MainTemplate"])
       if stack_config["ChildStacks"]
         stack_config["ChildStacks"].each do |filename|
-          child = CFTemplate.new(@mgr, @stack, @sourcestack, @stackconfig, filename)
+          child = CFTemplate.new(@mgr, @stackdef, @sourcestack, @stackconfig, filename)
           @children.push(child)
         end
       end
@@ -378,11 +378,11 @@ module RAWSTools
       end
       if op == :create
         stackout = @client.create_stack(params)
-        @mgr.log(:info, "Created stack #{@stack}:#{@name}: #{stackout.stack_id}")
+        @mgr.log(:info, "Created stack #{@stackdef}:#{@stackname}: #{stackout.stack_id}")
       else
         params.delete(:disable_rollback)
         stackout = @client.update_stack(params)
-        @mgr.log(:info, "Issued update for stack #{@stack}:#{@name}: #{stackout.stack_id}")
+        @mgr.log(:info, "Issued update for stack #{@stackdef}:#{@stackname}: #{stackout.stack_id}")
       end
       return stackout
     end
@@ -396,7 +396,7 @@ module RAWSTools
     end
 
     def Delete()
-      @mgr.log(:warn, "Deleting stack #{@stack}:#{@name}")
+      @mgr.log(:warn, "Deleting stack #{@stackdef}:#{@stackname}")
       @client.delete_stack({ stack_name: @mgr.stack_family + @stackname })
     end
 

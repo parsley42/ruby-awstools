@@ -313,8 +313,8 @@ module RAWSTools
         s3urlprefix += "#{prefix}/"
       end
       s3urlprefix += "#{@stackname}"
-      mgr.log(:debug, "Setting generated parameter \"cfns3prefix\" to: #{s3urlprefix}")
-      mgr.setparam("cfns3prefix", s3urlprefix)
+      mgr.log(:debug, "Setting generated parameter \"s3urlprefix\" to: #{s3urlprefix}")
+      mgr.setparam("s3urlprefix", s3urlprefix)
       resparent = { "stackconfig" => stack_config }
       mgr.resolve_vars(resparent, "stackconfig")
       super(mgr, stack, sourcestack, stack_config, stack_config["MainTemplate"])

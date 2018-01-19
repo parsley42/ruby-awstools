@@ -18,9 +18,9 @@ Usage: cfn <command> (options) <stack|templatedir> - manage a CloudFormation sta
   list - list all stacks for the account
   resources <stackname>(:childstack) - list all the resources of a given stack
   resource <stackname>(:childstack...):<resourcename>(.property)(=resourcetype) - get a specific resource or property
-  create <stack> - create a new stack
-  delete <stack> - delete a stack (warning: without confirmation, no resources retained)
-  update <stack> - update a stack
+  create <stackdef> - create a new stack from a stack definition
+  delete <stackdef> - delete a stack (warning: without confirmation, no resources retained)
+  update <stackdef> - update a stack
   validate <stack> - run templates through validation
 
  <stack> corresponds to a directory under cfn/, or in <SearchPath>/cfn

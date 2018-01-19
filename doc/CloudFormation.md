@@ -20,6 +20,10 @@ S3URL: https://s3.amazonaws.com # default value if not supplied
 DisableUpload: true # should be specified for the CloudFormation bucket
 # Stack parameters; variable expansion is the norm
 Parameters:
-# Stacks that create additional stacks should use the cfns3prefix generated parameter with e.g. "!Sub ${cfns3prefix}/<template file name>"
-    cfns3prefix: ${@cfns3prefix}
+# Stacks that create additional stacks should use the cfns3prefix generated parameter with e.g. "!Sub ${pcfns3prefix}/<template file name>"
+    pcfns3prefix: ${@s3urlprefix}
+#
+ChildStacks:
+- child1.yaml
+- child2.json
 ```

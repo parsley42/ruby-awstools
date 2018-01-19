@@ -126,7 +126,7 @@ module RAWSTools
       search_dirs.each do |dir|
         log(:debug, "Looking for #{dir}/cloudconfig.yaml")
         if File::exist?("#{dir}/cloudconfig.yaml")
-          log(:debug, "=> Loading #{dir}/cloudconfig.yaml")
+          log(:info, "Loading configuration and variables from #{dir}/cloudconfig.yaml")
           raw = File::read("#{dir}/cloudconfig.yaml")
           merge_templates(YAML::load(raw), @config)
         end
@@ -224,7 +224,7 @@ module RAWSTools
         if @logarray
           @logarray.push(message)
         else
-          $stderr.puts(message)
+          $stderr.puts("#{level.to_s}: #{message}")
         end
       end
     end
@@ -373,13 +373,13 @@ module RAWSTools
       search_dirs.each do |dir|
         log(:debug, "Looking for #{dir}/#{facility}/#{facility}.yaml")
         if File::exist?("#{dir}/#{facility}/#{facility}.yaml")
-          log(:debug, "=> Loading #{dir}/#{facility}/#{facility}.yaml")
+          log(:info, "Loading api template #{dir}/#{facility}/#{facility}.yaml")
           raw = File::read("#{dir}/#{facility}/#{facility}.yaml")
           merge_templates(YAML::load(raw), template)
         end
         log(:debug, "Looking for #{dir}/#{facility}/#{type}.yaml")
         if File::exist?("#{dir}/#{facility}/#{type}.yaml")
-          log(:debug, "=> Loading #{dir}/#{facility}/#{type}.yaml")
+          log(:info, "Loading api template #{dir}/#{facility}/#{type}.yaml")
           found = true
           raw = File::read("#{dir}/#{facility}/#{type}.yaml")
           merge_templates(YAML::load(raw), template)

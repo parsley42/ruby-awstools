@@ -301,7 +301,6 @@ module RAWSTools
       end
       raise "Unable to locate stackconfig.yaml for stack: #{stack}, source stack: #{sourcestack}" unless found
       stack_config["StackName"] = stack unless stack_config["StackName"]
-      FileUtils::mkdir_p("cfn/#{stack}/#{stack_config["StackName"]}")
       if stack_config["S3URL"]
         s3urlprefix = stack_config["S3URL"]
       else
@@ -317,6 +316,7 @@ module RAWSTools
       mgr.setparam("s3urlprefix", s3urlprefix)
       resparent = { "stackconfig" => stack_config }
       mgr.resolve_vars(resparent, "stackconfig")
+      FileUtils::mkdir_p("cfn/#{stack}/#{stack_config["StackName"]}")
       super(mgr, stack, sourcestack, stack_config, stack_config["MainTemplate"])
       if stack_config["ChildStacks"]
         stack_config["ChildStacks"].each do |filename|

@@ -113,6 +113,8 @@ module RAWSTools
       raw = @file.read()
       # A number of config items need to be defined before using expand_strings
       @config = YAML::load(raw)
+      # For SearchPath items that expand an environment variable
+      resolve_vars(@config, "SearchPath")
       search_dirs = ["#{@installdir}/templates"]
       if @config["SearchPath"]
         search_dirs += @config["SearchPath"]

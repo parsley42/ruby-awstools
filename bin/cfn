@@ -30,11 +30,11 @@ Usage: cfn <command> (options) <stack|templatedir> - manage a CloudFormation sta
 
  Options are:
 EOF
-opts.on("-d", "--disable-rollback", "Disable rollback when a create or update fails") do |disable|
-  disable_rollback = true
+opts.on("-d", "--disable-rollback", "Disable rollback when a create or update fails") do
+  params["disable_rollback"] = true
 end
-opts.on("-g", "--generate-only", "Generate expanded templates without creating or updating the stack") do |generate_only|
-  generate_only = true
+opts.on("-g", "--generate-only", "Generate expanded templates without creating or updating the stack") do
+  params["generate_only"] = true
 end
 opts.on("-p", "--parameter PARAMVAL", "Set an arbitrary parameter where PARAMVAL is of the form parameter=value") do |keyval|
   e = keyval.index("=")

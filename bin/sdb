@@ -1,4 +1,4 @@
-#!/usr/bin/ruby
+#!/usr/bin/env ruby
 
 require 'pathname'
 lp = Pathname.new($0).realpath().dirname().dirname()

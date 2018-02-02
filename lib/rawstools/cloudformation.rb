@@ -373,6 +373,10 @@ module RAWSTools
       }
       parameters = get_stack_parameters()
       write_all()
+      if @generate_only
+        @mgr.log(:info, "Exiting without action on user request")
+        return "generate only"
+      end
       if parameters
         params[:parameters] = parameters
       end

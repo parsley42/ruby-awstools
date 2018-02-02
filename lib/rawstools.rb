@@ -124,7 +124,7 @@ module RAWSTools
       @params = {}
       @params = @params.merge(paramhash)
       @config = {}
-      repositories = ""
+      repositories = []
       search_dirs.each do |dir|
         log(:debug, "Looking for #{dir}/cloudconfig.yaml")
         if File::exist?("#{dir}/cloudconfig.yaml")
@@ -136,10 +136,11 @@ module RAWSTools
           reponame = File.basename(`git rev-parse --show-toplevel`).chomp()
           repohash = `git rev-parse --short=8 HEAD`.chomp()
           dirtyflag = `git diff --quiet --ignore-submodules HEAD 2>/dev/null; [ $? -eq 1 ] && echo "+"`.chomp()
-          repositories += ":#{reponame}@#{repohash}#{dirtyflag}"
+          repository = "#{reponame}@#{repohash}#{dirtyflag}"
+          repositories << repository unless repositories.include?(repository)
         end
       end
-      @params["repositories"] = repositories[1..-1]
+      @params["repositories"] = repositories.join(":")
       @params["creator"] = ENV["USER"] unless @params["creator"]
 
       if @config["LogLevel"] && ! log_set

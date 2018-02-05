@@ -493,7 +493,7 @@ module RAWSTools
         end
         cfgvar = cfgvar[1..-1]
         value = @config[cfgvar]
-        if value
+        if value != nil
           varclass = @config[cfgvar].class().to_s()
           unless Valid_Classes.include?(varclass)
             raise "Bad variable reference during string expansion: \"#{cfgvar}\" expands to non-scalar class #{varclass}"

@@ -21,7 +21,7 @@ Usage: cfn <command> (options) <stack|templatedir> - manage a CloudFormation sta
   create <stackdef> - create a new stack from a stack definition
   delete <stackdef> - delete a stack (warning: without confirmation, no resources retained)
   update <stackdef> - update a stack
-  validate <stack> - run templates through validation
+  validate <stackdef> - run templates through validation
 
  <stack> corresponds to a directory under cfn/, or in <SearchPath>/cfn
 

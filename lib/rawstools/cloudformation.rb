@@ -225,9 +225,9 @@ module RAWSTools
 
     # Validate the template
     def validate()
-      @mgr.log(:debug,"Validating #{@stackdef}:#{@filename}")
+      @mgr.log(:info, "Validating #{@stackdef}:#{@filename}")
       resp = @client.validate_template({ template_body: @raw })
-      @mgr.log(:info,"Validated #{@stackdef}:#{@filename}: #{resp.description}")
+      @mgr.log(:debug, "Validated #{@stackdef}:#{@filename}: #{resp.description}")
       if resp.capabilities.length > 0
         @mgr.log(:info, "Capabilities: #{resp.capabilities.join(",")}")
         @mgr.log(:info, "Reason: #{resp.capabilities_reason}")

@@ -1,13 +1,10 @@
 ---
 # stackconfig.yaml - ruby-awstools configuration and parameters for a
 # Management VPC from the Reference Architecture
-MainTemplate:
-  File: vpc-management.yaml
-  Format: yaml
-  StackName: MgmtVPC
-SecurityGroupsTemplate:
-  File: securitygroups.yaml
-  Format: yaml
+MainTemplate: vpc-management.yaml
+StackName: MgmtVPC
+ChildStacks:
+- securitygroups.yaml
 Parameters:
   # pEnvironment: Production
   # pCreateNatGateway: false # default, set true for a NAT Gateway

@@ -1,7 +1,5 @@
 ---
-MainTemplate:
-  File: main.yaml
-  Format: yaml
-  StackName: PrivateDNS
+MainTemplate: main.yaml
+StackName: PrivateDNS
 Parameters:
   ZoneName: $DNSBase

@@ -1,16 +1,10 @@
 ---
 # stackconfig.yaml - ruby-awstools configuration and parameters for the
 # core IAM and Logging templates, derived from the AWS NIST Quickstart
-MainTemplate:
-  File: main.yaml
-  Format: yaml
-  StackName: RefCore
-IamTemplate:
-  File: iam.yaml
-  Format: yaml
-  # ... final stack name will be <StackFamily>-NISTcore-IAMStack-<random>
-LoggingTemplate:
-  File: logging.yaml
-  Format: yaml
+MainTemplate: main.yaml
+StackName: RefCore
+ChildStacks:
+- iam.yaml
+- logging.yaml
 Parameters:
   pNotifyEmail: ${&NotifyMail} # All cloudconfig.yaml references are required

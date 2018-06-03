@@ -5,13 +5,10 @@
 # Test and Dev, or e.g. multiple separate Prod environments.
 
 # SourceStack: clientvpc # each spoke VPC should reference this source stack
-MainTemplate:
-  File: vpc-production.yaml
-  Format: yaml
-  # StackName: ProdVPC
-SecurityGroupsTemplate:
-  File: securitygroups.yaml
-  Format: yaml
+MainTemplate: vpc-production.yaml
+StackName: ProdVPC
+ChildStacks:
+- securitygroups.yaml
 Parameters:
   # pProductionVPCName: ProdVPC
   # pEnvironment: Production

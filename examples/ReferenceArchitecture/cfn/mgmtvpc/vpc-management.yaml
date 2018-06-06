@@ -13,15 +13,10 @@ Metadata:
             Parameters:
               - pManagementVPCName
               - pManagementCIDR
+              - pManagementBastionAccessCIDR
               - pManagementDMZSubnetACIDR
               - pManagementDMZSubnetBCIDR
               - pVPCTenancy
-          - Label:
-                default: AWS Quick Start Configuration
-            Parameters:
-              - QuickStartS3URL
-              - QSS3BucketName
-              - QSS3KeyPrefix
         ParameterLabels:
             pManagementVPCName:
                 default: Name of Management VPC to create
@@ -35,12 +30,6 @@ Metadata:
                 default: Whether or not to create a NAT Gateway for the DMZ
             pVPCTenancy:
                 default: Instance tenancy
-            QuickStartS3URL:
-                default: Quick Start URL
-            QSS3BucketName:
-                default: Quick Start S3 Bucket Name
-            QSS3KeyPrefix:
-                default: Quick Start S3 Key Prefix
             pCreateBastionHost:
                 default: Create Bastion Host
             pEC2KeyPairBastion:
@@ -60,6 +49,9 @@ Metadata:
     Output:
         Description: Outputs ID of all deployed resources
 Parameters:
+    pS3URLprefix:
+        Description: RAWS-provided prefix for child stacks in S3
+        Type: String
     pRegionAZ1Name:
         Description: Availability Zone 1 Name in Region
         Type: String
@@ -76,6 +68,10 @@ Parameters:
         Description: CIDR block for Management VPC
         Type: String
         Default: 10.10.0.0/16
+    pManagementBastionAccessCIDR:
+        Description: CIDR block for allowing SSH access to bastion
+        Type: String
+        Default: 0.0.0.0/16
     pManagementDMZSubnetACIDR:
         Description: CIDR block for Management AZ-1a subnet
         Type: String
@@ -111,31 +107,6 @@ Parameters:
         Description: Log Group for capturing VPC Flow Logs
         Type: String
         Default: ''
-    QuickStartS3URL:
-        Description: Quick Start S3 URL prefix.
-        Default: https://s3.amazonaws.com
-        Type: String
-    QSS3BucketName:
-        AllowedPattern: ^[0-9a-zA-Z]+([0-9a-zA-Z\-\.]*[0-9a-zA-Z])*$
-        ConstraintDescription: Quick Start bucket name can include numbers, lowercase
-            letters, uppercase letters, periods (.), and hyphens (-). It cannot start or end with a hyphen
-            (-).
-        Default: quickstart-reference
-        Description: S3 bucket name for the Quick Start assets. Quick Start bucket name
-            can include numbers, lowercase letters, uppercase letters, periods (.), and hyphens (-).
-            It cannot start or end with a hyphen (-).
-        Type: String
-    QSS3KeyPrefix:
-        AllowedPattern: ^[0-9a-zA-Z-]+(/[0-9a-zA-Z-]+)*$
-        ConstraintDescription: Quick Start key prefix can include numbers, lowercase letters,
-            uppercase letters, hyphens (-), and forward slash (/). It cannot start or end
-            with forward slash (/) because they are automatically appended.
-        Default: quickstart-enterprise-accelerator-nist
-        Description: S3 key prefix for the Quick Start assets. Quick Start key prefix
-            can include numbers, lowercase letters, uppercase letters, hyphens (-), and
-            forward slash (/). It cannot start or end with forward slash (/) because they
-            are automatically appended.
-        Type: String
 Conditions:
     cEnableFlowLogs: !Not [ !Equals [ !Ref pFlowLogGroup, '' ] ]
     cCreateNatGateway: !Equals [ true, !Ref pCreateNatGateway ]
@@ -155,9 +126,12 @@ Resources:
         DependsOn:
         - rVPCManagement
         Properties:
+            TemplateURL:
+              "Fn::Sub": "${pS3URLprefix}/securitygroups.yaml"
             Parameters:
               pVpcId: !Ref rVPCManagement
               pManagementCIDR: !Ref pManagementCIDR
+              pBastionAccess: !Ref pManagementBastionAccessCIDR
               pEnvironment: !Ref pEnvironment
     rRouteMgmtNGW:
         Condition: cCreateNatGateway

@@ -8,3 +8,4 @@ ChildStacks:
 - logging.yaml
 Parameters:
   pNotifyEmail: ${&NotifyMail} # All cloudconfig.yaml references are required
+  pS3URLprefix: ${@s3urlprefix}

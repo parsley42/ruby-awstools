@@ -13,5 +13,7 @@ Parameters:
   pManagementDMZSubnetBCIDR: ${&MgmtDMZBCIDR}
   pManagementPrivateSubnetACIDR: ${&MgmtPVTACIDR}
   pManagementPrivateSubnetBCIDR: ${&MgmtPVTBCIDR}
+  pManagementBastionAccessCIDR: ${&MgmtBastionAccessCIDR}
   pRegionAZ1Name: ${&RegionAZ1}
   pRegionAZ2Name: ${&RegionAZ2}
+  pS3URLprefix: ${@s3urlprefix}

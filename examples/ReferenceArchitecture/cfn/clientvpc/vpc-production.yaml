@@ -72,6 +72,9 @@ Conditions:
     cCreateAppSubnets: !Equals [ true, !Ref pCreateAppSubnets ]
     cCreateNatGateway: !Equals [ true, !Ref pCreateNatGateway ]
 Parameters:
+    pS3URLprefix:
+        Description: RAWS-provided prefix for child stacks in S3
+        Type: String
     pRegionAZ1Name:
         Description: Availability Zone 1 Name in Region
         Type: AWS::EC2::AvailabilityZone::Name
@@ -191,6 +194,8 @@ Resources:
         DependsOn:
         - rVPCProduction
         Properties:
+            TemplateURL:
+              "Fn::Sub": "${pS3URLprefix}/securitygroups.yaml"
             Parameters:
               pVpcId: !Ref rVPCProduction
               pProductionCIDR: !Ref pProductionCIDR

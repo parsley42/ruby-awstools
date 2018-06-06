@@ -29,6 +29,9 @@ Metadata:
   Output:
     Description: N/A
 Parameters:
+  pS3URLprefix:
+    Description: RAWS-provided prefix for child stacks in S3
+    Type: String
   pNotifyEmail:
     Description: Notification email address for security events (you will receive
       a confirmation email)
@@ -179,25 +182,13 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       TemplateURL:
-        !Sub
-        - ${QuickStartS3URL}/${QSS3BucketName}/${QSS3KeyPrefix}/submodules/quickstart-compliance-common/templates/iam.template
-        - QuickStartS3URL:
-            !FindInMap
-            - AWSInfoRegionMap
-            - !Ref AWS::Region
-            - QuickStartS3URL
+        "Fn::Sub": "${pS3URLprefix}/iam.yaml"
       TimeoutInMinutes: 20
   LoggingTemplate:
     Type: AWS::CloudFormation::Stack
     Properties:
       TemplateURL:
-        !Sub
-        - ${QuickStartS3URL}/${QSS3BucketName}/${QSS3KeyPrefix}/submodules/quickstart-compliance-common/templates/logging.template
-        - QuickStartS3URL:
-            !FindInMap
-            - AWSInfoRegionMap
-            - !Ref AWS::Region
-            - QuickStartS3URL
+        "Fn::Sub": "${pS3URLprefix}/logging.yaml"
       TimeoutInMinutes: 20
       Parameters:
         pNotifyEmail: !Ref pNotifyEmail
@@ -206,30 +197,6 @@ Resources:
           - RegionServiceSupport
           - !Ref AWS::Region
           - Glacier
-  ConfigRulesTemplate:
-    Type: AWS::CloudFormation::Stack
-    Condition: LoadConfigRulesTemplate
-    DependsOn:
-    - IamTemplate
-    - ProductionVpcTemplate
-    - ManagementVpcTemplate
-    - LoggingTemplate
-    Properties:
-      TemplateURL:
-        !Sub
-        - ${QuickStartS3URL}/${QSS3BucketName}/${QSS3KeyPrefix}/submodules/quickstart-compliance-common/templates/config-rules.template
-        - QuickStartS3URL:
-            !FindInMap
-            - AWSInfoRegionMap
-            - !Ref AWS::Region
-            - QuickStartS3URL
-      TimeoutInMinutes: 20
-      Parameters:
-        pRequiredTagKey:
-          !FindInMap
-          - CustomVariables
-          - vResourceEnvironmentTagKey
-          - Value
 Outputs:
   TemplateType:
     Value: Standard Multi-Tier Web Application

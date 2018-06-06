@@ -27,3 +27,4 @@ Parameters:
   pManagementCIDR: ${&MgmtCIDR}
   pManagementRouteTablePrivate: ${=MgmtVPC:rRouteTableMgmtPrivate}
   pManagementRouteTableDMZ: ${=MgmtVPC:rRouteTableMgmtDMZ}
+  pS3URLprefix: ${@s3urlprefix}

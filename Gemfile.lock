@@ -33,6 +33,9 @@ GEM
     aws-sdk-simpledb (1.1.0)
       aws-sdk-core (~> 3)
       aws-sigv2 (~> 1.0)
+    aws-sdk-ssm (1.18.0)
+      aws-sdk-core (~> 3)
+      aws-sigv4 (~> 1.0)
     aws-sigv2 (1.0.1)
     aws-sigv4 (1.0.3)
     jmespath (1.4.0)
@@ -50,6 +53,7 @@ DEPENDENCIES
   aws-sdk-route53
   aws-sdk-s3
   aws-sdk-simpledb
+  aws-sdk-ssm
 
 BUNDLED WITH
-   1.16.2
+   1.16.3

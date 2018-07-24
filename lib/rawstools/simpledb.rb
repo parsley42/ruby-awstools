@@ -31,7 +31,7 @@ module RAWSTools
     def retrieve(item, key)
       dom = getdomain()
 #      puts "Looking for attribute #{key} in #{item} from domain #{dom}"
-      values = @client.get_attributes({
+      @client.get_attributes({
         domain_name: dom,
         item_name: item,
         attribute_names: [ key ],

@@ -9,12 +9,14 @@ require 'aws-sdk-rds'
 require 'aws-sdk-route53'
 require 'aws-sdk-s3'
 require 'aws-sdk-simpledb'
+require 'aws-sdk-ssm'
 require 'aws-sdk-cloudformation'
 require 'rawstools/cloudformation'
 require 'rawstools/ec2'
 require 'rawstools/rds'
 require 'rawstools/route53'
 require 'rawstools/simpledb'
+require 'rawstools/paramstore'
 
 module RAWSTools
 
@@ -32,7 +34,7 @@ module RAWSTools
   end
 
   Valid_Classes = [ "String", "Fixnum", "Integer", "TrueClass", "FalseClass" ]
-  Expand_Regex = /\${([@=%&~][:|.\-\/\w<>=#]+)}/
+  Expand_Regex = /\${([@=%&~^][:|.\-\/\w<>=#]+)}/
   Log_Levels = [:trace, :debug, :info, :warn, :error]
 
   # Class to convert from configuration file format to AWS expected format
@@ -83,7 +85,7 @@ module RAWSTools
   # Central library class that loads the configuration file and provides
   # utility classes for processing names and templates.
   class CloudManager
-    attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :rds, :region, :route53, :tags, :params, :stack_family, :govcloud, :client_opts
+    attr_reader :installdir, :subdom, :cfn, :sdb, :s3, :s3res, :ec2, :param, :rds, :region, :route53, :tags, :params, :stack_family, :govcloud, :client_opts
 
     # Initiallize
     def initialize(paramhash, logarray = nil, loglevel = nil)
@@ -171,6 +173,7 @@ module RAWSTools
       @iam = Aws::IAM::Client.new( @client_opts )
       @iamres = Aws::IAM::Resource.new( client: @iam )
       @sdb = SimpleDB.new(self)
+      @param = Param.new(self)
       @s3 = Aws::S3::Client.new( @client_opts )
       @s3res = Aws::S3::Resource.new( client: @s3 )
       @rds = RDS.new(self)
@@ -467,6 +470,26 @@ module RAWSTools
           return default
         else
           raise "Output not found while expanding \"#{var}\""
+        end
+      # parameter store lookups
+      when "^"
+        lookup, default = var.split('|')
+        if not default and var.end_with?('|')
+          default=""
+        end
+        key = lookup[1..-1]
+        raise "Invalid parameter lookup: #{lookup}" unless key
+        begin
+          value = @param.retrieve(key)
+          found = true
+        rescue
+        end
+        if found
+          return value
+        elsif default
+          return default
+        else
+          raise "Failed to retrieve parameter \"#{key}\""
         end
       # simpledb lookups
       when "%"

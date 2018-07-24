@@ -1,0 +1,63 @@
+#!/usr/bin/env ruby
+
+require 'pathname'
+lp = Pathname.new($0).realpath().dirname().dirname()
+$LOAD_PATH.unshift("#{lp}/lib")
+require 'rawstools'
+require 'optparse'
+
+opts = OptionParser.new
+
+opts.banner = <<-EOF
+Usage: param <command> (args) - store and retrieve simple key-value pairs from SSM parameter store
+ Where <command> is one of:
+  store <key> <value> - store a <key> <value> pair
+  retrieve <key> - retrieve the value of <key>
+ Options are:
+EOF
+
+params = {}
+
+class UsageException < Exception
+  def initialize(msg="Invalid command / option / argument")
+    super(msg)
+  end
+end
+
+begin
+
+commands = [ "store", "retrieve" ]
+command = ARGV.shift()
+raise UsageException.new("Missing <command>") unless command
+raise UsageException.new("Unknown command: #{command}") unless commands.include?(command)
+
+replace = true
+
+case command
+when "store"
+  opts.on("-n", "--no-replace", "Fail silently instead of replacing (the default)") do
+    replace = false
+  end
+end
+
+opts.parse!
+
+cfg = RAWSTools::CloudManager.new(params)
+
+case command
+when "store"
+  key, value = ARGV.shift(2)
+  raise UsageException.new("Missing required argument") unless value
+  cfg.param.store(key, value, replace)
+  puts "Stored parameter #{key} = #{value}"
+when "retrieve"
+  key = ARGV.shift()
+  raise UsageException.new("Missing required argument") unless key
+  value = cfg.param.retrieve(key)
+  puts value
+end
+
+rescue UsageException => e
+  puts "\n#{e.message}\n\n"
+  puts opts.help()
+end

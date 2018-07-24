@@ -12,7 +12,7 @@ values are expanded:
 * **${%item:key(|defaultvalue)}** - Look up the attribute <key> for <item> in the configured
   ConfigDB (AWS SimpleDB) from the cloud config. Mostly useful for retrieving
   AMI ids stored with the `sdb` tool
-* **${^param(|defaultvalue)}** - Look up the key from SSM parameter store
+* **${/some/param(|defaultvalue)}** - Look up the key from SSM parameter store, must start with `/`
 
 ## Default Values
 

@@ -472,12 +472,12 @@ module RAWSTools
           raise "Output not found while expanding \"#{var}\""
         end
       # parameter store lookups
-      when "^"
+      when "/"
         lookup, default = var.split('|')
         if not default and var.end_with?('|')
           default=""
         end
-        key = lookup[1..-1]
+        key = lookup[0..-1]
         raise "Invalid parameter lookup: #{lookup}" unless key
         begin
           value = @param.retrieve(key)
